@@ -4,6 +4,12 @@
   publish = "dist"
   functions = "netlify/functions"
 
+# The Supabase address and publishable key are public by design: they're built into the app
+# so the browser can sign in. Tell Netlify's secret scan not to treat them as leaked secrets.
+# The service role key, Claude key and internal secret are never in the app, only in functions.
+[build.environment]
+  SECRETS_SCAN_OMIT_KEYS = "SUPABASE_URL,SUPABASE_ANON_KEY,APP_URL,EMAIL_FROM"
+
 [functions]
   node_bundler = "esbuild"
 
