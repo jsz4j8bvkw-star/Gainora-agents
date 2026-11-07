@@ -1,0 +1,23 @@
+{
+  "name": "gainora-agents",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Gainora Agents: The Watcher, The Scout and The Brief for small businesses.",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "build:demo": "node scripts/build.mjs --demo",
+    "test": "node scripts/test.mjs",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.functions.json"
+  },
+  "dependencies": {
+    "esbuild": "^0.24.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "@types/node": "^22.0.0"
+  },
+  "engines": { "node": ">=20" }
+}

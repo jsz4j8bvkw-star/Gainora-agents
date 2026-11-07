@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "types": ["node"],
+    "typeRoots": ["/opt/npm-tools/node_modules/@types", "./node_modules/@types"]
+  },
+  "include": ["netlify", "shared", "types/globals.d.ts", "src/lib/types.ts"]
+}
