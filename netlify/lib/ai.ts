@@ -1,6 +1,20 @@
 // One small adapter for the AI provider, with cost tracking and a monthly cap per client.
 import { db, env, HttpError, insert } from './core';
 
+/**
+ * Works with every Claude Console key type: classic keys ("sk-ant-api…") in x-api-key, and personal or
+ * service-account keys as a bearer token. A key not scoped to a workspace also needs ANTHROPIC_WORKSPACE_ID.
+ */
+function anthropicHeaders(): Record<string, string> {
+  const key = env('ANTHROPIC_API_KEY');
+  const ws = env('ANTHROPIC_WORKSPACE_ID');
+  return {
+    ...(key.startsWith('sk-ant-api') ? { 'x-api-key': key } : { Authorization: `Bearer ${key}` }),
+    ...(ws ? { 'anthropic-workspace-id': ws } : {}),
+    'anthropic-version': '2023-06-01', 'content-type': 'application/json',
+  };
+}
+
 export interface AiResult {
   text: string;
   citations: { title: string; url: string }[];
@@ -46,7 +60,7 @@ async function callAnthropic(c: AiCall): Promise<AiResult> {
   }] : undefined;
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
-    headers: { 'x-api-key': env('ANTHROPIC_API_KEY'), 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+    headers: anthropicHeaders(),
     body: JSON.stringify({ model: modelFor(c, 'anthropic'), max_tokens: c.maxTokens ?? 1500, system: c.system, messages: c.messages, ...(tools ? { tools } : {}) }),
     signal: AbortSignal.timeout(c.webSearch ? 600_000 : 90_000),
   });
