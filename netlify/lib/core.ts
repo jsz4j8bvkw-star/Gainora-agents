@@ -30,9 +30,13 @@ export function handler(fn: (req: Request) => Promise<Response>) {
 }
 
 /* ---------- Supabase (service role) ---------- */
-function sbHeaders(extra: Record<string, string> = {}) {
+/**
+ * Headers for the service role. Works with both kinds of Supabase key: the newer secret keys
+ * ("sb_secret_...") go in `apikey` only, while the older service_role JWT also goes in Authorization.
+ */
+export function sbHeaders(extra: Record<string, string> = {}) {
   const key = env('SUPABASE_SERVICE_ROLE_KEY');
-  return { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', ...extra };
+  return { apikey: key, ...(key.startsWith('sb_') ? {} : { Authorization: `Bearer ${key}` }), 'Content-Type': 'application/json', ...extra };
 }
 
 export async function db<T = any>(path: string, init: { method?: string; body?: unknown; prefer?: string } = {}): Promise<T> {

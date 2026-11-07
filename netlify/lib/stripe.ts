@@ -1,6 +1,6 @@
 // Stripe: webhook signature check and subscription → agent access.
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import { db, env, enc, HttpError, upsert } from './core';
+import { db, env, enc, HttpError, sbHeaders, upsert } from './core';
 import { sendEmail } from './email';
 
 export function verifyStripeSignature(payload: string, header: string | null, secret: string, toleranceSec = 300, now = Math.floor(Date.now() / 1000)): boolean {
@@ -60,7 +60,7 @@ const STATUS: Record<string, string> = { active: 'active', trialing: 'trialing',
 async function ensureUser(email: string): Promise<boolean> {
   const res = await fetch(`${env('SUPABASE_URL')}/auth/v1/admin/users`, {
     method: 'POST',
-    headers: { apikey: env('SUPABASE_SERVICE_ROLE_KEY'), Authorization: `Bearer ${env('SUPABASE_SERVICE_ROLE_KEY')}`, 'Content-Type': 'application/json' },
+    headers: sbHeaders(),
     body: JSON.stringify({ email, email_confirm: true }),
   });
   if (res.ok) return true;          // new user created
@@ -90,7 +90,7 @@ export async function syncSubscription(sub: any): Promise<string[]> {
   if (agents.length && (status === 'active' || status === 'trialing')) {
     const created = await ensureUser(email);
     // Link the login to the subscription rows (the database trigger also does this for new users).
-    const users = await fetch(`${env('SUPABASE_URL')}/auth/v1/admin/users?email=${enc(email)}`, { headers: { apikey: env('SUPABASE_SERVICE_ROLE_KEY'), Authorization: `Bearer ${env('SUPABASE_SERVICE_ROLE_KEY')}` } }).then((r) => r.json()).catch(() => null);
+    const users = await fetch(`${env('SUPABASE_URL')}/auth/v1/admin/users?email=${enc(email)}`, { headers: sbHeaders() }).then((r) => r.json()).catch(() => null);
     const match = (users?.users || []).find((u: any) => String(u.email).toLowerCase() === email);
     if (match) await db(`entitlements?email=eq.${enc(email)}&user_id=is.null`, { method: 'PATCH', body: { user_id: match.id } });
     if (created) {
