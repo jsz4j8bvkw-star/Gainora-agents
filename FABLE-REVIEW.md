@@ -1,7 +1,7 @@
 # Overnight review: Capture & Convert
 
 Branch `fable-review`, worktree `/home/claude/gainora-capture-fable`. Nothing pushed, nothing deployed, no live
-service touched. Type-check, 36 tests, demo build and the Retell export all pass. Before/after screenshots are in
+service touched. Type-check, 36 tests (26 before), demo build and the Retell export all pass; the physio and plumber samples were checked too. Before/after screenshots are in
 `/tmp/claude-0/-home-claude/33f7761b-12f0-5a26-b061-cf4a0d30e834/scratchpad/fable-capture/` (`before-*.png`,
 `after-*.png`, desktop and phone).
 
@@ -42,6 +42,9 @@ service touched. Type-check, 36 tests, demo build and the Retell export all pass
 | `1eb4cda` | **Follow-ups for clinics** (Due back, Went quiet) and a **Report** with clinic wording, value by the owner's prices, no-shows, and "What to change next month" built only from the month's own numbers. |
 | `9132e33` | Setup/Settings: "due back" interval per treatment; Receptionist page explains the diary rule; morning and monthly emails in the clinic's words, with due-back clients and the "what to change" points. |
 | `57f8459` | README rewritten to match the code; script notes the occasion a client is booking for. |
+| `6e57b8f` | Phone polish: treatment rows, section headings, the reply box grows with the draft. |
+| `945e179` | Enquiry page shows the client's history ("Client since Oct 2026 · 3 visits · £360 · 1 no-show"), matched on phone or email. Brand names such as HydraFacial keep their capitals in texts. |
+| `eb99593` | Reply time now measures you, not the receptionist: calls she settled herself are counted separately ("4 settled on the call"). |
 
 Every safety rule is intact and tested: honest about being an AI, never a person, no card details, no medical or
 aftercare advice, beauty concerns to the clinic line only (never 999/A&E/111/GP/pharmacy, and the "if the caller
@@ -83,12 +86,10 @@ new tests were added around them.
    text repeats, with a payment link. The clinic's own payment link already exists in settings.
 3. **Quiet days to fill**: a "Fill Thursday" draft to the due-back list when the diary has gaps. Needs the diary
    connection (not built) or the owner picking the day by hand.
-4. **Returning-client recognition in the inbox**: match by phone across enquiries and show "4th visit, last
-   HydraFacial 6 weeks ago" on the enquiry page. The data is there; it's a day's UI work.
-5. **Reply time measured per owner, not per receptionist**: a booking made on the call counts as a 0-minute
-   reply, which flatters the median. Splitting "answered by the receptionist" from "replied by you" is a small
-   report change.
-6. **Weekly owner text**: "This week: 9 enquiries, 6 while closed, £335 booked" to the owner's mobile on a Monday.
-7. **Export the clinic's client list** (name, phone, last treatment, due back) as CSV for their own marketing.
-8. **Retell export is slightly non-deterministic**: the opening line in the prompt uses the current time of
+4. **Weekly owner text**: "This week: 9 enquiries, 6 while closed, £335 booked" to the owner's mobile on a Monday.
+5. **Export the clinic's client list** (name, phone, last treatment, due back) as CSV for their own marketing.
+6. **Returning-client recognition on the phone**: the receptionist could be told "this number has visited 3 times,
+   last HydraFacial with Leah" at the start of the call. Retell supports a pre-call webhook; it's the Call to
+   Booking package's "recognises returning callers" promise made real. Half a day, and needs a live test.
+7. **Retell export is slightly non-deterministic**: the opening line in the prompt uses the current time of
    day, so `prompt.txt` changes between morning and afternoon runs. Harmless, but noisy in git.
