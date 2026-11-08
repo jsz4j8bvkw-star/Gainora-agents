@@ -1,41 +1,43 @@
 # Before you publish: owner checklist
 
-These are the things I couldn't, and shouldn't, decide or invent for you.
+These are the things only you can decide or supply. The site builds and passes its checks without them, with safe defaults.
 
 ## Business details (site.config.json)
-- [ ] Final company name (`brand.name`). Currently "Gainora".
 - [ ] Legal name, address and company number, if you have them. Leave them empty if you don't. Never guess them.
-- [ ] Contact email on your own domain.
-- [ ] Your real reply time (`contact.responseTime`).
-- [ ] Live site address (`site.url`), once you have a domain.
-- [ ] Optional: call-booking link.
-- [ ] Optional: founder name and a short honest bio for the About page.
+- [ ] Contact email is `hello@gainora.co.uk`: confirm it's live and monitored.
+- [ ] Reply time is "within one working day": keep it only if you can keep it.
+- [x] Booking link: Google Calendar appointment schedule, with 45-minute slots behind the 15-minute diagnostic. Add a line to the appointment description in Google Calendar saying the call is 15 minutes with extra time kept free, since the booking page shows the slot length.
+- [ ] Optional: founder name and a short honest bio for the About page (`founder.*`).
 
-## Prices
-- [ ] Confirm the public starting prices: diagnosis £495, website £1,500, automation £950, ongoing support £750/month.
-- [ ] Decide what a £495 diagnosis includes in practice (one business area, report format, walkthrough call), so your proposals match the site.
-- [ ] Decide whether prices include VAT, and state it in the terms.
+## Prices (site.config.json → prices)
+- [x] All prices match the Offer Brief of 8 November 2026 and are ex-VAT. Change them in one place if the brief changes.
+- [ ] Decide whether to show the founding offers on the site (`founding.show`). Default: off, mentioned on calls.
+
+## Demo receptionist
+- [ ] When the demo number and a 90-second recording exist, set `demo.phone`, `demo.phoneHref` (the number in international form, for example `+44…`) and `demo.recordingUrl`. The "Ring our receptionist" block then appears on the home page. Until then it's hidden and nothing is faked.
 
 ## Legal pages (drafts, marked on the site)
-- [ ] Privacy policy: fill in the bracketed details, list your real providers (host, email, any AI tools used for client work), describe international transfers and set retention periods.
-- [ ] Terms: payment, cancellation and refund terms, report usage rights, and liability wording. Have these reviewed by a solicitor.
-- [ ] Cookies page: keep it accurate if you ever add analytics.
+- [ ] Privacy policy: fill in the bracketed details, list the real providers (telephony and receptionist platform, text-message provider, email provider, AI tools), describe international transfers and set retention periods, including for call recordings.
+- [ ] Terms: payment stages for Partner fix projects, service levels for the receptionist, liability wording. Have these reviewed by a solicitor.
+- [ ] Data processing agreement for Capture & Convert clients (referred to in the terms).
 - [ ] Remove the "Draft for review" notices only once the pages are complete and checked.
-- [ ] Consider registering with the ICO, which is required for most businesses processing personal data (check ico.org.uk).
+- [ ] ICO registration, if not already done (ico.org.uk).
 
 ## Forms
-- [ ] Choose Netlify Forms or Formspree and connect it (see README).
-- [ ] Add email notifications.
-- [ ] Send a test from both forms (enquiry and shop sign-up) and confirm the emails arrive.
+- [ ] Deploy to Netlify, then add an email notification for the `diagnostic` form (Site configuration → Forms → Form notifications).
+- [ ] Send a test booking from the live site and confirm the email and the calendar invitation both arrive.
+- [ ] Later: add the Capture & Convert enquiry link as an outgoing webhook in the same screen, so enquiries land in the inbox too.
 
-## Shop (course, agents, digital products)
-- [ ] Confirm prices and features for each item in `site.config.json` → `shop.items`.
-- [ ] Right now every item has a free sign-up button (pilot, early access or waitlist), so nothing takes payment yet.
-- [ ] When an item is ready: create a Stripe Payment Link, set up delivery (download, course access or agent account), paste the link into `checkoutUrl`, set `status` to `available` and rebuild.
-- [ ] To take money before something exists, use `preorder` with a real `deliveryNote`, and be ready to refund if you miss it.
-- [ ] Add digital-content and subscription terms (cancellation rights, renewals) to the terms page before the first sale.
-- [ ] When the course pilot has a date and content, update `src/pages/ai-training.html`.
+## Calculator
+- [x] Every research figure has an opened, published source, listed on the calculator page.
+- [ ] Two figures have no credible published UK source and are shown as estimates: enquiry-to-customer conversion by industry, and callers who go to a competitor after an unanswered call. If you find good sources, add them to `calculator.json`.
+- [ ] Review the "assumption" defaults (phone share 60%, conversion 33%, 300 visits a month, £40 an hour) and change any you'd put differently.
+
+## Going live
+- [ ] Review the private preview page by page.
+- [ ] Deploy (GitHub + Netlify, or drag `dist/` onto Netlify Drop).
+- [ ] Check the redirects from the old addresses work on the live site.
+- [ ] Submit `sitemap.xml` in Google Search Console.
 
 ## After launch
-- [ ] Add real testimonials or case studies only with written client permission, and only once they exist.
-- [ ] Submit `sitemap.xml` in Google Search Console after `site.url` is set.
+- [ ] Case studies, starting with your own businesses labelled as such, then client pilots with real numbers and written permission. There's no testimonial section yet, on purpose.
