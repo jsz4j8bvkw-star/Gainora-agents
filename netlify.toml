@@ -3,10 +3,45 @@
   command = "node build.js && node tests/check.js"
   publish = "dist"
 
+# Pages that no longer exist. Each sends old links somewhere useful.
+[[redirects]]
+  from = "/diagnosis/"
+  to = "/audit/"
+  status = 301
 
 [[redirects]]
-  from = "/products/"
-  to = "/shop/"
+  from = "/contact/"
+  to = "/book/"
+  status = 301
+
+[[redirects]]
+  from = "/solutions/*"
+  to = "/packages/"
+  status = 301
+
+[[redirects]]
+  from = "/custom-solutions/"
+  to = "/packages/#partner"
+  status = 301
+
+[[redirects]]
+  from = "/shop/*"
+  to = "/packages/"
+  status = 301
+
+[[redirects]]
+  from = "/products/*"
+  to = "/packages/"
+  status = 301
+
+[[redirects]]
+  from = "/ai-training/"
+  to = "/packages/"
+  status = 301
+
+[[redirects]]
+  from = "/download/*"
+  to = "/packages/"
   status = 301
 
 [[redirects]]

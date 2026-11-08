@@ -1,0 +1,117 @@
+{
+ "_readme": "Starting figures for the Business improvement calculator. Each default has a basis: 'research' (a published source, listed under sources, that we opened), or 'assumption' (a starting point the visitor is told to change). Never add a 'research' figure without its source. Prices are read from site.config.json at build time.",
+ "asOf": "2026-11-08",
+ "sources": {
+  "moneypenny2016": {
+   "name": "Small Business Call Report",
+   "publisher": "Moneypenny, survey of 300 UK micro businesses and call data from 10,000 businesses",
+   "year": 2016,
+   "url": "https://smallbusiness.co.uk/voicemail-costing-small-businesses-trade-2535323/",
+   "country": "UK",
+   "note": "Commissioned by a call-answering company. A third of the businesses surveyed failed to answer a test call; 69% of callers who reached voicemail left no message."
+  },
+  "lightwork2026": {
+   "name": "Nearly half of agency enquiries arrive out of hours",
+   "publisher": "The Negotiator, reporting LightWork AI platform data",
+   "year": 2026,
+   "url": "https://thenegotiator.co.uk/news/proptech/nearly-half-of-agency-enquiries-arrive-out-of-hours-says-lightwork/",
+   "country": "UK",
+   "note": "Property sector only, July to September 2026, from one vendor's platform, sample size not published. 28% of phone calls and 49% of emails and portal enquiries arrived outside 9am to 5pm, Monday to Friday."
+  },
+  "ruler2026": {
+   "name": "Conversion rate by industry, 2026 benchmarks",
+   "publisher": "Ruler Analytics, 110 million website sessions across 13 industries",
+   "year": 2026,
+   "url": "https://www.ruleranalytics.com/blog/insight/conversion-rate-by-industry/",
+   "country": "Not stated (UK-based company, likely international data)",
+   "note": "Share of website visits that become a qualified lead or sale. Overall average 5.13%."
+  },
+  "nerdwallet2025": {
+   "name": "How UK business owners are prioritising time and money in 2025",
+   "publisher": "NerdWallet UK, OnePoll survey of 500 UK business owners and decision-makers",
+   "year": 2025,
+   "url": "https://www.nerdwallet.com/uk/business/survey-how-uk-business-owners-are-prioritising-time-and-money-in-2025/",
+   "country": "UK",
+   "note": "June 2025. Admin and operational tasks take 7.3 hours a week, 21% of leadership time; HR and team coordination another 7.3 hours."
+  },
+  "hbr2011": {
+   "name": "The Short Life of Online Sales Leads",
+   "publisher": "Harvard Business Review, audit of 2,241 US companies",
+   "year": 2011,
+   "url": "https://hbr.org/2011/03/the-short-life-of-online-sales-leads",
+   "country": "US",
+   "note": "Companies that contacted a lead within an hour were nearly seven times as likely to qualify it as those that waited an hour longer, and more than 60 times as likely as those that waited a day or more. Average response time was 42 hours."
+  },
+  "checkatrade2024": {
+   "name": "Does Checkatrade cost money?",
+   "publisher": "Checkatrade",
+   "year": 2024,
+   "url": "https://www.checkatrade.com/blog/trade/start-business/does-checkatrade-cost-money/",
+   "country": "UK",
+   "note": "Basic membership is £30 + VAT a month at its cheapest, without leads. Per-lead prices are only shown inside the members' area."
+  },
+  "bark2025": {
+   "name": "What is a credit and how much does it cost?",
+   "publisher": "Bark.com help centre",
+   "year": 2025,
+   "url": "https://help.bark.com/hc/en-gb/articles/13346288068892-What-is-a-credit-and-how-much-does-it-cost",
+   "country": "UK",
+   "note": "A credit costs £1.80 excluding VAT; the credits needed per lead vary with the job."
+  },
+  "checkatradePlumber2026": {
+   "name": "How much does a plumber cost?",
+   "publisher": "Checkatrade cost guide",
+   "year": 2026,
+   "url": "https://www.checkatrade.com/blog/cost-guides/plumber-cost/",
+   "country": "UK",
+   "note": "Editorial averages updated June 2026, not a survey: call-out £110, fix a leak £100, repair a burst pipe £150, day rate £350."
+  },
+  "dbt2025": {
+   "name": "Business population estimates for the UK and regions 2025",
+   "publisher": "Department for Business and Trade, official statistics",
+   "year": 2025,
+   "url": "https://www.gov.uk/government/statistics/business-population-estimates-2025/business-population-estimates-for-the-uk-and-regions-2025-statistical-release",
+   "country": "UK",
+   "note": "5.7 million private sector businesses; 75% have no employees; 99.85% are SMEs."
+  }
+ },
+ "types": [
+  { "id": "trades", "label": "Trades and home services", "rulerIndustry": "Construction & Engineering", "visitRate": 4.9, "jobValue": 150, "jobValueBasis": "research", "jobValueSource": "checkatradePlumber2026", "jobValueNote": "Checkatrade's guide puts repairing a burst pipe at about £150 and a plumber's day rate at £350" },
+  { "id": "health", "label": "Clinic, health or dental", "rulerIndustry": "Health & Social Care", "visitRate": 2.3, "jobValue": 60, "jobValueBasis": "assumption" },
+  { "id": "beauty", "label": "Beauty, hair or wellness", "rulerIndustry": "Beauty & Cosmetic", "visitRate": 3.5, "jobValue": 45, "jobValueBasis": "assumption" },
+  { "id": "professional", "label": "Professional services", "rulerIndustry": "Professional Services", "visitRate": 6.1, "jobValue": 600, "jobValueBasis": "assumption" },
+  { "id": "property", "label": "Property or lettings", "rulerIndustry": "Real Estate", "visitRate": 2.8, "jobValue": 900, "jobValueBasis": "assumption" },
+  { "id": "hospitality", "label": "Hospitality or events", "rulerIndustry": "Travel", "visitRate": 1.9, "jobValue": 80, "jobValueBasis": "assumption" },
+  { "id": "retail", "label": "Retail or online shop", "rulerIndustry": "Retail & eCommerce", "visitRate": 2.4, "jobValue": 60, "jobValueBasis": "assumption" },
+  { "id": "automotive", "label": "Automotive", "rulerIndustry": "Automotive", "visitRate": 7.9, "jobValue": 250, "jobValueBasis": "assumption" },
+  { "id": "education", "label": "Education or training", "rulerIndustry": "Education", "visitRate": 6.3, "jobValue": 300, "jobValueBasis": "assumption" },
+  { "id": "b2b", "label": "Services to other businesses", "rulerIndustry": "Professional Services", "visitRate": 6.1, "jobValue": 800, "jobValueBasis": "assumption" },
+  { "id": "other", "label": "Other", "rulerIndustry": "All industries, average", "visitRate": 5.13, "jobValue": 150, "jobValueBasis": "assumption" }
+ ],
+ "sizes": [
+  { "id": "solo", "label": "Just me", "enquiriesPerWeek": 6, "team": false },
+  { "id": "2-5", "label": "2 to 5 people", "enquiriesPerWeek": 15, "team": false },
+  { "id": "6-20", "label": "6 to 20 people", "enquiriesPerWeek": 35, "team": true },
+  { "id": "21-50", "label": "21 to 50 people", "enquiriesPerWeek": 70, "team": true },
+  { "id": "50+", "label": "More than 50 people", "enquiriesPerWeek": 120, "team": true }
+ ],
+ "defaults": {
+  "phoneShare": { "value": 60, "unit": "%", "basis": "assumption", "label": "Share of enquiries that come by phone" },
+  "missedShare": { "value": 33, "unit": "%", "basis": "research", "source": "moneypenny2016", "label": "Share of calls that go unanswered", "note": "A third of UK micro businesses failed to answer a test call" },
+  "noMessageShare": { "value": 69, "unit": "%", "basis": "research", "source": "moneypenny2016", "label": "Share of unanswered callers who leave no message", "note": "69% of callers who reached voicemail hung up without leaving one" },
+  "outOfHoursShare": { "value": 28, "unit": "%", "basis": "research", "source": "lightwork2026", "label": "Share of calls that arrive outside 9 to 5", "note": "28% of phone calls to UK estate agencies; the only UK figure we found, so treat it as indicative" },
+  "conversion": { "value": 33, "unit": "%", "basis": "assumption", "label": "Share of enquiries that become customers", "note": "We found no published UK figure by industry, so this is a starting point. Use your own" },
+  "minutesPerCall": { "value": 3, "unit": "min", "basis": "assumption", "label": "Average length of a call" },
+  "visitsPerMonth": { "value": 300, "unit": "visits", "basis": "assumption", "label": "Visits to your website a month" },
+  "adminHours": { "value": 7.3, "unit": "hours a week", "basis": "research", "source": "nerdwallet2025", "label": "Hours a week you spend on admin and keeping an eye on things", "note": "UK business owners spend 7.3 hours a week on admin and operations" },
+  "ownerHourValue": { "value": 40, "unit": "£", "basis": "assumption", "label": "What an hour of your time is worth" },
+  "directorySpend": { "value": 0, "unit": "£ a month", "basis": "yours", "label": "What you spend on lead sites and directories a month", "note": "For reference: Checkatrade's cheapest plan is £30 + VAT a month, without leads; Bark credits are £1.80 each" }
+ },
+ "bands": {
+  "_readme": "Results are shown as a likely figure with a low to high band. These shares are assumptions and are shown as such.",
+  "recoveredLow": 0.5,
+  "recoveredHigh": 1.0,
+  "hoursBackLow": 0.25,
+  "hoursBackHigh": 0.5
+ }
+}

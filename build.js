@@ -62,58 +62,25 @@ function render(tpl, ctx, depth = 0) {
 }
 
 
-/* ---------- Shop: cards rendered from site.config.json ---------- */
-const STATUS = {
-  "available":    { label: "Available now",      cls: "status-available", paid: true,  button: "Buy now" },
-  "preorder":     { label: "Pre-order",          cls: "status-progress",  paid: true,  button: "Pre-order" },
-  "pilot":        { label: "Pilot sign-ups open", cls: "status-progress", paid: false, button: "Join the pilot",     note: "Free to join the list. We'll email you the pilot date and price before asking you to pay." },
-  "early-access": { label: "Early access",       cls: "status-progress",  paid: false, button: "Join early access",  note: "Free to join. You only pay if you choose to subscribe when it launches." },
-  "waitlist":     { label: "Coming soon",        cls: "",                 paid: false, button: "Join the waitlist",  note: "Free. We'll email you once, when it's ready." }
-};
-const CATEGORY = { course: "Course", agents: "AI agent", products: "Digital product" };
-
-function renderCard(item, cfg) {
-  const st = STATUS[item.status];
-  if (!st) throw new Error(`Shop item ${item.id}: unknown status "${item.status}"`);
-  if (st.paid && !/^https:\/\//.test(item.checkoutUrl || "")) {
-    throw new Error(`Shop item ${item.id} is "${item.status}" but has no https checkoutUrl. Add your Stripe payment link or change its status.`);
-  }
-  if (item.status === "preorder" && !item.deliveryNote) {
-    throw new Error(`Shop item ${item.id} is a pre-order but has no deliveryNote (when it will be delivered).`);
-  }
-  const e = escapeHtml;
-  const label = item.buttonLabel || st.button;
-  const button = st.paid
-    ? `<a class="button button-primary shop-button" href="${e(item.checkoutUrl)}" rel="noopener" data-paid="true">${e(label)} · ${e(item.price)}</a>`
-    : `<a class="button button-primary shop-button" href="/shop/?item=${e(item.id)}#join" data-item="${e(item.id)}">${e(label)}</a>`;
-  const note = item.status === "preorder"
-    ? `${item.deliveryNote}. ${cfg.shop.preorderPolicy}`
-    : (st.note || "");
-  const billing = item.billing === "/month" ? `<span class="per">/month</span>` : `<span class="per">${e(item.billing)}</span>`;
-  return `<article class="shop-card shop-${e(item.category)}" id="${e(item.id)}">
-  <div class="shop-card-top"><span class="shop-cat">${e(CATEGORY[item.category] || item.category)}</span><span class="status ${st.cls}">${e(st.label)}</span></div>
-  <h3 class="shop-name">${e(item.name)}</h3>
-  <p class="shop-tagline">${e(item.tagline)}</p>
-  <p class="shop-price"><span class="amount">${e(item.price)}</span>${billing}</p>
-  ${item.priceNote ? `<p class="shop-price-note">${e(item.priceNote)}</p>` : ""}
-  <ul class="shop-features">${item.features.map(f => `<li>${e(f)}</li>`).join("")}</ul>
-  <div class="shop-actions">${button}${item.detailUrl ? `<a class="text-link" href="${e(item.detailUrl)}">Details</a>` : ""}</div>
-  ${note ? `<p class="shop-note">${e(note)}</p>` : ""}
-</article>`;
-}
-
-function shopHtml(cfg) {
-  const items = (cfg.shop && cfg.shop.items) || [];
-  const grid = list => `<div class="shop-grid">${list.map(i => renderCard(i, cfg)).join("\n")}</div>`;
-  const by = c => items.filter(i => i.category === c);
-  const signups = items.filter(i => !STATUS[i.status].paid);
-  return {
-    course: grid(by("course")),
-    agents: grid(by("agents")),
-    products: grid(by("products")),
-    featured: `<div class="shop-grid shop-grid-featured">${items.filter(i => i.featured).map(i => renderCard(i, cfg)).join("\n")}</div>`,
-    joinOptions: signups.map(i => `<option value="${escapeHtml(i.id)}">${escapeHtml(i.name)} (${escapeHtml(CATEGORY[i.category] || i.category)})</option>`).join("")
+/* ---------- Calculator data: calculator.json becomes a small script the page loads ---------- */
+function calculatorScript() {
+  const file = path.join(ROOT, "calculator.json");
+  if (!fs.existsSync(file)) return null;
+  const data = JSON.parse(fs.readFileSync(file, "utf8"));
+  // Prices the calculator compares against come from site.config.json, never from calculator.json
+  const num = s => Number(String(s).replace(/[^0-9.]/g, ""));
+  data.prices = {
+    commandCentre: num(config.prices.commandCentre),
+    launchGrowMonthly: num(config.prices.launchGrow.monthly),
+    launchGrowSetup: num(config.prices.launchGrow.setup),
+    cc: {
+      never: { setup: num(config.prices.cc.never.setup), monthly: num(config.prices.cc.never.monthly), minutes: num(config.prices.cc.never.minutes) },
+      booking: { setup: num(config.prices.cc.booking.setup), monthly: num(config.prices.cc.booking.monthly), minutes: num(config.prices.cc.booking.minutes) },
+      desk: { setup: num(config.prices.cc.desk.setup), monthly: num(config.prices.cc.desk.monthly), minutes: num(config.prices.cc.desk.minutes) }
+    },
+    partnerMonthly: num(config.prices.partner.monthly)
   };
+  return "window.GAINORA_CALC = " + JSON.stringify(data) + ";\n";
 }
 
 function copyDir(from, to) {
@@ -126,14 +93,18 @@ function copyDir(from, to) {
 }
 
 function build() {
+  if (config.demo.phone && !(config.demo.phoneHref && /^https:\/\//.test(config.demo.recordingUrl || ""))) {
+    throw new Error("demo.phone is set but demo.phoneHref or demo.recordingUrl is missing. The 'Ring our receptionist' block needs the number, a tel: value and a recording.");
+  }
   fs.rmSync(DIST, { recursive: true, force: true });
   fs.mkdirSync(DIST, { recursive: true });
   copyDir(path.join(SRC, "assets"), path.join(DIST, "assets"));
 
   const layout = fs.readFileSync(path.join(SRC, "layout.html"), "utf8");
-  const SHOP = shopHtml(config);
   const siteUrl = (config.site.url || "").replace(/\/$/, "");
   const pages = [];
+  const calc = calculatorScript();
+  if (calc) fs.writeFileSync(path.join(DIST, "assets", "calc-data.js"), calc);
 
   for (const file of fs.readdirSync(path.join(SRC, "pages")).filter(f => f.endsWith(".html"))) {
     const raw = fs.readFileSync(path.join(SRC, "pages", file), "utf8");
@@ -143,7 +114,7 @@ function build() {
     const body = raw.slice(m[0].length);
 
     const navState = {};
-    for (const k of ["home", "diagnosis", "solutions", "how", "shop", "about", "contact"]) {
+    for (const k of ["home", "packages", "how", "calculator", "about", "book", "audit"]) {
       navState[k] = meta.nav === k ? ' aria-current="page"' : "";
     }
 
@@ -154,10 +125,10 @@ function build() {
         path: meta.path,
         canonical: siteUrl ? siteUrl + meta.path : "",
         robots: meta.noindex ? "noindex" : "index, follow",
-        bodyClass: meta.bodyClass || ""
+        bodyClass: meta.bodyClass || "",
+        scripts: (meta.scripts || []).map(s => `<script src="${escapeHtml(s)}" defer></script>`).join("\n")
       },
-      year: String(new Date().getFullYear()),
-      shopHtml: SHOP
+      year: String(new Date().getFullYear())
     });
 
     let html = render(layout.replace("{{content}}", body), ctx);

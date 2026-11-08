@@ -2,27 +2,26 @@
   <div class="container footer-grid">
     <div class="footer-brand">
       <p class="wordmark wordmark-footer"><svg class="logo-mark" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><path class="mark-ring" d="M77.58 26.86 A36 36 0 1 0 86 50"/><clipPath id="gc-footer"><circle cx="50" cy="50" r="41.5"/></clipPath><path class="mark-step" d="M95 50 L64 50 L64 64 L44.5 64" clip-path="url(#gc-footer)"/></svg><span>{{brand.name}}</span></p>
-      <p>Business diagnosis, practical solutions and the help to build them.</p>
+      <p>Every call answered, every enquiry followed up, and a clear view of how the business is doing. For businesses of every kind.</p>
       {{#if contact.email}}<p><a href="mailto:{{contact.email}}">{{contact.email}}</a></p>{{/if}}
     </div>
-    <nav class="footer-nav" aria-label="Services">
-      <p class="footer-heading">Services</p>
+    <nav class="footer-nav" aria-label="Packages">
+      <p class="footer-heading">Packages</p>
       <ul>
-        <li><a href="/diagnosis/">Business Diagnosis</a></li>
-        <li><a href="/solutions/#website">Website improvements</a></li>
-        <li><a href="/solutions/#automation">Automation &amp; systems</a></li>
-        <li><a href="/solutions/#reporting">Business reporting</a></li>
-        <li><a href="/custom-solutions/">Custom solutions</a></li>
+        <li><a href="/packages/#command-centre">Command Centre</a></li>
+        <li><a href="/packages/#launch-grow">Launch &amp; Grow</a></li>
+        <li><a href="/packages/#capture-convert">Capture &amp; Convert</a></li>
+        <li><a href="/packages/#partner">Growth &amp; Operations Partner</a></li>
+        <li><a href="/audit/">Business Audit</a></li>
       </ul>
     </nav>
     <nav class="footer-nav" aria-label="Company">
       <p class="footer-heading">Company</p>
       <ul>
-        <li><a href="/how-we-work/">How we work</a></li>
-        <li><a href="/shop/">Shop</a></li>
-        <li><a href="/ai-training/">AI training</a></li>
+        <li><a href="/how-we-work/">How it works</a></li>
+        <li><a href="/calculator/">Business improvement calculator</a></li>
         <li><a href="/about/">About</a></li>
-        <li><a href="/contact/">Contact</a></li>
+        <li><a href="/book/">Book a 15-minute diagnostic</a></li>
       </ul>
     </nav>
     <nav class="footer-nav" aria-label="Legal">
@@ -34,7 +33,7 @@
       </ul>
     </nav>
     <div class="footer-base">
-      <p>© {{year}} {{brand.name}}{{#if brand.legalName}} is a trading name of {{brand.legalName}}{{/if}}{{#if brand.companyNumber}}, registered in England and Wales no. {{brand.companyNumber}}{{/if}}.</p>
+      <p>© {{year}} {{brand.name}}{{#if brand.legalName}} is a trading name of {{brand.legalName}}{{/if}}{{#if brand.companyNumber}}, registered in England and Wales no. {{brand.companyNumber}}{{/if}}. All prices exclude VAT.</p>
       {{#if brand.address}}<p>{{brand.address}}</p>{{/if}}
     </div>
   </div>

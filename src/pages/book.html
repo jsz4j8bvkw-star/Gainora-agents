@@ -1,0 +1,181 @@
+<!--meta {"title": "Book a 15-minute diagnostic | {brand}", "description": "Pick a time for a free 15-minute call about what isn't working in your business, then tell us a little about it. You'll leave the call knowing the right next step.", "path": "/book/", "nav": "book", "scripts": ["/assets/book.js"]} -->
+<header class="page-head">
+  <div class="container">
+    <h1>Book a 15-minute diagnostic.</h1>
+    <p class="lede">A free call about what isn't working. We ask the questions that matter and tell you honestly which package fits, or whether none does. Pick a time, then tell us a little about the business so the call starts in the right place.</p>
+  </div>
+</header>
+
+<section class="section book-steps-section">
+  <div class="container">
+    <ol class="book-steps" aria-label="Two steps">
+      <li class="is-current"><span class="num">1</span><span>Pick a time</span></li>
+      <li><span class="num">2</span><span>Tell us about the business</span></li>
+    </ol>
+  </div>
+</section>
+
+<section class="section" id="time" aria-labelledby="time-title">
+  <div class="container">
+    <div class="split">
+      <h2 class="split-head" id="time-title">1. Pick a time</h2>
+      <div class="split-body">
+        <p class="lede">Choose any slot that suits you. You'll get a calendar invitation straight away, and the call is on the phone or a video link, whichever you prefer.</p>
+        {{#if contact.bookingUrl}}<p><a class="button button-secondary" href="{{contact.bookingUrl}}" rel="noopener" target="_blank">Open the booking calendar in a new tab</a></p>{{/if}}
+      </div>
+    </div>
+    {{#if contact.bookingEmbedUrl}}
+    <div class="calendar-frame">
+      <iframe src="{{contact.bookingEmbedUrl}}" title="Booking calendar: pick a time for your 15-minute diagnostic" loading="lazy"></iframe>
+    </div>
+    <p class="small">If the calendar doesn't load, use the button above, or just fill in the form and we'll reply {{contact.responseTime}} with times.</p>
+    {{/if}}
+    {{#unless contact.bookingEmbedUrl}}
+    <p class="muted">Fill in the form below and we'll reply {{contact.responseTime}} with a few times to choose from.</p>
+    {{/unless}}
+  </div>
+</section>
+
+<section class="section section-deep" id="details" aria-labelledby="details-title">
+  <div class="container form-layout">
+    <aside class="form-aside">
+      <h2 id="details-title">2. Tell us about the business</h2>
+      <p class="lede">About two minutes. It means the call starts with your situation, not with the basics.</p>
+      <ol>
+        <li>We read your answers before the call.</li>
+        <li>On the call we ask the questions that matter and give you a straight answer.</li>
+        <li>You decide what happens next. No obligation.</li>
+      </ol>
+      {{#if contact.email}}<p class="small space-top">Prefer email? Write to <a href="mailto:{{contact.email}}">{{contact.email}}</a>.</p>{{/if}}
+    </aside>
+
+    <div class="form-main">
+      <form class="form js-form" name="diagnostic" method="POST" action="/thanks/" data-netlify="true" netlify-honeypot="bot-field" novalidate>
+        <input type="hidden" name="form-name" value="diagnostic">
+        <input type="hidden" name="source" id="dx-source" value="website">
+        <p class="honeypot" aria-hidden="true"><label>Leave this empty <input name="bot-field" tabindex="-1" autocomplete="off"></label></p>
+
+        <div class="form-row">
+          <div class="field">
+            <label for="dx-name">Your name</label>
+            <input id="dx-name" name="name" autocomplete="name" required maxlength="120" aria-describedby="dx-name-error">
+            <span class="field-error" id="dx-name-error"></span>
+          </div>
+          <div class="field">
+            <label for="dx-business">Business name</label>
+            <input id="dx-business" name="business" autocomplete="organization" required maxlength="160" aria-describedby="dx-business-error">
+            <span class="field-error" id="dx-business-error"></span>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="field">
+            <label for="dx-email">Email</label>
+            <input id="dx-email" name="email" type="email" autocomplete="email" required maxlength="200" aria-describedby="dx-email-error">
+            <span class="field-error" id="dx-email-error"></span>
+          </div>
+          <div class="field">
+            <label for="dx-mobile">Mobile</label>
+            <input id="dx-mobile" name="mobile" type="tel" inputmode="tel" autocomplete="tel" required maxlength="30" aria-describedby="dx-mobile-error">
+            <span class="field-error" id="dx-mobile-error"></span>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="dx-website">Website <span class="hint">(optional)</span></label>
+          <input id="dx-website" name="website" type="url" inputmode="url" placeholder="https://" maxlength="300" aria-describedby="dx-website-error">
+          <span class="field-error" id="dx-website-error"></span>
+        </div>
+
+        <div class="form-row">
+          <div class="field">
+            <label for="dx-type">Type of business</label>
+            <select id="dx-type" name="business_type" required aria-describedby="dx-type-error">
+              <option value="">Choose the closest</option>
+              <option value="trades">Trades and home services</option>
+              <option value="health">Clinic, health or dental</option>
+              <option value="beauty">Beauty, hair or wellness</option>
+              <option value="professional">Professional services</option>
+              <option value="property">Property or lettings</option>
+              <option value="hospitality">Hospitality or events</option>
+              <option value="retail">Retail or online shop</option>
+              <option value="automotive">Automotive</option>
+              <option value="education">Education or training</option>
+              <option value="b2b">Services to other businesses</option>
+              <option value="other">Other</option>
+            </select>
+            <span class="field-error" id="dx-type-error"></span>
+          </div>
+          <div class="field">
+            <label for="dx-size">Size</label>
+            <select id="dx-size" name="size" required aria-describedby="dx-size-error">
+              <option value="">Choose one</option>
+              <option value="solo">Just me</option>
+              <option value="2-5">2 to 5 people</option>
+              <option value="6-20">6 to 20 people</option>
+              <option value="21-50">21 to 50 people</option>
+              <option value="50+">More than 50 people</option>
+            </select>
+            <span class="field-error" id="dx-size-error"></span>
+          </div>
+        </div>
+
+        <fieldset class="field fieldset">
+          <legend>How do enquiries come in? <span class="hint">Tick all that apply</span></legend>
+          <div class="check-grid">
+            <div class="check-item"><input type="checkbox" id="dx-ch-phone" name="channels" value="phone"><label for="dx-ch-phone">Phone</label></div>
+            <div class="check-item"><input type="checkbox" id="dx-ch-website" name="channels" value="website"><label for="dx-ch-website">Website form</label></div>
+            <div class="check-item"><input type="checkbox" id="dx-ch-email" name="channels" value="email"><label for="dx-ch-email">Email</label></div>
+            <div class="check-item"><input type="checkbox" id="dx-ch-social" name="channels" value="social"><label for="dx-ch-social">Social media</label></div>
+            <div class="check-item"><input type="checkbox" id="dx-ch-directories" name="channels" value="directories"><label for="dx-ch-directories">Directories or lead sites</label></div>
+            <div class="check-item"><input type="checkbox" id="dx-ch-walkin" name="channels" value="walk-in"><label for="dx-ch-walkin">Walk-ins or referrals</label></div>
+          </div>
+          <span class="field-error" id="dx-channels-error"></span>
+        </fieldset>
+
+        <div class="form-row">
+          <div class="field">
+            <label for="dx-volume">Roughly how many enquiries a week? <span class="hint">(optional)</span></label>
+            <select id="dx-volume" name="enquiries_per_week" aria-describedby="dx-volume-error">
+              <option value="">Not sure</option>
+              <option value="under-5">Under 5</option>
+              <option value="5-20">5 to 20</option>
+              <option value="20-50">20 to 50</option>
+              <option value="50+">More than 50</option>
+            </select>
+            <span class="field-error" id="dx-volume-error"></span>
+          </div>
+          <div class="field">
+            <label for="dx-package">Which package caught your eye? <span class="hint">(optional)</span></label>
+            <select id="dx-package" name="package" aria-describedby="dx-package-error">
+              <option value="">Not sure yet</option>
+              <option value="capture-convert">Capture &amp; Convert</option>
+              <option value="launch-grow">Launch &amp; Grow</option>
+              <option value="command-centre">Command Centre</option>
+              <option value="partner">Growth &amp; Operations Partner</option>
+              <option value="audit">Business Audit</option>
+            </select>
+            <span class="field-error" id="dx-package-error"></span>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="dx-message">What isn't working? <span class="hint">One to three sentences is plenty.</span></label>
+          <textarea id="dx-message" name="message" required minlength="10" maxlength="3000" aria-describedby="dx-message-error"></textarea>
+          <span class="field-error" id="dx-message-error"></span>
+        </div>
+
+        <p class="form-privacy">Please don't include passwords, customer lists or other people's personal details. We use what you send only to prepare for and follow up the call. See our <a href="/privacy/">privacy policy</a>.</p>
+
+        <div class="check-field">
+          <input id="dx-consent" name="consent" type="checkbox" value="yes" required aria-describedby="dx-consent-error">
+          <label for="dx-consent">{{brand.name}} can contact me about this enquiry.</label>
+        </div>
+        <span class="field-error" id="dx-consent-error"></span>
+
+        <div class="form-status" role="status" aria-live="polite"></div>
+        <div><button class="button button-primary" type="submit">Send my details</button></div>
+      </form>
+    </div>
+  </div>
+</section>

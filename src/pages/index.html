@@ -1,177 +1,187 @@
-<!--meta {"title": "{brand} | Business diagnosis and practical solutions", "description": "We investigate what isn't working in your business, find the likely causes and give you a clear, prioritised plan. If you want help, we can build the fix too.", "path": "/", "nav": "home"} -->
-<section class="hero">
-  <div class="container hero-grid">
-    <div class="hero-copy">
-      <h1>Find what's not working. Know what to do next.</h1>
-      <p class="lede">We investigate the problems holding businesses back, find the likely causes and give you a clear, prioritised plan. If you want help putting it right, we can build the solution too.</p>
-      <div class="actions">
-        <a class="button button-primary" href="/contact/">Get a business diagnosis</a>
-        <a class="button button-secondary" href="/how-we-work/">How we work</a>
-      </div>
+<!--meta {"title": "{brand} | Every call answered. Every enquiry followed up.", "description": "A receptionist that answers every call, follow-ups that never get forgotten, a website that brings enquiries you own, and a clear view of the business. Fixed prices.", "path": "/", "nav": "home", "scripts": ["/assets/calc-data.js", "/assets/calc.js", "/assets/home.js"]} -->
+<section class="hero hero-statement">
+  <div class="container">
+    <h1>Every call answered. Every enquiry followed up. A business that runs while you work.</h1>
+    <p class="lede">{{brand.name}} works with businesses of every kind: trades, clinics, salons, agencies, shops, property and more. Four packages, one fixed price each, and a 15-minute call to find the right one.</p>
+    <div class="actions">
+      <a class="button button-primary" href="/book/">Book a 15-minute diagnostic</a>
+      {{#if demo.phone}}<a class="button button-secondary" href="#receptionist">Ring our receptionist</a>{{/if}}
+      {{#unless demo.phone}}<a class="button button-secondary" href="#packages">See the packages</a>{{/unless}}
     </div>
-
-    <figure class="hero-note case-note" aria-labelledby="case-note-caption">
-      <blockquote class="case-note-quote">Our website gets plenty of visitors, but hardly anyone gets in touch.</blockquote>
-      <ul class="annotations">
-        <li><span class="kind"><span class="mark mark-observed" aria-hidden="true"></span>Observed</span><span>The enquiry form sits at the bottom of a long page and asks for a full postal address.</span></li>
-        <li><span class="kind"><span class="mark mark-check" aria-hidden="true"></span>To verify</span><span>Whether mobile visitors enquire less often than desktop visitors. Needs your analytics.</span></li>
-        <li><span class="kind"><span class="mark mark-cause" aria-hidden="true"></span>Likely cause</span><span>People ready to ask a question face more effort than the question deserves.</span></li>
-        <li><span class="kind"><span class="mark mark-action" aria-hidden="true"></span>Recommend</span><span>Shorten the form, move it up the page and add a direct call option.</span></li>
-      </ul>
-      <figcaption class="case-note-foot" id="case-note-caption">An illustrative example of how we separate what we saw from what still needs checking. Not a client.</figcaption>
-    </figure>
+    <a class="scroll-cue" href="#packages" aria-label="Scroll to the packages"><span></span></a>
   </div>
 </section>
 
-<section class="section section-deep">
-  <div class="container">
-    <div class="split">
-      <h2 class="split-head">Most business problems have a cause. Finding it is the first step.</h2>
-      <p class="split-body lede">Owners usually know something is wrong long before they know why. These are the kinds of situations people bring to us.</p>
+{{#if demo.phone}}
+<section class="section demo" id="receptionist" aria-labelledby="demo-title">
+  <div class="container demo-grid">
+    <div>
+      <p class="eyebrow">Ring our receptionist</p>
+      <h2 id="demo-title">Hear it before you buy it.</h2>
+      <p class="lede">Call the number and ask about a job or an appointment, as a customer would. The receptionist that answers is the one your customers would get.</p>
     </div>
-    <ul class="problems">
-      <li>Your website isn't turning visitors into enquiries.</li>
-      <li>Important follow-ups get missed.</li>
-      <li>Your team repeats the same manual tasks every week.</li>
-      <li>Your systems don't talk to each other.</li>
-      <li>Your reports don't give you a clear picture.</li>
-      <li>Customers struggle with processes that should be simple.</li>
-    </ul>
-    <p class="problems-foot muted">Sometimes the cause is obvious once someone looks properly. Sometimes it's somewhere you weren't looking at all. Either way, it's cheaper to understand it before you spend money fixing it.</p>
+    <div class="demo-card">
+      <a class="demo-number" href="tel:{{demo.phoneHref}}">{{demo.phone}}</a>
+      <p class="small">Open 24 hours. Calls to this number are recorded so we can keep improving the receptionist.</p>
+      <p class="demo-label">A real call, 90 seconds</p><audio controls preload="none" src="{{demo.recordingUrl}}"></audio>
+    </div>
   </div>
 </section>
+{{/if}}
 
-<section class="section">
+<section class="section packages-home" id="packages" aria-labelledby="packages-title">
   <div class="container">
     <div class="split">
-      <h2 class="split-head">Understand the problem before paying to fix it.</h2>
-      <p class="split-body lede">A Business Diagnosis is a focused investigation into one area of your business that isn't working as it should. You get a report you can act on yourself, with your own team, or with us.</p>
+      <h2 class="split-head" id="packages-title">Four packages. One fixed price each.</h2>
+      <p class="split-body lede">Each one solves a problem owners describe in the same words. Start with the one that sounds like you. Every price excludes VAT, and there's nothing else to buy.</p>
     </div>
-    <div class="offer-grid">
-      <div class="offer-text">
-        <h3>What the report gives you</h3>
-        <ul class="checklist">
-          <li><strong>Findings</strong> about what is actually going wrong</li>
-          <li><strong>Evidence</strong> behind each finding, with what we observed kept separate from what still needs confirming</li>
-          <li><strong>Priorities</strong>, so you know which problems are worth solving first</li>
-          <li><strong>Recommended solutions</strong> in plain language</li>
-          <li><strong>Next steps</strong> you can take with or without us</li>
+
+    <div class="pkg-grid">
+      <article class="pkg-card pkg-start" id="pkg-capture-convert">
+        <p class="pkg-flag">Start here</p>
+        <p class="pkg-quote">"I miss calls and enquiries, and I forget to follow up."</p>
+        <h3 class="pkg-name">Capture &amp; Convert</h3>
+        <p class="pkg-line">A receptionist that answers every call, day and night, and follow-ups that send themselves.</p>
+        <p class="pkg-price"><span class="amount">{{prices.cc.booking.monthly}}</span><span class="per">/month</span></p>
+        <p class="pkg-price-note">{{prices.cc.booking.name}}: {{prices.cc.booking.setup}} setup, {{prices.cc.booking.minutes}} minutes a month</p>
+        <ul class="pkg-outcomes">
+          <li>Every call answered, details taken, the customer texted a confirmation</li>
+          <li>Urgent calls sent straight to your mobile</li>
+          <li>Quotes chased, invoices reminded, reviews requested, automatically</li>
+          <li>Appointments booked into your diary</li>
         </ul>
-        <div class="price-line"><span class="from">from</span><span class="amount">{{prices.diagnosis}}</span></div>
-        <p class="small">For a clearly scoped diagnosis of one business area. We agree the scope and price with you before any work starts.</p>
-        <div class="actions">
-          <a class="button button-primary" href="/contact/">Request your diagnosis</a>
-          <a class="text-link" href="/diagnosis/">What's included in detail</a>
-        </div>
-      </div>
-      <div class="offer-doc">
-        <div class="report-stack">
-          <div class="report" role="img" aria-label="Illustration of a Business Diagnosis report contents page. Illustrative sample.">
-            <div class="report-label"><span>{{brand.name}} · Business Diagnosis</span><span class="sample-tag">Illustrative sample</span></div>
-            <p class="report-title">Why enquiries aren't reaching the sales team</p>
-            <p class="report-sub">Prepared for a fictional professional services firm</p>
-            <ol class="report-toc">
-              <li>Executive summary<span class="toc-note">One page</span></li>
-              <li>Scope of the investigation</li>
-              <li>Key findings and evidence</li>
-              <li>Priority ranking<span class="toc-note">Impact against effort</span></li>
-              <li>Recommended solutions</li>
-              <li>Quick wins and longer-term changes</li>
-              <li>Next steps</li>
-            </ol>
-          </div>
-        </div>
-      </div>
+        <p class="pkg-tiers">Also {{prices.cc.never.name}}: {{prices.cc.never.setup}} setup, {{prices.cc.never.monthly}} a month. And {{prices.cc.desk.name}}: {{prices.cc.desk.setup}} setup, {{prices.cc.desk.monthly}} a month.</p>
+        <a class="button button-primary" href="/packages/#capture-convert">See how it works</a>
+      </article>
+
+      <article class="pkg-card" id="pkg-launch-grow">
+        <p class="pkg-quote">"Nobody finds me online, or I'm paying for shared leads."</p>
+        <h3 class="pkg-name">Launch &amp; Grow</h3>
+        <p class="pkg-line">Get found online and turn visitors into enquiries you own.</p>
+        <p class="pkg-price"><span class="amount">{{prices.launchGrow.monthly}}</span><span class="per">/month</span></p>
+        <p class="pkg-price-note">{{prices.launchGrow.setup}} setup. Ad spend is paid by you, to Google or Meta</p>
+        <ul class="pkg-outcomes">
+          <li>A website, Google Business Profile and review system in your name</li>
+          <li>Enquiries that come to you, not to a lead site that sells them on</li>
+          <li>Ads managed, profile posted, small updates made each month</li>
+          <li>Command Centre included, with a monthly call</li>
+        </ul>
+        <a class="button button-secondary" href="/packages/#launch-grow">See how it works</a>
+      </article>
+
+      <article class="pkg-card" id="pkg-command-centre">
+        <p class="pkg-quote">"I don't know what's going on, and I have no time to find out."</p>
+        <h3 class="pkg-name">Command Centre</h3>
+        <p class="pkg-line">A weekly watch on your website, reviews and competitors, and a plain-English brief on what to do about it.</p>
+        <p class="pkg-price"><span class="amount">{{prices.commandCentre}}</span><span class="per">/month</span></p>
+        <p class="pkg-price-note">No setup fee. Cancel any time</p>
+        <ul class="pkg-outcomes">
+          <li>Website, speed and competitor checks every week</li>
+          <li>Google review replies drafted for you</li>
+          <li>Leads and follow-ups you'd otherwise forget, flagged</li>
+          <li>Weekly priorities, monthly results</li>
+        </ul>
+        <a class="button button-secondary" href="/packages/#command-centre">See how it works</a>
+      </article>
+
+      <article class="pkg-card" id="pkg-partner">
+        <p class="pkg-quote">"The business runs on me, and it's breaking."</p>
+        <h3 class="pkg-name">Growth &amp; Operations Partner</h3>
+        <p class="pkg-line">For businesses with a team, where the owner has become the bottleneck.</p>
+        <p class="pkg-price"><span class="amount">{{prices.partner.monthly}}</span><span class="per">/month to run</span></p>
+        <p class="pkg-price-note">After a {{prices.partner.audit}} audit and a fix at {{prices.partner.focused}}, {{prices.partner.core}} or {{prices.partner.whole}}</p>
+        <ul class="pkg-outcomes">
+          <li>A costed fix plan before you commit to anything</li>
+          <li>The systems built, tested and handed over</li>
+          <li>Monthly running and review, Command Centre included</li>
+          <li>For teams of roughly 5 to 50 people</li>
+        </ul>
+        <a class="button button-secondary" href="/packages/#partner">See how it works</a>
+      </article>
+    </div>
+
+    <div class="audit-line">
+      <p><strong>Not sure which?</strong> The {{prices.audit}} Business Audit tells you what to fix first, in writing. It's credited in full against any package you take within {{prices.auditCreditDays}} days. <a href="/audit/">About the audit</a></p>
     </div>
   </div>
 </section>
 
-<section class="section shop-strip" aria-labelledby="shop-strip-title">
-  <div class="container">
-    <div class="shop-strip-head">
-      <div>
-        <h2 id="shop-strip-title">Prefer to do it yourself?</h2>
-        <p class="lede">Learn with our AI course, put a specialist AI agent to work, or use a ready-made tool.</p>
-      </div>
-      <a class="button button-secondary" href="/shop/">Visit the shop</a>
+<section class="rail-section" id="how" aria-labelledby="how-title">
+  <div class="container rail-layout">
+    <aside class="rail" aria-hidden="true">
+      <ol class="rail-marks">
+        <li data-stage="1"><span class="n">01</span><span class="w">Call</span></li>
+        <li data-stage="2"><span class="n">02</span><span class="w">Plan</span></li>
+        <li data-stage="3"><span class="n">03</span><span class="w">Live</span></li>
+        <li data-stage="4"><span class="n">04</span><span class="w">Running</span></li>
+      </ol>
+    </aside>
+    <div class="rail-stages">
+      <p class="eyebrow eyebrow-dark">How it works</p>
+      <h2 class="visually-hidden" id="how-title">How it works</h2>
+
+      <section class="stage" data-stage="1">
+        <p class="stage-num">01</p>
+        <h3>A 15-minute call about what isn't working</h3>
+        <p>You tell us what's happening and what you've tried. We ask the questions that matter and tell you honestly which package fits, or whether none does. No pitch, no obligation.</p>
+        <a class="text-link text-link-dark" href="/book/">Book the call</a>
+      </section>
+
+      <section class="stage" data-stage="2">
+        <p class="stage-num">02</p>
+        <h3>A plan you can act on, with or without us</h3>
+        <p>If it isn't obvious what to fix first, the {{prices.audit}} Business Audit finds out and writes it down: what we saw, what it's costing you and what to do in what order. Take a package within {{prices.auditCreditDays}} days and the audit is credited in full.</p>
+        <a class="text-link text-link-dark" href="/audit/">About the audit</a>
+      </section>
+
+      <section class="stage" data-stage="3">
+        <p class="stage-num">03</p>
+        <h3>Your package goes live</h3>
+        <p>We set it up with you: the receptionist learns your services, prices and diary; the website and Google profile go up in your name; the Command Centre starts watching. You approve everything before it reaches a customer.</p>
+        <a class="text-link text-link-dark" href="/packages/">See the packages</a>
+      </section>
+
+      <section class="stage" data-stage="4">
+        <p class="stage-num">04</p>
+        <h3>It keeps running. We keep improving it.</h3>
+        <p>Every month you get the numbers: calls answered, enquiries caught out of hours, jobs booked, reviews gained. We tune what the numbers say needs tuning. You own the website, the number, the profile and the data, and you keep them if you leave.</p>
+        <a class="text-link text-link-dark" href="/how-we-work/">How we work</a>
+      </section>
     </div>
-    {{{shopHtml.featured}}}
   </div>
 </section>
 
-<section class="section section-deep" id="how">
+<section class="section calc-teaser" id="calculator" aria-labelledby="calc-title">
   <div class="container">
     <div class="split">
-      <h2 class="split-head">You get answers first. You decide what happens next.</h2>
-      <p class="split-body lede">Four stages, with a clear handover at the end. Nothing about the diagnosis depends on you hiring us afterwards.</p>
+      <div class="split-head">
+        <p class="eyebrow">Business improvement calculator</p>
+        <h2 id="calc-title">What could it be worth to a business like yours?</h2>
+      </div>
+      <p class="split-body lede">Pick your type and size of business. The starting figures come from published research, with the source shown. Change any of them to match your business.</p>
     </div>
-    <ol class="steps">
-      <li><h3>Tell us about your business</h3><p>What's happening, what you've tried and what you'd like to be different. We agree what to investigate and the price.</p></li>
-      <li><h3>We investigate</h3><p>We examine the evidence you authorise us to see, research the problem and work out the likely causes.</p></li>
-      <li><h3>You receive the report</h3><p>Clear findings, the evidence behind them, priorities and recommendations, walked through with you.</p></li>
-      <li class="step-emph"><h3>You decide what's next</h3><p>Act on it yourself, give it to your team, or ask us to help implement some or all of it.</p></li>
+    <div class="calc calc-mini" data-calc="mini">
+      <noscript><p class="muted">The calculator needs JavaScript. <a href="/calculator/">Open the full calculator</a> or <a href="/book/">book a 15-minute diagnostic</a>.</p></noscript>
+    </div>
+    <div class="actions"><a class="button button-secondary" href="/calculator/">Open the full calculator</a></div>
+  </div>
+</section>
+
+<section class="section section-deep" aria-labelledby="principles-title">
+  <div class="container">
+    <div class="split">
+      <h2 class="split-head" id="principles-title">Why we work this way</h2>
+      <p class="split-body lede">The same rules apply to every package, every client and every month.</p>
+    </div>
+    <ol class="principles principles-numbered">
+      <li><h3>Outcomes, not tools.</h3><p>You're buying answered calls and booked jobs, not software. We use modern tools, including AI, and a person checks what they do.</p></li>
+      <li><h3>Honest with your customers.</h3><p>The receptionist never claims to be a person, and says so if asked. Every message to a customer is one you've switched on, approved or written.</p></li>
+      <li><h3>Fixed prices, in writing.</h3><p>One price per package, ex-VAT, agreed before anything starts. No open-ended billing.</p></li>
+      <li><h3>You own everything.</h3><p>Your website, domain, phone number, Google profile and data stay in your name, and leave with you if you go.</p></li>
+      <li><h3>Measured, including when it doesn't work.</h3><p>Monthly numbers, and we tell you when a change made no difference.</p></li>
+      <li><h3>No pushing.</h3><p>The audit stands on its own. What happens next is your decision.</p></li>
     </ol>
-    <div class="optional-note"><p><strong>Implementation is optional.</strong> The report is yours to use however you like. We'll never make a recommendation just because it leads to more work for us.</p></div>
   </div>
 </section>
-
-<section class="section">
-  <div class="container">
-    <div class="split">
-      <h2 class="split-head">From finding the problem to building the solution.</h2>
-      <p class="split-body lede">When a diagnosis points to a fix, we can help build it. Every piece of work is scoped around the problem you actually have.</p>
-    </div>
-    <ul class="rows">
-      <li><a class="row-link" href="/solutions/#website"><h3>Website improvements</h3><p>Clearer customer journeys, better enquiry forms, faster pages and fixes to the areas that are losing you customers.</p><span class="row-price">from {{prices.website}}</span></a></li>
-      <li><a class="row-link" href="/solutions/#automation"><h3>Business automation</h3><p>Take repetitive admin off your team: enquiry tracking, follow-up reminders, onboarding and handoffs.</p><span class="row-price">from {{prices.automation}}</span></a></li>
-      <li><a class="row-link" href="/solutions/#systems"><h3>Digital systems</h3><p>Internal tools, customer tracking and integrations between the software you already use.</p><span class="row-price">Quoted on scope</span></a></li>
-      <li><a class="row-link" href="/solutions/#reporting"><h3>Reporting and dashboards</h3><p>Turn the information you already have into a clear picture of how the business is doing.</p><span class="row-price">Quoted on scope</span></a></li>
-      <li><a class="row-link" href="/custom-solutions/"><h3>Custom solutions</h3><p>For problems that don't fit a package. We assess what's feasible before we commit to anything.</p><span class="row-price">Quoted on scope</span></a></li>
-    </ul>
-  </div>
-</section>
-
-<section class="section section-deep">
-  <div class="container">
-    <div class="split">
-      <h2 class="split-head">What a solution can look like</h2>
-      <p class="split-body lede">Illustrative problem-and-solution scenarios showing the kind of work we do. They are examples, not past client projects.</p>
-    </div>
-    <div class="scenarios">
-      <article class="scenario">
-        <h3>Missed enquiries</h3>
-        <dl><dt>Problem</dt><dd>Enquiries arrive by email, phone and web form, and some are never answered.</dd><dt>Solution</dt><dd>One place where every enquiry is captured, assigned and followed up, with reminders when something is waiting.</dd></dl>
-      </article>
-      <article class="scenario">
-        <h3>Manual reporting</h3>
-        <dl><dt>Problem</dt><dd>Someone spends a day each month copying figures between spreadsheets.</dd><dt>Solution</dt><dd>An automated report that pulls the figures together into a dashboard the whole team can read.</dd></dl>
-      </article>
-      <article class="scenario">
-        <h3>Poor website experience</h3>
-        <dl><dt>Problem</dt><dd>Visitors arrive but can't easily find what they need or how to take the next step.</dd><dt>Solution</dt><dd>A clearer customer journey with fewer obstacles and an obvious next action on every key page.</dd></dl>
-      </article>
-      <article class="scenario">
-        <h3>Disconnected systems</h3>
-        <dl><dt>Problem</dt><dd>The same customer details are typed into three different tools.</dd><dt>Solution</dt><dd>An integration that passes information between tools automatically and removes the manual handoff.</dd></dl>
-      </article>
-    </div>
-  </div>
-</section>
-
-<section class="section">
-  <div class="container">
-    <h2 class="measure">Why we work this way</h2>
-    <ul class="principles">
-      <li><h3>We investigate before recommending.</h3><p>No off-the-shelf fixes before we understand the problem.</p></li>
-      <li><h3>We separate facts from assumptions.</h3><p>Every finding says what we saw, what the evidence supports and what still needs checking.</p></li>
-      <li><h3>We explain things plainly.</h3><p>Reports written for the people who run the business, not for other consultants.</p></li>
-      <li><h3>We prioritise what matters.</h3><p>Some problems aren't worth the cost of fixing. We'll tell you which.</p></li>
-      <li><h3>We build practical solutions.</h3><p>When you want help, we implement, test and hand over working changes.</p></li>
-      <li><h3>We don't push implementation.</h3><p>The diagnosis stands on its own. What happens next is your decision.</p></li>
-    </ul>
-  </div>
-</section>
-
-
 
 {{> cta}}
