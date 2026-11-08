@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "Gainora Capture & Convert: an AI receptionist run as a managed service, with an enquiries inbox and follow-ups for UK trades.",
+  "description": "Gainora Capture & Convert: an AI receptionist run as a managed service for beauty and aesthetics clinics, salons and other appointment and trade businesses, with an enquiries inbox, automations and follow-ups.",
   "scripts": {
     "build": "node scripts/build.mjs",
     "build:demo": "node scripts/build.mjs --demo",

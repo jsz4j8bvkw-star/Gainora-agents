@@ -140,6 +140,7 @@ export function packFromSettings(s: CaptureSettings): ReceptionistPack {
       'Best phone number: confirm the number they are calling from, or read a new one back.',
       `Whether they are a new or returning ${who}.`,
       'In a few words, what they would like help with. Do not ask for medical details beyond that.',
+      ...(beauty ? ['If they mention an occasion or a date they need it for (a wedding, a holiday, a birthday), note it: it matters for timing.'] : []),
       'Which days and times suit them.',
       'Email address only if they want a confirmation by email: spell it back.',
     ] : [
