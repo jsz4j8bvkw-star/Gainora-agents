@@ -134,8 +134,8 @@ export async function checkCompetitors(userId: string, profile: any, learned?: L
   try {
     const r = await ai({
       userId, agent: 'watcher', maxTokens: 900, fast: true,
-      system: `${HOUSE_STYLE}\nYou explain competitor website changes to a small business owner. Only use the facts given. Return JSON only.`,
-      messages: [{ role: 'user', content: `${profileContext(profile)}\n\nChanges spotted today (facts only):\n${found.map((f, i) => `${i + 1}. ${f.summary}\nDetail: ${JSON.stringify(f.raw).slice(0, 800)}`).join('\n\n')}\n\nReturn a JSON array with one object per change, same order: {"summary": "one sentence of what changed", "detail": "one or two sentences on why it matters for this business and what to consider"}.` }],
+      system: `${HOUSE_STYLE}\nYou explain competitor website changes to a business owner. Only use the facts given; never guess at prices, dates or reasons that are not in them. Return JSON only.`,
+      messages: [{ role: 'user', content: `${profileContext(profile)}\n\nChanges spotted today (facts only):\n${found.map((f, i) => `${i + 1}. ${f.summary}\nDetail: ${JSON.stringify(f.raw).slice(0, 800)}`).join('\n\n')}\n\nReturn a JSON array with one object per change, same order: {"summary": "one plain sentence of what changed, naming the competitor", "detail": "What this means for this owner in one sentence (compare with the owner's own prices, offer or edge where the profile gives them), then one concrete thing to consider, starting 'Worth considering:'. If it changes nothing for them, say so plainly."}.` }],
     });
     details = extractJson(r.text);
   } catch (e: any) { console.error('[gainora] watcher ai', e?.message); }
@@ -252,7 +252,7 @@ export async function buildPriceTable(userId: string, profile: any, now = new Da
   const fmt = (pages: { url: string; lines: string[] }[]) => pages.map((p) => `Page: ${p.url}\n${p.lines.join('\n')}`).join('\n\n') || '(no prices found)';
   const r = await ai({
     userId, agent: 'watcher', maxTokens: 2000, fast: true,
-    system: `${HOUSE_STYLE}\nYou build a like-for-like price comparison for a small business. You get lines of text containing prices from the owner's website and from competitors' websites, each with the page it came from. Pair up products or services a customer would genuinely compare (same kind of item, similar size or scope). Use only prices that appear in the lines, copied exactly, with the exact page URL they came from. Use null when a business has no comparable item. Return JSON only: {"rows": [{"item": "short generic name, e.g. Large serving bowl", "yours": {"price": "£48", "name": "the owner's product name", "url": "page url"} or null, "theirs": [one entry per competitor, in the order given, same shape or null], "note": "optional, under 15 words"}]}. At most 10 rows, the most useful comparisons first.`,
+    system: `${HOUSE_STYLE}\nYou build a like-for-like price comparison for a business. You get lines of text containing prices from the owner's website and from competitors' websites, each with the page it came from. Pair up products or services a customer would genuinely compare (same kind of item, similar size or scope). Use only prices that appear in the lines, copied exactly, with the exact page URL they came from. Use null when a business has no comparable item. Return JSON only: {"rows": [{"item": "short generic name, e.g. Large serving bowl", "yours": {"price": "£48", "name": "the owner's product name", "url": "page url"} or null, "theirs": [one entry per competitor, in the order given, same shape or null], "note": "optional, under 15 words"}]}. At most 10 rows, the most useful comparisons first.`,
     messages: [{ role: 'user', content: `${profileContext(profile)}\n\nTHE OWNER'S WEBSITE\n${fmt(mine)}\n\n${comps.map((c, i) => `COMPETITOR ${i + 1}: ${c.name}\n${fmt(theirs[i])}`).join('\n\n')}` }],
   });
   const raw = extractJson<any>(r.text);

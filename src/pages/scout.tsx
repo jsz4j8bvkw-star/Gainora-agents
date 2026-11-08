@@ -427,7 +427,7 @@ function Contracts({ state }: { state: ReturnType<typeof useLoad<Tender[]>> }) {
             <article className="tender" key={t.id}>
               <div className="row gap-8 wrap">
                 <span className={`tag ${t.fit === 'strong' ? 'tag-forest' : 'tag-plain'}`}>{t.fit === 'strong' ? 'Strong fit' : 'Worth a look'}</span>
-                {t.sme && <span className="tag tag-plain">Suitable for small businesses</span>}
+                {t.sme && <span className="tag tag-plain">Open to smaller suppliers</span>}
                 {d != null && <span className={`tag ${d <= 7 ? 'tag-danger' : 'tag-plain'}`}>{d <= 0 ? 'Closes today' : `Closes in ${d} ${d === 1 ? 'day' : 'days'}`}</span>}
               </div>
               <h3 className="tender-title">{t.title}</h3>

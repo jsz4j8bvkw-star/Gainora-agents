@@ -54,17 +54,18 @@ export function cleanScoutResults(raw: ScoutResultIn[], profile: any, citedHosts
   return out.slice(0, 12);
 }
 
-const CUSTOMER_PROMPT = `You are The Scout, a research agent for a UK small business. Use web search to find real businesses or organisations that match the owner's request.
+const CUSTOMER_PROMPT = `You are The Scout, a research agent for a UK business. Use web search to find real businesses or organisations that match the owner's request.
 Rules:
 - Only businesses and organisations, never private individuals. Do not include personal email addresses, personal phone numbers or LinkedIn profiles.
 - Every result must come from a page you actually found in search, and source_url must be that page.
-- Never include the owner's own business or their listed competitors.
+- Never include the owner's own business or their listed competitors. Prefer independents and organisations a business this size could realistically sell to; skip national chains unless the owner asked for them.
 - "strong" fit means there is clear public evidence they match; otherwise "possible".
+- The reason must point to the evidence on the page ("their stockists page lists six independent makers", "they posted that they are looking for new Christmas stock") and then say why that matters for this owner's offer. Never write a reason that could apply to any business.
 - Do not guess revenue, size or contact names.
 Finish with JSON only, in this shape:
-{"summary": "two sentences on what you found", "results": [{"name": "", "location": "town", "website": "https://", "fit": "strong|possible", "reason": "one or two sentences of evidence-based reasoning", "source_url": "https://", "source_title": ""}]}`;
+{"summary": "two sentences on what you found", "results": [{"name": "", "location": "town", "website": "https://", "fit": "strong|possible", "reason": "one or two sentences: the evidence, then why it fits", "source_url": "https://", "source_title": ""}]}`;
 
-const LOCAL_PROMPT = `You are The Scout, researching local opportunities for a UK small business: markets, fairs, festivals, networking groups, business awards, trade shows and community events in the coming months where the owner could meet their customers or partners.
+const LOCAL_PROMPT = `You are The Scout, researching local opportunities for a UK business: markets, fairs, festivals, networking groups, business awards, trade shows and community events in the coming months where the owner could meet their customers or partners.
 Rules:
 - Only real, upcoming opportunities you found in search, with the page as source_url. Skip anything that has already happened.
 - Say when it happens and how to take part (how to book a stall, enter or attend), using only what the source says. If a cost is published, include it.
@@ -146,8 +147,8 @@ export async function draftReviewReply(userId: string, profile: any, review: Rev
   try {
     const r = await ai({
       userId, agent: 'watcher', maxTokens: 400, fast: true,
-      system: `${HOUSE_STYLE}\nWrite the owner's public reply to a Google review. 40 to 90 words. Thank the reviewer by first name. Refer to something specific they said. For a critical review: apologise sincerely without arguing or blaming, and invite them to get in touch so it can be put right (do not invent contact details). Never offer discounts, refunds or gifts in exchange for changing the review, and never mention other customers. Sign with the owner's first name. Plain text only.`,
-      messages: [{ role: 'user', content: `${profileContext(profile)}\n\nReview by ${review.author}, ${review.rating} stars:\n"${review.text || '(no text, rating only)'}"` }],
+      system: `${HOUSE_STYLE}\nWrite the owner's public reply to a Google review, in the owner's voice: the business's preferred writing style, its products and what it is proud of (its edge), so it could not have been written for any other business. Thank the reviewer by first name. Refer to the specific thing they praised or complained about, naming the product or service if they did. Lengths: 5 stars 30 to 60 words; 4 stars 40 to 70 words; 3 stars or below 60 to 100 words. For a critical review: apologise sincerely for the specific problem without arguing, blaming or explaining it away, say what will happen next, and invite them to get in touch so it can be put right (do not invent contact details, phone numbers or names). Never offer discounts, refunds or gifts in exchange for changing the review, never mention other customers or competitors, and never promise an outcome. UK spelling. Sign with the owner's first name only. Plain text only, no subject line.`,
+      messages: [{ role: 'user', content: `${profileContext(profile)}\n\nReview by ${review.author}, ${review.rating} stars${review.when ? `, ${review.when}` : ''}:\n"${review.text || '(no text, rating only)'}"` }],
     });
     const t = r.text.trim();
     if (t.length > 20 && !hasBanned(t) && !/discount|voucher|refund in exchange/i.test(t)) text = t;
@@ -169,7 +170,7 @@ export async function draftWinback(userId: string, profile: any, changes: Metric
   try {
     const r = await ai({
       userId, agent: 'brief', maxTokens: 900, fast: true,
-      system: `${HOUSE_STYLE}\nWrite three short messages the owner can send to past customers to bring them back: an email (under 120 words, with a subject line starting "Subject: "), a text message (under 45 words, ending "Reply STOP to opt out."), and a social media post (under 60 words, no hashtags spam, at most two). Use {first name} as a placeholder. Only mention offers, products or facts given in the business profile; never invent a discount, a deadline or a product. Return JSON only: {"email": "", "text": "", "social": ""}`,
+      system: `${HOUSE_STYLE}\nWrite three short messages the owner can send to past customers to bring them back: an email (under 120 words, with a subject line starting "Subject: "), a text message (under 45 words, ending "Reply STOP to opt out."), and a social media post (under 60 words, at most two hashtags). Write in the business's preferred style and lead with its best seller or edge, so the messages could only be from this business. Give the reader one clear, low-pressure reason to come back now. Use {first name} as a placeholder. Only mention offers, products or facts given in the business profile; never invent a discount, a deadline, a price or a product. Return JSON only: {"email": "", "text": "", "social": ""}`,
       messages: [{ role: 'user', content: `${profileContext(profile)}\n\nThis week's numbers: ${moves || 'not provided'}` }],
     });
     const j = extractJson(r.text);

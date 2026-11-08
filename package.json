@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "Gainora Agents: The Watcher, The Scout and The Brief for small businesses.",
+  "description": "Gainora Command Centre: The Watcher, The Scout and The Brief for businesses.",
   "scripts": {
     "build": "node scripts/build.mjs",
     "build:demo": "node scripts/build.mjs --demo",

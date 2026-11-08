@@ -76,11 +76,11 @@ export async function matchTendersForUser(userId: string, profile: any, tenders:
   try {
     const r = await ai({
       userId, agent: 'scout', maxTokens: 1800, fast: true,
-      system: `${HOUSE_STYLE}\nYou check UK public sector contract notices for a small business. For each notice decide whether this business could realistically bid: "strong" (clearly what they sell, at a size they could deliver), "possible" (related and worth a look), or "no". Judge only from the notice and the business profile; don't assume extra capabilities. Give one sentence naming what in the notice fits. Return JSON only: [{"id": "", "fit": "strong|possible|no", "reason": ""}]${learned.rules.length ? `\n\nThe owner's preferences:\n- ${learned.rules.join('\n- ')}` : ''}`,
+      system: `${HOUSE_STYLE}\nYou check UK public sector contract notices for a business. For each notice decide whether this business could realistically bid: "strong" (clearly what they sell, at a size their team could deliver), "possible" (related and worth a look), or "no". Judge only from the notice and the business profile; don't assume extra capabilities. Give one or two sentences naming what in the notice fits what they sell, and anything they would clearly need to have (insurance, volume, a partner) that the notice states. Return JSON only: [{"id": "", "fit": "strong|possible|no", "reason": ""}]${learned.rules.length ? `\n\nThe owner's preferences:\n- ${learned.rules.join('\n- ')}` : ''}`,
       messages: [{ role: 'user', content: `${profileContext(profile)}\n\nNotices:\n\n${list.map((s) => [
         `ID: ${s.tender.id}`, `Title: ${s.tender.title}`, `Buyer: ${s.tender.buyer}`,
         `Value: ${s.tender.value ? money(s.tender.value) : 'not stated'}`, `Closes: ${s.tender.deadline?.slice(0, 10) ?? 'not stated'}`,
-        `Region: ${s.tender.region ?? 'not stated'}`, `Suitable for small businesses: ${s.tender.sme === true ? 'yes' : s.tender.sme === false ? 'no' : 'not stated'}`,
+        `Region: ${s.tender.region ?? 'not stated'}`, `Suitable for SMEs: ${s.tender.sme === true ? 'yes' : s.tender.sme === false ? 'no' : 'not stated'}`,
         `Description: ${s.tender.description.slice(0, 700)}`,
       ].join('\n')).join('\n\n')}` }],
     });
