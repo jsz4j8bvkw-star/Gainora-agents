@@ -7,6 +7,7 @@ import { isDue } from '../../shared/leads';
 import { daysLeft } from '../../shared/tenders';
 import { fallbackReply, type ReviewItem } from '../../shared/reviews';
 import type { Learned } from '../../shared/learning';
+import { ASK_SOURCE_LINE, block, parseSources, sourceCatalogue } from '../../shared/ask';
 
 const rid = () => 'r_' + Math.random().toString(36).slice(2, 10);
 const isHttp = (u: unknown) => { try { const x = new URL(String(u)); return x.protocol === 'https:' || x.protocol === 'http:'; } catch { return false; } };
@@ -286,30 +287,34 @@ export async function answer(userId: string, profile: any, question: string) {
   ]);
   const w = ws[0]?.state;
   const rv = w?.reviews;
+  const day = (iso?: string) => (iso ? String(iso).slice(0, 10) : '');
   const context = [
-    profileContext(profile),
-    w ? `Website check (${w.lastCheck}): ${w.up ? 'online' : 'DOWN'}, ${w.responseMs}ms, ${w.brokenLinks?.length ?? 0} broken links. Issues: ${(w.issues || []).map((i: any) => i.title).join('; ') || 'none'}.` : 'Website: not checked yet.',
-    w?.speed ? `Google speed test (${w.speed.checkedAt.slice(0, 10)}): speed ${w.speed.scores.performance}/100, Google basics ${w.speed.scores.seo}/100. Top fixes: ${w.speed.fixes.filter((f: any) => !f.done).slice(0, 3).map((f: any) => f.title).join('; ') || 'none'}.` : '',
-    rv ? `Google reviews: ${rv.rating} stars from ${rv.count} reviews. Recent: ${rv.reviews.slice(0, 5).map((r: any) => `${r.author} ${r.rating}★ "${String(r.text).slice(0, 120)}"`).join(' | ')}. Competitors: ${rv.competitors.map((c: any) => `${c.name} ${c.rating ?? '–'}★ (${c.count ?? '–'})`).join(', ')}.` : 'Google reviews: listing not connected yet.',
-    w?.prices?.rows?.length ? `Price comparison: ${w.prices.rows.map((r: any) => `${r.item}: you ${r.yours?.price ?? '–'}; ${w.prices.competitors.map((c: string, i: number) => `${c} ${r.theirs[i]?.price ?? '–'}`).join(', ')}`).join(' | ')}` : '',
-    changes.length ? `Competitor changes:\n${changes.map((c) => `- ${c.created_at.slice(0, 10)} ${c.summary} ${c.detail || ''}`).join('\n')}` : 'Competitor changes: none recorded yet.',
-    scout.length ? `Scout research:\n${scout.map((s) => `- "${s.query}" (${s.kind ?? 'customers'}): ${s.summary} Top: ${(s.results || []).filter((r: any) => !r.dismissed).slice(0, 5).map((r: any) => `${r.name} (${r.location}, ${r.fit}${r.when ? `, ${r.when}` : ''}): ${r.reason}`).join(' | ')}`).join('\n')}` : 'Scout: no research yet.',
-    leads.length ? `Leads: ${leads.map((l) => `${l.name} (${l.stage}${l.next_follow_up_at ? `, follow-up due ${l.next_follow_up_at.slice(0, 10)}` : ''})`).join('; ')}` : 'Leads: none yet.',
-    tenders.length ? `Public contracts that fit: ${tenders.map((t) => `${t.tenders?.title} for ${t.tenders?.buyer} (${t.tenders?.value ? `£${t.tenders.value}` : 'value not stated'}, closes ${t.tenders?.deadline?.slice(0, 10) ?? 'n/a'}): ${t.reason}`).join(' | ')}` : '',
-    briefs[0] ? `Latest Brief (${briefs[0].week_of}): ${briefs[0].headline} ${briefs[0].paragraphs.join(' ')} Priorities: ${briefs[0].actions.join('; ')}` : 'Brief: none yet.',
-    nums.length ? `Recent weekly numbers: ${nums.map((n) => `${n.week_of}: ${JSON.stringify(n.values)}`).join(' | ')}` : '',
-    learned.rules.length ? `The owner's stated preferences:\n- ${learned.rules.join('\n- ')}` : '',
+    block('profile', profileContext(profile)),
+    block('site', w ? `Website check (${day(w.lastCheck)}): ${w.up ? 'online' : 'DOWN'}, ${w.responseMs}ms, ${w.brokenLinks?.length ?? 0} broken links. Issues: ${(w.issues || []).map((i: any) => i.title).join('; ') || 'none'}.` : 'Website: not checked yet.'),
+    w?.speed ? block('speed', `Google speed test (${day(w.speed.checkedAt)}): speed ${w.speed.scores.performance}/100, Google basics ${w.speed.scores.seo}/100. Top fixes: ${w.speed.fixes.filter((f: any) => !f.done).slice(0, 3).map((f: any) => `${f.title} (${f.who === 'You' ? 'owner can do it' : 'web person'})`).join('; ') || 'none'}.`) : '',
+    block('reviews', rv ? `Google reviews (${day(rv.checkedAt)}): ${rv.rating} stars from ${rv.count} reviews. Recent: ${rv.reviews.slice(0, 5).map((r: any) => `${r.author} ${r.rating}★${r.isNew ? ' (new)' : ''} "${String(r.text).slice(0, 120)}"`).join(' | ')}. Competitors: ${rv.competitors.map((c: any) => `${c.name} ${c.rating ?? '–'}★ (${c.count ?? '–'})`).join(', ')}.` : 'Google reviews: listing not connected yet.'),
+    w?.prices?.rows?.length ? block('prices', `Price comparison (${day(w.prices.checkedAt)}): ${w.prices.rows.map((r: any) => `${r.item}: you ${r.yours?.price ?? '–'}; ${w.prices.competitors.map((c: string, i: number) => `${c} ${r.theirs[i]?.price ?? '–'}`).join(', ')}`).join(' | ')}`) : '',
+    block('changes', changes.length ? `Competitor changes:\n${changes.map((c) => `- ${c.created_at.slice(0, 10)} ${c.summary} ${c.detail || ''}`).join('\n')}` : 'Competitor changes: none recorded yet.'),
+    block('scout', scout.length ? `Scout research:\n${scout.map((s) => `- "${s.query}" (${s.kind ?? 'customers'}, ${s.created_at.slice(0, 10)}): ${s.summary} Top: ${(s.results || []).filter((r: any) => !r.dismissed).slice(0, 5).map((r: any) => `${r.name} (${r.location}, ${r.fit}${r.when ? `, ${r.when}` : ''}): ${r.reason}`).join(' | ')}`).join('\n')}` : 'Scout: no research yet.'),
+    block('leads', leads.length ? `Leads: ${leads.map((l) => `${l.name} (${l.stage}${l.next_follow_up_at ? `, follow-up due ${l.next_follow_up_at.slice(0, 10)}` : ''})`).join('; ')}` : 'Leads: none yet.'),
+    tenders.length ? block('tenders', `Public contracts that fit: ${tenders.map((t) => `${t.tenders?.title} for ${t.tenders?.buyer} (${t.tenders?.value ? `published value £${t.tenders.value}` : 'value not stated'}, closes ${t.tenders?.deadline?.slice(0, 10) ?? 'n/a'}): ${t.reason}`).join(' | ')}`) : '',
+    block('brief', briefs[0] ? `Latest Brief (week of ${briefs[0].week_of}): ${briefs[0].headline} ${briefs[0].paragraphs.join(' ')} Priorities: ${briefs[0].actions.join('; ')}` : 'Brief: none yet.'),
+    nums.length ? block('numbers', `Recent weekly numbers: ${nums.map((n) => `${n.week_of}: ${JSON.stringify(n.values)}`).join(' | ')}`) : '',
+    learned.rules.length ? block('learned', `The owner's stated preferences:\n- ${learned.rules.join('\n- ')}`) : '',
   ].filter(Boolean).join('\n\n');
+  const catalogue = sourceCatalogue({ site: day(w?.lastCheck), speed: day(w?.speed?.checkedAt), reviews: day(rv?.checkedAt), prices: day(w?.prices?.checkedAt), brief: briefs[0] ? `week of ${briefs[0].week_of}` : '' });
 
   await insert('chat_messages', { user_id: userId, role: 'user', text: question.slice(0, 2000) });
   const msgs = history.reverse().map((m) => ({ role: m.role === 'agent' ? 'assistant' as const : 'user' as const, content: m.text }));
   const r = await ai({
     userId, agent: 'ask', maxTokens: 900, fast: true,
-    system: `${HOUSE_STYLE}\nYou are Gainora, the owner's business assistant. Answer using the business context below and general good business sense. Be concrete: name the lead, contract, review or fix you mean. If the answer depends on something not in the context, say what you'd need. Keep answers short: two to four short paragraphs, or a short list when steps are needed. You cannot send emails, post or change anything; you advise and draft.\n\nCONTEXT\n${context}`,
+    system: `${HOUSE_STYLE}\nYou are Gainora, the owner's business assistant. Answer using the business context below and general good business sense. Be concrete: name the lead, contract, review or fix you mean, and say which agent found it ("The Watcher saw…", "The Scout found…"). When the context has a figure, use it; never estimate money or results. If the answer depends on something not in the context, say what you'd need. Keep answers short: two to four short paragraphs, or a short list when steps are needed. Finish with the one thing to do next. You cannot send emails, post or change anything; you advise and draft. ${ASK_SOURCE_LINE}\n\nCONTEXT\n${context}`,
     messages: [...msgs, { role: 'user', content: question.slice(0, 2000) }],
   });
-  const text = hasBanned(r.text) ? r.text.replace(/guarantee(d)?/gi, 'expect') : r.text;
-  const rows = await insert('chat_messages', { user_id: userId, role: 'agent', text: text.trim().slice(0, 6000), sources: r.citations.length ? r.citations.slice(0, 5) : null });
+  const parsed = parseSources(r.text, catalogue);
+  const text = hasBanned(parsed.text) ? parsed.text.replace(/guarantee(d)?/gi, 'expect') : parsed.text;
+  const sources = [...parsed.sources, ...r.citations].slice(0, 6);
+  const rows = await insert('chat_messages', { user_id: userId, role: 'agent', text: text.trim().slice(0, 6000), sources: sources.length ? sources : null });
   return rows[0];
 }
 

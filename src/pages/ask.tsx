@@ -3,6 +3,7 @@ import { api } from '../lib/api';
 import { useApp } from '../app';
 import { ErrorNote, Icon, Loading, useLoad } from '../components/ui';
 import { pending } from '../components/palette';
+import { Link } from '../lib/router';
 import type { ChatMessage } from '../lib/types';
 
 export function Ask() {
@@ -48,7 +49,7 @@ export function Ask() {
       <div className="page-head">
         <div>
           <h1 className="title">Ask</h1>
-          <p className="lede">Ask anything about {profile.business.name}. Answers come from your business details and your agents’ latest findings.</p>
+          <p className="lede">Ask anything about {profile.business.name}. Answers come from your business details and your agents’ latest findings, and each one says which finding it used.</p>
         </div>
       </div>
 
@@ -67,7 +68,7 @@ export function Ask() {
                 <div className="who">Gainora</div>
                 <div className="voice">{m.text}</div>
                 {m.sources && m.sources.length > 0 && (
-                  <div className="xsmall faint mt-8">Sources: {m.sources.map((s, i) => <span key={s.url}>{i > 0 && ', '}<a href={s.url} target="_blank" rel="noreferrer">{s.title}</a></span>)}</div>
+                  <div className="xsmall faint mt-8 msg-sources">From: {m.sources.map((s, i) => <span key={s.url + i}>{i > 0 && ', '}{s.url.startsWith('/') ? <Link to={s.url}>{s.title}</Link> : <a href={s.url} target="_blank" rel="noreferrer">{s.title}</a>}</span>)}</div>
                 )}
               </div>
             ))}

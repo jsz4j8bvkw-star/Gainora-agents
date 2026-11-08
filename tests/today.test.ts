@@ -79,3 +79,20 @@ test('actionLink: to-do items from the agents lead somewhere useful; the owner�
   assert.equal(actionLink({ agent: 'brief', text: 'Write down what drove the rise in enquiries so you can repeat it' }), '/brief');
   assert.equal(actionLink({ agent: 'you', text: 'Order more boxes' }), null);
 });
+
+/* ---------- Ask: which findings an answer came from ---------- */
+import { parseSources, sourceCatalogue } from '../shared/ask';
+
+test('ask: the SOURCES line is stripped and turned into links to the agent pages', () => {
+  const cat = sourceCatalogue({ reviews: '8 Nov' });
+  const r = parseSources('Reply to Mark D. first.\n\nThen chase The Driftwood Room.\n\nSOURCES: reviews, leads, made-up', cat);
+  assert.equal(r.text, 'Reply to Mark D. first.\n\nThen chase The Driftwood Room.');
+  assert.deepEqual(r.sources, [
+    { title: 'The Watcher’s Google reviews (8 Nov)', url: '/watcher?tab=reviews' },
+    { title: 'The Scout’s lead pipeline', url: '/scout?tab=leads' },
+  ]);
+  // Variations the model produces: bold, brackets, "none"; and a reply without the line keeps its text.
+  assert.deepEqual(parseSources('Answer.\n**Sources:** [brief], [numbers]', cat).sources.map((s) => s.url), ['/brief', '/brief']);
+  assert.deepEqual(parseSources('Answer.\nSOURCES: none', cat), { text: 'Answer.', sources: [] });
+  assert.deepEqual(parseSources('Just an answer.', cat), { text: 'Just an answer.', sources: [] });
+});

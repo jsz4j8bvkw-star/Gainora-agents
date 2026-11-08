@@ -12,6 +12,7 @@ import { fallbackReply } from '../../shared/reviews';
 import { followUpSent, moveLead } from '../../shared/leads';
 import { hostOf } from '../../shared/learning';
 import { planToday } from '../../shared/today';
+import { sourceCatalogue } from '../../shared/ask';
 import { mondayOf, uid } from './format';
 
 const KEY = 'gainora.agents.demo.v2';
@@ -325,29 +326,41 @@ function demoReply(text: string, s: DemoState): ChatMessage {
   const strong = s.scout[0]?.results.filter((r) => r.fit === 'strong' && !r.dismissed) ?? [];
   const due = s.leads.find((l) => l.stage === 'contacted');
   let reply: string;
+  let keys: string[] = ['profile'];
   if (/review|rating|google/.test(t) && s.watcher?.reviews) {
+    keys = ['reviews'];
     const rv = s.watcher.reviews;
     reply = `You’re on ${rv.rating} stars from ${rv.count} Google reviews, ahead of ${rv.competitors[0]?.name ?? 'your main competitor'} on ${rv.competitors[0]?.rating ?? '–'}. Three new reviews came in this week.\n\nThe one to deal with today is Mark D.’s 2-star review about a chipped bowl. A public, calm reply plus a replacement usually turns these round. I’ve drafted one on the Watcher’s Reviews tab.`;
   } else if (/contract|tender|council|public/.test(t) && s.tenders.length) {
+    keys = ['tenders'];
     const t1 = s.tenders[0];
     reply = `The best public contract right now is “${t1.title}”, worth £${t1.value?.toLocaleString('en-GB')}. ${t1.reason}\n\nIt closes in about three weeks, so there’s time, but start the price list this week.`;
   } else if (/follow|chase|reply|lead/.test(t) && due) {
+    keys = ['leads'];
     reply = `${due.name} is due a follow-up today. You contacted them four days ago and haven’t heard back, which is normal. A short, friendly nudge usually gets a reply. The Scout has written it for you on the Leads tab.`;
   } else if (/competitor|rival|cove|saltwater|deliver|price/.test(t) && c) {
+    keys = ['changes', 'profile'];
     reply = `The biggest move this fortnight: ${c.summary} ${c.detail ?? ''}\n\nGiven that your edge is “${p.competitors.ourEdge.replace(/\.$/, '')}”, I wouldn’t race them on price. A better reply is to lower your free-delivery threshold for December only and lead with free gift-wrapping in your next two posts. That keeps your margin on the rest of the year.`;
   } else if (/stock|wholesale|shop|prospect|scout|client/.test(t) && strong.length) {
+    keys = ['scout'];
     reply = `Start with ${strong.slice(0, 3).map((r) => `${r.name} in ${r.location}`).join(', ')}. All three already buy from independent makers, which is the strongest sign they’ll consider you.\n\nSend each a short note with photos of your three best sellers and an offer of a small first order. The Scout has a ready-to-edit introduction for each of them.`;
   } else if (/enquir|sales|orders|number|week|brief|revenue/.test(t) && s.briefs[0]) {
+    keys = ['brief', 'numbers'];
     const b = s.briefs[0];
     reply = `${b.headline}\n\n${b.paragraphs[0]}\n\nIf you only do one thing this week: ${lower1(b.actions[0])}.`;
   } else if (/website|site|slow|form|broken|link|speed/.test(t) && s.watcher) {
+    keys = ['site', 'speed'];
     reply = `Two things matter most on your website. Your contact page returned an error on Sunday, so enquiries may be going missing; fix that first. Then shrink your product photos: Google’s test says it could make your site about 1.8 seconds faster on phones, and you can do it yourself.`;
   } else if (/goal|target|plan|focus|priorit/.test(t)) {
+    keys = ['profile', 'leads', 'tenders'];
     reply = `Your goal is ${lower1(p.goals.target)}. With ${p.goals.timePerWeek.toLowerCase()} a week, I’d spend it like this:\n\nFollow up with ${due?.name ?? 'your waiting leads'} today and contact two new strong-fit shops. Then put an hour into the visitor centre contract, which on its own could cover a good part of your target.`;
   } else {
+    keys = ['site', 'reviews', 'leads', 'tenders'];
     reply = `Here’s where ${p.business.name} stands: one urgent website issue (the contact page), a 2-star review waiting for a reply, a follow-up due today and a public contract worth £18,000 that fits you well.\n\nAsk me about any of those, your competitors, your numbers or who to contact next.`;
   }
-  return { id: uid('m_'), role: 'agent', text: reply, at: new Date().toISOString() };
+  const cat = sourceCatalogue({ site: 'today', reviews: 'today', brief: `week of ${s.briefs[0]?.weekOf ?? ''}` });
+  const sources = keys.map((k) => cat.find((c) => c.key === k)!).filter(Boolean).map(({ title, url }) => ({ title, url }));
+  return { id: uid('m_'), role: 'agent', text: reply, at: new Date().toISOString(), sources };
 }
 
 export function createDemoApi(): Api {
