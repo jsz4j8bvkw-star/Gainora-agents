@@ -4,6 +4,8 @@
 -- "capture" becomes a plan of its own, sold separately from Command Centre.
 alter table public.entitlements drop constraint if exists entitlements_agent_check;
 alter table public.entitlements add constraint entitlements_agent_check check (agent in ('watcher','scout','brief','capture'));
+-- Which Capture & Convert package: answer, book (Answer & Book) or desk (Front Desk).
+alter table public.entitlements add column if not exists plan text;
 
 -- The business details and how calls should be handled. One row per client.
 create table if not exists public.capture_settings (

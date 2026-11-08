@@ -5,10 +5,12 @@ import { Button, Icon, useToast } from '../components/ui';
 import { display, QField, SETUP, sectionErrors, setPath, type SetupSection } from './setup';
 import { shortDate } from '../lib/format';
 import type { CaptureSettings } from '../lib/types';
+import { EXTRA_MINUTES, PACKAGES } from '../../shared/capture';
 
 export function Settings() {
   const { user, plan, settings, enquiries, setSettings } = useApp();
   const [opening, setOpening] = useState(false);
+  const current = PACKAGES.find((p) => p.id === plan.package);
   const toast = useToast();
 
   const manage = async () => {
@@ -36,17 +38,24 @@ export function Settings() {
       <section className="panel" aria-labelledby="plan-h">
         <div className="panel-head">
           <div>
-            <h2 className="heading" id="plan-h">Gainora Capture &amp; Convert</h2>
-            <p className="small faint">AI receptionist, enquiries inbox and follow-ups, managed by Gainora.{plan.renewsOn ? ` Renews ${shortDate(plan.renewsOn)}.` : ''}</p>
+            <h2 className="heading" id="plan-h">{current ? current.name : 'Gainora Capture & Convert'}</h2>
+            <p className="small faint">{current ? `£${current.monthly} a month, ${current.minutes} minutes included. ${EXTRA_MINUTES}.` : 'Your AI receptionist, enquiries inbox and follow-ups, looked after by Gainora.'}{plan.renewsOn ? ` Renews ${shortDate(plan.renewsOn)}.` : ''}</p>
           </div>
           <Button kind="secondary" small busy={opening} onClick={manage}>Manage billing</Button>
         </div>
-        <div className="plan-includes">
-          {['Your receptionist set up, tested and looked after', 'Every enquiry in one inbox, emergencies emailed to you', 'Quote chasers, payment reminders and review requests drafted', 'Monthly report and a 15-minute review call'].map((t) => <span key={t}><Icon name="check" />{t}</span>)}
+        <div className="packages">
+          {PACKAGES.map((p) => (
+            <div key={p.id} className={`package ${p.id === current?.id ? 'on' : ''}`}>
+              <div className="split"><strong>{p.name}</strong>{p.id === current?.id && <span className="tag tag-forest">Your package</span>}</div>
+              <span className="package-price"><span className="tabular">£{p.monthly}</span> a month</span>
+              <span className="xsmall faint">{p.minutes.toLocaleString('en-GB')} minutes · £{p.setup.toLocaleString('en-GB')} setup</span>
+              <ul>{p.adds.map((a) => <li key={a}><Icon name="check" />{a}</li>)}</ul>
+            </div>
+          ))}
         </div>
         {plan.alsoCommandCentre
           ? <p className="small muted plan-foot">You also have Gainora Command Centre. <a href="https://app.gainora.co.uk">Open it</a> with the same login.</p>
-          : <p className="small muted plan-foot">Want your website watched and new customers found too? <a href="https://gainora.co.uk/">See Gainora Command Centre</a>.</p>}
+          : <p className="small muted plan-foot">To change package, email <a href="mailto:hello@gainora.co.uk">hello@gainora.co.uk</a> and we’ll move you over. Want your website watched and new customers found too? <a href="https://gainora.co.uk/">See Gainora Command Centre</a>.</p>}
       </section>
 
       {SETUP.map((sec) => <SectionEditor key={sec.id} sec={sec} />)}

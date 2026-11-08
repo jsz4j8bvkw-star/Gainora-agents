@@ -899,6 +899,17 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .
 .review-block dl { grid-template-columns: 240px minmax(0, 1fr); }
 @media (max-width: 640px) { .review-block dl { grid-template-columns: 1fr; gap: 2px 0; } .review-block dd { margin-bottom: 10px; } }
 
+.packages { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.package { padding: 20px 22px; display: flex; flex-direction: column; gap: 4px; }
+.package + .package { border-left: 1px solid var(--line); }
+.package.on { background: var(--forest-wash); box-shadow: inset 0 3px 0 var(--sage); }
+.package-price { font-family: var(--serif); font-size: 1.5rem; margin-top: 6px; }
+.package-price .tabular { font-size: 2rem; }
+.package ul { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 6px; font-size: var(--t-sm); }
+.package li { display: flex; gap: 8px; }
+.package li svg { width: 15px; height: 15px; color: var(--gold); flex: none; margin-top: 3px; }
+@media (max-width: 760px) { .packages { grid-template-columns: 1fr; } .package + .package { border-left: 0; border-top: 1px solid var(--line); } }
+
 /* Print the monthly report */
 .print-only { display: none; }
 @media print {

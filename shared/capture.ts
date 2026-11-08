@@ -545,3 +545,14 @@ export function replyTime(mins: number | null): string {
   if (mins < 60 * 24) return `${Math.round(mins / 60 * 10) / 10} h`;
   return `${Math.round(mins / 1440)} days`;
 }
+
+/* ---------- Packages ---------- */
+
+export type PackageId = 'answer' | 'book' | 'desk';
+export interface Package { id: PackageId; name: string; setup: number; monthly: number; minutes: number; adds: string[] }
+export const PACKAGES: Package[] = [
+  { id: 'answer', name: 'Answer', setup: 595, monthly: 249, minutes: 300, adds: ['Human-sounding receptionist, day and night', 'Emergencies passed to your mobile', 'Enquiries inbox, follow-ups and monthly report', 'Ongoing care of your receptionist'] },
+  { id: 'book', name: 'Answer & Book', setup: 995, monthly: 399, minutes: 600, adds: ['Everything in Answer', 'Books into your diary and texts a confirmation', 'Recognises returning callers'] },
+  { id: 'desk', name: 'Front Desk', setup: 1995, monthly: 599, minutes: 1200, adds: ['Everything in Answer & Book', 'Several staff, numbers or call transfers'] },
+];
+export const EXTRA_MINUTES = '£25 per 100 extra minutes';

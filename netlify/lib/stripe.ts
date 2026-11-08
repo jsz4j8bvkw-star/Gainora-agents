@@ -14,13 +14,19 @@ export function verifyStripeSignature(payload: string, header: string | null, se
 }
 
 /**
- * STRIPE_CAPTURE_PRODUCTS lists the Stripe product ids that unlock Capture & Convert, comma-separated:
- * "prod_ABC,prod_DEF" (for example the standard price and a founding price on separate products).
- * Products not on the list are ignored here; Command Centre products are handled by the Gainora Agents app.
+ * STRIPE_CAPTURE_PRODUCTS lists the Stripe products that unlock Capture & Convert and which package each is:
+ * "prod_A:answer,prod_B:book,prod_C:desk" (a founding product can point at the same package).
+ * A product id with no package is treated as Answer & Book. Products not on the list are ignored here;
+ * Command Centre products are handled by the Gainora Agents app.
  */
-export function grantsCapture(productId: string): boolean {
-  return env('STRIPE_CAPTURE_PRODUCTS').split(',').map((x) => x.trim()).filter(Boolean).includes(productId);
+export function captureTier(productId: string): 'answer' | 'book' | 'desk' | null {
+  for (const part of env('STRIPE_CAPTURE_PRODUCTS').split(',').map((x) => x.trim()).filter(Boolean)) {
+    const [id, tier] = part.split(':').map((x) => x.trim());
+    if (id === productId) return tier === 'answer' || tier === 'desk' ? tier : 'book';
+  }
+  return null;
 }
+export const grantsCapture = (productId: string) => captureTier(productId) != null;
 
 export async function stripeGet(path: string) {
   const res = await fetch(`https://api.stripe.com/v1/${path}`, { headers: { Authorization: `Bearer ${env('STRIPE_SECRET_KEY')}` } });
@@ -62,11 +68,12 @@ export async function syncSubscription(sub: any): Promise<string[]> {
   const agents: string[] = [];
   for (const item of sub.items?.data || []) {
     const product = typeof item.price?.product === 'string' ? item.price.product : item.price?.product?.id;
-    for (const agent of grantsCapture(product) ? ['capture'] : []) {
+    const tier = captureTier(product);
+    for (const agent of tier ? ['capture'] : []) {
     if (agents.includes(agent)) continue;
     agents.push(agent);
     await upsert('entitlements', {
-      email, agent, status, stripe_customer: customer.id, stripe_subscription: sub.id,
+      email, agent, plan: tier, status, stripe_customer: customer.id, stripe_subscription: sub.id,
       current_period_end: sub.current_period_end ? new Date(sub.current_period_end * 1000).toISOString() : (item.current_period_end ? new Date(item.current_period_end * 1000).toISOString() : null),
       updated_at: new Date().toISOString(),
     }, 'email,agent');

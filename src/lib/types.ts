@@ -1,11 +1,12 @@
 export type {
-  CaptureSettings, EnquiryRecord, EnquiryPatch, EnquiryStatus, EnquiryKind, Channel, Urgency, FollowItem, FollowKind, Report, HistoryItem, QuotePolicy,
+  CaptureSettings, EnquiryRecord, PackageId, EnquiryPatch, EnquiryStatus, EnquiryKind, Channel, Urgency, FollowItem, FollowKind, Report, HistoryItem, QuotePolicy,
 } from '../../shared/capture';
 
 export interface User { id: string; email: string }
 
 export interface Plan {
   active: boolean;
+  package?: import('../../shared/capture').PackageId;
   renewsOn?: string;
   alsoCommandCentre: boolean;   // the same login also has Gainora Agents
 }

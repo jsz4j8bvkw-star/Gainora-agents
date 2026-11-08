@@ -20,7 +20,7 @@ const server = createServer(async (req, res) => {
 test('a Capture & Convert subscription grants access; other Gainora products are left alone', async () => {
   await new Promise<void>((r) => server.listen(0, r));
   const base = `http://127.0.0.1:${(server.address() as any).port}`;
-  Object.assign(process.env, { SUPABASE_URL: base, SUPABASE_SERVICE_ROLE_KEY: 'svc', STRIPE_SECRET_KEY: 'sk', STRIPE_WEBHOOK_SECRET: 'whsec_x', STRIPE_CAPTURE_PRODUCTS: 'prod_CAP, prod_CAP_FOUNDING' });
+  Object.assign(process.env, { SUPABASE_URL: base, SUPABASE_SERVICE_ROLE_KEY: 'svc', STRIPE_SECRET_KEY: 'sk', STRIPE_WEBHOOK_SECRET: 'whsec_x', STRIPE_CAPTURE_PRODUCTS: 'prod_CAP:desk, prod_CAP_FOUNDING' });
   const realFetch = globalThis.fetch;
   globalThis.fetch = ((url: any, init: any) => realFetch(String(url).replace('https://api.stripe.com', base), init)) as any;
   try {
@@ -37,6 +37,7 @@ test('a Capture & Convert subscription grants access; other Gainora products are
     assert.equal(ent.length, 1);
     assert.equal(ent[0].body.email, 'owner@shop.co.uk');
     assert.equal(ent[0].body.agent, 'capture');
+    assert.equal(ent[0].body.plan, 'desk');
     assert.equal(ent[0].body.status, 'active');
     assert.ok(calls.some((c) => c.url.startsWith('/auth/v1/admin/users') && c.method === 'POST' && c.body.email === 'owner@shop.co.uk'));
     assert.ok(calls.some((c) => c.method === 'PATCH' && c.url.startsWith('/rest/v1/entitlements') && c.body.user_id === 'u_1'));

@@ -3,3 +3,4 @@ drop table if exists public.enquiries, public.enquiry_sources, public.capture_se
 delete from public.entitlements where agent = 'capture';
 alter table public.entitlements drop constraint if exists entitlements_agent_check;
 alter table public.entitlements add constraint entitlements_agent_check check (agent in ('watcher','scout','brief'));
+alter table public.entitlements drop column if exists plan;

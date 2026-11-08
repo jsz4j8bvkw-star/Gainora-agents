@@ -148,7 +148,7 @@ export function createDemoApi(): Api {
     async getUser() { if (s.user) ensure(); return s.user; },
     async requestSignIn(email) { s.user = { id: 'demo', email }; ensure(); save(); },
     async signOut() { s.user = null; save(); },
-    async getPlan() { return { active: true, renewsOn: new Date(Date.now() + 19 * DAY).toISOString(), alsoCommandCentre: false }; },
+    async getPlan() { return { active: true, package: 'book' as const, renewsOn: new Date(Date.now() + 19 * DAY).toISOString(), alsoCommandCentre: false }; },
     async billingUrl() { return null; },
     async getSettings() { await wait(100); return s.settings; },
     async saveSettings(next) { s.settings = next; save(); },

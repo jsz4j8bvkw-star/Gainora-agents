@@ -126,9 +126,9 @@ export function createLiveApi(): Api {
     },
 
     async getPlan(): Promise<Plan> {
-      const rows = await rest<any[]>('entitlements?select=agent,status,current_period_end&status=in.(active,trialing)');
+      const rows = await rest<any[]>('entitlements?select=agent,plan,status,current_period_end&status=in.(active,trialing)');
       const cap = rows.find((r) => r.agent === 'capture');
-      return { active: !!cap, renewsOn: cap?.current_period_end ?? undefined, alsoCommandCentre: rows.some((r) => r.agent !== 'capture') };
+      return { active: !!cap, package: cap?.plan ?? undefined, renewsOn: cap?.current_period_end ?? undefined, alsoCommandCentre: rows.some((r) => r.agent !== 'capture') };
     },
     async billingUrl() { return (await fn<{ url: string }>('billing-portal', {})).url; },
     async getSettings() {

@@ -52,15 +52,15 @@ showing the receptionist’s opening line and rules.
 
 1. **Database:** in the Supabase SQL editor of the Gainora project, run
    `supabase/migrations/20261108_capture_convert.sql` (rollback file alongside).
-2. **Stripe:** create a product “Gainora Capture & Convert” with a £249/month price (and a one-off
-   £395 setup price or an invoice). Add a webhook endpoint
+2. **Stripe:** create three products: Answer (£249/month, £595 setup), Answer & Book (£399/month,
+   £995 setup) and Front Desk (£599/month, £1,995 setup). Founding clients: Answer & Book at £299/month, £495 setup. Add a webhook endpoint
    `https://<this site>/api/stripe-webhook` for `checkout.session.completed` and
    `customer.subscription.created/updated/deleted`.
 3. **Netlify:** new site from this repo. Environment variables:
    `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (same as Command Centre),
    `APP_URL` (e.g. `https://capture.gainora.co.uk`), `INTERNAL_SECRET` (a new random string),
    `RESEND_API_KEY`, `EMAIL_FROM`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` (this endpoint’s),
-   `STRIPE_CAPTURE_PRODUCTS` (product ids, comma-separated), and optionally `ANTHROPIC_API_KEY`
+   `STRIPE_CAPTURE_PRODUCTS` (product id and package, e.g. `prod_A:answer,prod_B:book,prod_C:desk`), and optionally `ANTHROPIC_API_KEY`
    for AI-written first replies (templates are used without it).
 4. **Domain:** add `capture.gainora.co.uk` in Netlify and a CNAME in Squarespace DNS.
 5. **Supabase auth:** add the new site to Authentication → URL configuration → Redirect URLs.
