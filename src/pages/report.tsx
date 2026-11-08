@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useApp } from '../app';
+import { api } from '../lib/api';
 import { Button, ErrorNote, Loading } from '../components/ui';
 import { money } from '../lib/format';
 import { CHANNEL_LABEL, replyTime, report } from '../../shared/capture';
@@ -45,7 +46,7 @@ export function ReportPage() {
           <div className="seg" role="group" aria-label="Month">
             {[0, 1, 2].map((b) => <button key={b} className="seg-btn" aria-pressed={back === b} onClick={() => setBack(b)}>{b === 0 ? 'This month' : new Date(new Date().getFullYear(), new Date().getMonth() - b, 1).toLocaleDateString('en-GB', { month: 'short' })}</button>)}
           </div>
-          <Button kind="secondary" icon="printer" onClick={() => window.print()}>Print or save PDF</Button>
+          {api.mode === 'live' && <Button kind="secondary" icon="printer" onClick={() => window.print()}>Print or save PDF</Button>}
         </div>
       </div>
 

@@ -24,6 +24,7 @@ export function Settings() {
     try { await api.saveSettings(next); setSettings(next); } catch (e: any) { toast(e?.message || 'Couldn’t open setup. Try again.'); }
   };
   const exportData = () => {
+    if (api.mode === 'demo') { toast('In your app this downloads a file. Downloads are switched off in the demo.'); return; }
     const blob = new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), settings, enquiries }, null, 2)], { type: 'application/json' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'gainora-capture-my-data.json'; a.click(); URL.revokeObjectURL(a.href);
   };

@@ -35,6 +35,7 @@ export function Enquiries({ adding = false }: { adding?: boolean }) {
   const [filter, setFilter] = useState<Filter>(() => (enquiries ?? []).some((e) => e.status === 'new') ? 'new' : 'all');
   const [q, setQ] = useState('');
   const [add, setAdd] = useState(adding);
+  const toast = useToast();
 
   const counts = useMemo(() => Object.fromEntries((Object.keys(IN) as Filter[]).map((f) => [f, (enquiries ?? []).filter(IN[f]).length])) as Record<Filter, number>, [enquiries]);
   const list = useMemo(() => {
@@ -51,6 +52,7 @@ export function Enquiries({ adding = false }: { adding?: boolean }) {
   if (!enquiries) return <Loading />;
 
   const exportCsv = () => {
+    if (api.mode === 'demo') { toast('In your app this downloads a file. Downloads are switched off in the demo.'); return; }
     const rows: (string | number)[][] = [['Received', 'Channel', 'Name', 'Phone', 'Email', 'Postcode', 'Type', 'Urgency', 'Out of hours', 'Status', 'Quote', 'Job value', 'Paid', 'Summary']];
     for (const e of enquiries) rows.push([new Date(e.receivedAt).toLocaleString('en-GB'), CHANNEL_LABEL[e.channel], e.name, e.phone, e.email, e.postcode, KIND_LABEL[e.kind], e.urgency, e.afterHours ? 'Yes' : 'No', STATUS_LABEL[e.status], e.quoteAmount ?? '', e.jobValue ?? '', e.paidAt ? 'Yes' : '', e.summary]);
     const a = document.createElement('a');

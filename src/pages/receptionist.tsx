@@ -40,6 +40,7 @@ function Script() {
   const toast = useToast();
   const pack = packFromSettings(settings);
   const download = () => {
+    if (api.mode === 'demo') { toast('In your app this downloads the script as a text file. Use Copy script in the demo.'); return; }
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([pack.text], { type: 'text/plain' }));
     a.download = `${settings.business.name.replace(/[^\w]+/g, '-').toLowerCase()}-receptionist-script.txt`; a.click(); URL.revokeObjectURL(a.href);
