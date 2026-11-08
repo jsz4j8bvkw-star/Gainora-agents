@@ -21,22 +21,25 @@ export function UrgencyTag({ e }: { e: EnquiryRecord }) {
   return null;
 }
 
-export function EnquiryRow({ e, compact = false }: { e: EnquiryRecord; compact?: boolean }) {
+/** why: the one-line reason this enquiry is where it is in the list (from shared/insight priority). */
+export function EnquiryRow({ e, compact = false, why, step }: { e: EnquiryRecord; compact?: boolean; why?: string; step?: string }) {
   const { messages } = useApp();
-  const replied = messages.some((m) => m.enquiryId === e.id && m.direction === 'in' && !m.read);
+  const reply = messages.filter((m) => m.enquiryId === e.id && m.direction === 'in' && !m.read).sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
   return (
-    <Link to={`/enquiries/${e.id}`} className={`enq-row ${e.status === 'new' || replied ? 'unread' : ''} urg-${e.urgency}`}>
+    <Link to={`/enquiries/${e.id}`} className={`enq-row ${e.status === 'new' || reply ? 'unread' : ''} urg-${e.urgency}`}>
       <span className="enq-ico" title={CHANNEL_LABEL[e.channel]}><Icon name={CHANNEL_ICON[e.channel]} /><span className="sr-only">{CHANNEL_LABEL[e.channel]}</span></span>
       <span className="enq-main">
         <span className="enq-top">
           <span className="enq-name">{who(e)}</span>
           <UrgencyTag e={e} />
           {e.afterHours && <span className="tag tag-plain"><Icon name="moon" className="tag-ico" />Out of hours</span>}
-          {!compact && e.kind !== 'other' && e.kind !== 'spam' && <span className="tag tag-plain">{e.status === 'booked' ? 'Booked' : KIND_LABEL[e.kind]}</span>}
-          {replied && <span className="tag tag-brass"><Icon name="message" className="tag-ico" />New reply</span>}
+          {!compact && e.kind !== 'other' && e.kind !== 'spam' && e.status !== 'booked' && <span className="tag tag-plain">{KIND_LABEL[e.kind]}</span>}
+          {reply && <span className="tag tag-brass"><Icon name="message" className="tag-ico" />New reply</span>}
           {e.isTest && <span className="tag tag-plain">Test</span>}
+          {why && <span className="xsmall faint">{why}</span>}
         </span>
-        <span className="enq-summary">{e.summary || 'No summary sent.'}</span>
+        {step && <span className="enq-step">{step}</span>}
+        <span className="enq-summary">{reply ? `“${reply.body}”` : e.summary || 'No summary sent.'}</span>
       </span>
       <span className="enq-side">
         <span className="xsmall faint" style={{ whiteSpace: 'nowrap' }}>{relative(e.receivedAt)}</span>

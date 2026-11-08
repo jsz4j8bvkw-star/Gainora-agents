@@ -14,7 +14,7 @@ const STATUS: Record<MessageRecord['status'], string> = { awaiting_approval: 'Wa
 const when = (iso: string) => new Date(iso).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
 
 /** Every text and email with this customer, and a box to reply. */
-export function Thread({ e }: { e: EnquiryRecord }) {
+export function Thread({ e, autoDraft = false }: { e: EnquiryRecord; autoDraft?: boolean }) {
   const { messages, putMessage, putEnquiry, reloadMessages, settings } = useApp();
   const list = useMemo(() => messages.filter((m) => m.enquiryId === e.id).sort((a, b) => a.createdAt.localeCompare(b.createdAt)), [messages, e.id]);
   const next = useMemo(() => upcoming(e, settings, list.map((m) => ({ enquiryId: m.enquiryId, direction: m.direction, key: m.key, status: m.status, createdAt: m.createdAt, automatic: m.automatic }))), [e, settings, list]);
@@ -24,8 +24,15 @@ export function Thread({ e }: { e: EnquiryRecord }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [editing, setEditing] = useState<{ id: string; text: string } | null>(null);
   const end = useRef<HTMLDivElement | null>(null);
+  const box = useRef<HTMLTextAreaElement | null>(null);
   const toast = useToast();
   const unread = list.some((m) => m.direction === 'in' && !m.read);
+
+  // Arrived from a "Reply" button: write the draft straight away and put the cursor in it.
+  useEffect(() => {
+    if (!autoDraft || !(e.phone || e.email)) return;
+    draft().then(() => { box.current?.focus(); box.current?.scrollIntoView({ block: 'center' }); });
+  }, []);
 
   useEffect(() => {
     if (!unread) return;
@@ -65,7 +72,7 @@ export function Thread({ e }: { e: EnquiryRecord }) {
     <section className="panel thread" aria-labelledby="thread-h">
       <div className="panel-head"><h2 className="subhead" id="thread-h">Messages</h2><span className="xsmall faint">{e.phone ? `Texts with ${fmtPhone(e.phone)}` : e.email ? `Emails with ${e.email}` : 'No phone or email'}</span></div>
       <div className="thread-body" aria-live="polite">
-        {list.length === 0 && <p className="small muted thread-empty">No messages yet. Automatic messages and your replies appear here, and so do the customer’s replies.</p>}
+        {list.length === 0 && <p className="small muted thread-empty">No messages yet. Automatic messages and your replies appear here, and so do the {settings.business.kind === 'appointments' ? 'client' : 'customer'}’s replies.</p>}
         {list.map((m) => m.audience === 'owner' ? (
           <p className="thread-note" key={m.id}><Icon name="alert" className="inline-icon" />Urgent alert texted to you{m.status === 'failed' ? ' (not sent: texting isn’t switched on)' : ''} · {when(m.createdAt)}</p>
         ) : (
@@ -107,7 +114,7 @@ export function Thread({ e }: { e: EnquiryRecord }) {
           )}
           {channel === 'email' && <input className="input" aria-label="Email subject" placeholder={`Subject: Your enquiry with ${settings.business.name}`} value={subject} onChange={(ev: any) => setSubject(ev.target.value)} />}
           <label className="sr-only" htmlFor="reply">Your message</label>
-          <textarea id="reply" className="textarea" rows={3} placeholder={channel === 'text' ? `Text ${e.name.split(' ')[0] || 'the customer'}…` : 'Write an email…'} value={text} onChange={(ev: any) => setText(ev.target.value)} />
+          <textarea id="reply" ref={box} className="textarea" rows={3} placeholder={channel === 'text' ? `Text ${e.name.split(' ')[0] || (settings.business.kind === 'appointments' ? 'the client' : 'the customer')}…` : 'Write an email…'} value={text} onChange={(ev: any) => setText(ev.target.value)} />
           <div className="composer-foot">
             <Button kind="quiet" small icon="pencil" busy={busy === 'draft'} onClick={draft}>Write it for me</Button>
             <span className="xsmall faint">{channel === 'text' && text ? `${text.length} characters · ${smsParts(text)} ${smsParts(text) === 1 ? 'text' : 'texts'}` : ''}</span>
