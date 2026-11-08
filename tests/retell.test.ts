@@ -13,6 +13,10 @@ test('retell: beauty receptionist is warm, handles every call type, never sends 
   for (const t of ['patch test', 'Moving an appointment', 'Cancelling', 'Running late', 'Gift vouchers', 'Group bookings', 'Fully booked', 'complaint', 'Sales calls', '18 or over']) assert.ok(p.toLowerCase().includes(t.toLowerCase()), t);
   assert.doesNotMatch(p, /call 999|go to A&E|call NHS 111/i);
   assert.match(p, /This is a demonstration line/);
+  // Found in a test chat: telling the model the demo emergency line was "an example number" made it break role and send the caller to 999
+  assert.doesNotMatch(p, /example number/);
+  assert.match(p, /Stay in role for every kind of call/);
+  assert.match(p, /don’t tell them not to go and don’t suggest it yourself/);
   assert.equal(agent.language, 'en-GB');
   // Demo emergency line is an Ofcom drama number: given out, never dialled
   assert.ok(!(llm.general_tools as any[]).some((t) => t.type === 'transfer_call'));
