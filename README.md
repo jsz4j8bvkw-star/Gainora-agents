@@ -47,6 +47,29 @@ Run `supabase/migrations/20261107_gainora_agents_v2.sql` in the SQL Editor (it o
 | 05:30 daily | `tenders-daily` → `tenders-background` | Fetches new open contracts from Contracts Finder and matches them to each Scout client. |
 | 06:00 daily | `daily` → `daily-background` | Starts every Watcher run (site, reviews, competitors; speed test and prices weekly), sends weekly summaries on each client's report day, follow-up reminders, and the monthly results email on the 1st. |
 
+## Capture & Convert (branch `capture-convert`, not live yet)
+
+Gainora doesn't build its own phone agent. Each client's calls are answered by a white-label AI receptionist
+platform (Trillet first, My AI Front Desk as backup), and Gainora owns everything around it:
+
+- **Receptionist pack** (`POST /api/enquiries {op:"pack"}`): the script and answers to paste into the platform,
+  written from the client's profile plus the onboarding call. Always says it's an AI and that calls are recorded,
+  gives the National Gas Emergency number for gas smells, never takes card details, and gives no prices unless
+  the owner chose guide or fixed prices.
+- **Enquiry links** (`{op:"link"}`): a secret URL per source (receptionist, web form, email forwarder). Only a
+  SHA-256 of the token is stored; the full link is shown once. `{op:"link", revoke:id}` turns one off.
+- **Inbox** (`POST /api/enquiry-in/<token>`): takes Retell-style call webhooks, flat JSON and normal form posts.
+  Saves the enquiry, ignores platform retries, flags emergencies (gas, floods, no heating, someone vulnerable)
+  as alerts, and files sales spam quietly. It never contacts the customer.
+- **Owner tools** (`{op:"update" | "draft" | "message"}`): status (replied, quote sent, booked, job done),
+  job value, a drafted first reply, quote chasers (day 3 and 8), payment reminders (due date, +7, +14 days)
+  and review requests (always with an opt-out). The owner sends every message.
+- **Results:** enquiries caught and jobs won (with the value the owner enters) appear on the results page.
+
+To switch it on: run `supabase/migrations/20261108_capture_convert.sql`, create a Stripe product for
+Capture & Convert and add it to `STRIPE_AGENT_PRODUCTS` as `"prod_…":"capture"`. Command Centre ("all") does
+not include it. The app screens for the inbox are the next piece of work.
+
 ## Running costs
 
 - Netlify and Supabase: free tiers are enough for the first ~50 clients.

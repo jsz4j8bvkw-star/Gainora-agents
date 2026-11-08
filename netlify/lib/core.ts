@@ -63,7 +63,9 @@ export const enc = encodeURIComponent;
 
 /* ---------- Auth ---------- */
 export interface AuthedUser { id: string; email: string }
-export type AgentId = 'watcher' | 'scout' | 'brief';
+export type AgentId = 'watcher' | 'scout' | 'brief' | 'capture';
+/** Agents that write notes and actions (Capture & Convert only writes alerts and results). */
+type NoteAgent = Exclude<AgentId, 'capture'>;
 
 export async function userFromRequest(req: Request): Promise<AuthedUser> {
   const auth = req.headers.get('authorization') || '';
@@ -116,13 +118,13 @@ export function requireInternal(req: Request) {
 }
 
 /* ---------- Writes shared by agents ---------- */
-export async function addNote(userId: string, agent: AgentId, text: string) {
+export async function addNote(userId: string, agent: NoteAgent, text: string) {
   await insert('agent_notes', { user_id: userId, agent, body: text.slice(0, 1200) });
 }
 export async function addAlert(userId: string, agent: AgentId, level: 'urgent' | 'notice' | 'good', title: string, text: string, link?: string) {
   await insert('alerts', { user_id: userId, agent, level, title: title.slice(0, 160), body: text.slice(0, 500), link: link ?? null });
 }
-export async function addActions(userId: string, agent: AgentId, texts: string[]) {
+export async function addActions(userId: string, agent: NoteAgent, texts: string[]) {
   const clean = [...new Set(texts.map((t) => t.trim()).filter(Boolean))].slice(0, 5);
   if (!clean.length) return;
   // Skip actions that are already open with the same text.

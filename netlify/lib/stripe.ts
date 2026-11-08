@@ -13,9 +13,10 @@ export function verifyStripeSignature(payload: string, header: string | null, se
   return sigs.some((s) => s.length === expected.length && timingSafeEqual(Buffer.from(s), Buffer.from(expected)));
 }
 
-type Agent = 'watcher' | 'scout' | 'brief';
+type Agent = 'watcher' | 'scout' | 'brief' | 'capture';
+/** Command Centre ("all") is the three agents. Capture & Convert is sold on its own product: {"prod_X":"capture"}. */
 const ALL_AGENTS: Agent[] = ['watcher', 'scout', 'brief'];
-const isAgent = (a: unknown): a is Agent => a === 'watcher' || a === 'scout' || a === 'brief';
+const isAgent = (a: unknown): a is Agent => a === 'watcher' || a === 'scout' || a === 'brief' || a === 'capture';
 
 /**
  * STRIPE_AGENT_PRODUCTS maps Stripe products to agents. "all" means Gainora Command Centre (every agent):

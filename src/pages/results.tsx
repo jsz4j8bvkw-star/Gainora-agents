@@ -6,7 +6,7 @@ import { formatMinutes, groupDay, startOfMonth, summariseValue, valueSentence, V
 import { money, shortDate } from '../lib/format';
 import type { ValueEvent } from '../lib/types';
 
-const WHO: Record<ValueEvent['agent'], string> = { watcher: 'The Watcher', scout: 'The Scout', brief: 'The Brief', you: 'You' };
+const WHO: Record<ValueEvent['agent'], string> = { watcher: 'The Watcher', scout: 'The Scout', brief: 'The Brief', capture: 'Capture & Convert', you: 'You' };
 
 export function Results() {
   const { profile } = useApp();

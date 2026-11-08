@@ -5,11 +5,11 @@
 export type ValueKind =
   | 'issue_found' | 'issue_fixed' | 'competitor_change' | 'review_alert' | 'reply_drafted'
   | 'lead_found' | 'lead_contacted' | 'lead_won' | 'tender_found' | 'opportunity_found'
-  | 'draft_written' | 'brief_written' | 'price_check';
+  | 'draft_written' | 'brief_written' | 'price_check' | 'enquiry_caught' | 'enquiry_won';
 
 export interface ValueEvent {
   id: string;
-  agent: 'watcher' | 'scout' | 'brief' | 'you';
+  agent: 'watcher' | 'scout' | 'brief' | 'capture' | 'you';
   kind: ValueKind;
   title: string;
   amount?: number | null;
@@ -18,7 +18,7 @@ export interface ValueEvent {
 
 export const VALUE_KINDS: ValueKind[] = [
   'issue_found', 'issue_fixed', 'competitor_change', 'review_alert', 'reply_drafted', 'lead_found', 'lead_contacted',
-  'lead_won', 'tender_found', 'opportunity_found', 'draft_written', 'brief_written', 'price_check',
+  'lead_won', 'tender_found', 'opportunity_found', 'draft_written', 'brief_written', 'price_check', 'enquiry_caught', 'enquiry_won',
 ];
 
 /** Typical minutes an owner would spend doing each piece of work themselves. */
@@ -26,10 +26,11 @@ export const VALUE_MINUTES: Record<ValueKind, number> = {
   issue_found: 10, issue_fixed: 0, competitor_change: 10, review_alert: 5, reply_drafted: 10,
   lead_found: 15, lead_contacted: 0, lead_won: 0, tender_found: 15, opportunity_found: 15,
   draft_written: 10, brief_written: 30, price_check: 20,
+  enquiry_caught: 5, enquiry_won: 0,
 };
 
 export const VALUE_BASIS =
-  'Estimated from typical times: 10 minutes per drafted message or review reply, 15 minutes per researched lead, contract or local opportunity, 30 minutes per Brief, 20 minutes per price comparison, 10 minutes per website issue or competitor change found, and 5 minutes per review alert.';
+  'Estimated from typical times: 10 minutes per drafted message or review reply, 15 minutes per researched lead, contract or local opportunity, 30 minutes per Brief, 20 minutes per price comparison, 10 minutes per website issue or competitor change found, and 5 minutes per review alert or enquiry logged for you.';
 
 export interface ValueSummary {
   counts: Record<ValueKind, number>;
@@ -48,7 +49,7 @@ export function summariseValue(events: ValueEvent[], since?: Date): ValueSummary
     if (!(e.kind in counts)) continue;
     counts[e.kind]++;
     minutesSaved += VALUE_MINUTES[e.kind];
-    if (e.kind === 'lead_won' && typeof e.amount === 'number' && e.amount > 0) wonValue += e.amount;
+    if ((e.kind === 'lead_won' || e.kind === 'enquiry_won') && typeof e.amount === 'number' && e.amount > 0) wonValue += e.amount;
     if (e.kind === 'tender_found' && typeof e.amount === 'number' && e.amount > 0) tenderValue += e.amount;
   }
   return { counts, minutesSaved, wonValue, tenderValue, events: list };
@@ -72,6 +73,7 @@ const GROUP_LABEL: Partial<Record<ValueKind, [string, string]>> = {
   issue_found: ['website issue found', 'website issues found'],
   review_alert: ['new review', 'new reviews'],
   competitor_change: ['competitor change', 'competitor changes'],
+  enquiry_caught: ['enquiry caught', 'enquiries caught'],
 };
 
 /** Collapses runs of the same kind of event on one day into a single readable line. */
@@ -108,6 +110,7 @@ export function valueSentence(s: ValueSummary, period: string): string {
   if (c.tender_found) parts.push(n(c.tender_found, 'public contract', 'public contracts'));
   if (c.opportunity_found) parts.push(n(c.opportunity_found, 'local opportunity', 'local opportunities'));
   if (c.review_alert) parts.push(n(c.review_alert, 'new review', 'new reviews'));
+  if (c.enquiry_caught) parts.push(n(c.enquiry_caught, 'enquiry caught', 'enquiries caught'));
   const drafted = c.draft_written + c.reply_drafted;
   const found = parts.length ? `found ${joinList(parts)}` : '';
   const wrote = drafted ? `drafted ${n(drafted, 'message', 'messages')} for you` : '';
