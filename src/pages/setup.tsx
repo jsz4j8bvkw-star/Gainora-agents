@@ -260,7 +260,7 @@ function TypesField({ f, s, onChange, error }: { f: Q; s: CaptureSettings; onCha
               <input className="input" aria-label={`Who does ${r.name || 'this booking'}`} value={r.who} placeholder="Any physio" onChange={(e: any) => set(i, 'who', e.target.value)} />
               <select className="select" aria-label={`Weeks until ${r.name || 'this booking'} is due again`} value={r.rebookWeeks ?? 0} onChange={(e: any) => onChange('bookings.types', rows.map((x, j) => (j === i ? { ...x, rebookWeeks: Number(e.target.value) || undefined } : x)))}>
                 <option value={0}>Not set</option>
-                {[2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 26, 52].map((w) => <option key={w} value={w}>{w} wks</option>)}
+                {[2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 26, 52].map((w) => <option key={w} value={w}>Every {w} wks</option>)}
               </select>
               <button type="button" className="icon-btn" aria-label={`Remove ${r.name || 'this row'}`} onClick={() => onChange('bookings.types', rows.filter((_, j) => j !== i))}><Icon name="x" /></button>
             </div>

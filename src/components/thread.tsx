@@ -114,7 +114,7 @@ export function Thread({ e, autoDraft = false }: { e: EnquiryRecord; autoDraft?:
           )}
           {channel === 'email' && <input className="input" aria-label="Email subject" placeholder={`Subject: Your enquiry with ${settings.business.name}`} value={subject} onChange={(ev: any) => setSubject(ev.target.value)} />}
           <label className="sr-only" htmlFor="reply">Your message</label>
-          <textarea id="reply" ref={box} className="textarea" rows={3} placeholder={channel === 'text' ? `Text ${e.name.split(' ')[0] || (settings.business.kind === 'appointments' ? 'the client' : 'the customer')}…` : 'Write an email…'} value={text} onChange={(ev: any) => setText(ev.target.value)} />
+          <textarea id="reply" ref={box} className="textarea" rows={Math.min(8, Math.max(3, Math.ceil(text.length / 42)))} placeholder={channel === 'text' ? `Text ${e.name.split(' ')[0] || (settings.business.kind === 'appointments' ? 'the client' : 'the customer')}…` : 'Write an email…'} value={text} onChange={(ev: any) => setText(ev.target.value)} />
           <div className="composer-foot">
             <Button kind="quiet" small icon="pencil" busy={busy === 'draft'} onClick={draft}>Write it for me</Button>
             <span className="xsmall faint">{channel === 'text' && text ? `${text.length} characters · ${smsParts(text)} ${smsParts(text) === 1 ? 'text' : 'texts'}` : ''}</span>
