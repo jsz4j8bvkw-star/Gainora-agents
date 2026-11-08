@@ -34,13 +34,13 @@ export function SignIn({ onSignedIn }: { onSignedIn: () => void }) {
           <span className="signin-product">Capture &amp; Convert</span>
         </div>
         <div>
-          <p className="signin-quote">Every call answered. Every job followed up.</p>
-          <p className="signin-lede">Your AI receptionist picks up when you can’t. Gainora puts every enquiry in one place, flags emergencies straight to you, and drafts the follow-ups until the job is booked and paid.</p>
+          <p className="signin-quote">Every call answered. Every enquiry followed up.</p>
+          <p className="signin-lede">Your AI receptionist picks up when you can’t. Gainora puts every enquiry in one place, flags emergencies straight to you, and drafts the follow-ups until they’re booked in.</p>
         </div>
         <div className="signin-agents">
           <div><strong>Answered</strong><span>Day and night, in your business name</span></div>
-          <div><strong>Flagged</strong><span>Emergencies to your phone in a minute</span></div>
-          <div><strong>Followed up</strong><span>Quotes, payments and reviews, drafted for you</span></div>
+          <div><strong>Flagged</strong><span>Anything urgent sent to you straight away</span></div>
+          <div><strong>Followed up</strong><span>Confirmations, reminders and reviews, drafted for you</span></div>
         </div>
       </section>
       <section className="signin-form">
