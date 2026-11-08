@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { humanThrown } from '../lib/errors';
 import { api } from '../lib/api';
 import { Button, Field } from '../components/ui';
 
@@ -21,7 +22,7 @@ export function SignIn({ onSignedIn }: { onSignedIn: () => void }) {
     } catch (err: any) {
       setError(err?.status === 422 || err?.status === 400
         ? 'We couldn’t find a subscription for that email. Use the address on your Stripe receipt.'
-        : err?.message || 'Sign-in failed. Try again.');
+        : humanThrown(err, 'Sign-in failed. Try again.'));
     } finally { setBusy(false); }
   };
 

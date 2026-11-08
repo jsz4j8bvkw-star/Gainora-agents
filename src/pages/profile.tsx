@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { humanThrown } from '../lib/errors';
 import { api } from '../lib/api';
 import { useApp } from '../app';
 import { Button, Icon, useLoad, useToast } from '../components/ui';
@@ -29,7 +30,7 @@ export function SectionEditor({ section, profile, onSaved }: { section: Section;
     if (Object.keys(errs).length) return;
     setBusy(true);
     try { await api.saveProfile(draft); onSaved(draft); setEditing(false); toast(`${section.title} saved`); }
-    catch (e: any) { toast(e?.message || 'Couldn’t save. Try again.'); }
+    catch (e: any) { toast(humanThrown(e, 'Couldn’t save. Try again.')); }
     finally { setBusy(false); }
   };
 

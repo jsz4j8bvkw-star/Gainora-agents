@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useId, useRef, useState } from 'react';
+import { humanThrown } from '../lib/errors';
 
 /* ---------- Icons (24px stroke) ---------- */
 const PATHS: Record<string, string> = {
@@ -136,7 +137,7 @@ export function useLoad<T>(fn: () => Promise<T>, deps: any[] = []) {
   const reload = useCallback(async () => {
     setLoading(true); setError(null);
     try { const d = await fn(); if (live.current) setData(d); }
-    catch (e: any) { if (live.current) setError(e?.message || 'Something went wrong loading this page.'); }
+    catch (e: any) { if (live.current) setError(humanThrown(e, 'Something went wrong loading this page.')); }
     finally { if (live.current) setLoading(false); }
   }, deps);
   useEffect(() => { live.current = true; reload(); return () => { live.current = false; }; }, [reload]);

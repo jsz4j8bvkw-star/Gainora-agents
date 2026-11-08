@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { humanThrown } from '../lib/errors';
 import { api } from '../lib/api';
 import { useApp } from '../app';
 import { AGENTS, Button, Icon, useToast } from '../components/ui';
@@ -21,7 +22,7 @@ export function Settings() {
       const url = await api.billingUrl();
       if (url) location.href = url;
       else toast('Billing is managed through Stripe in the live app.');
-    } catch (e: any) { toast(e?.message || 'Couldn’t open billing. Try again.'); }
+    } catch (e: any) { toast(humanThrown(e, 'Couldn’t open billing. Try again.')); }
     finally { setOpening(false); }
   };
 

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { humanThrown } from '../lib/errors';
 import { api } from '../lib/api';
 import { Locked, useApp } from '../app';
 import { Button, ErrorNote, Field, Icon, Loading, Modal, Sparkline, Stars, Tabs, copyText, useLoad, useToast } from '../components/ui';
@@ -40,7 +41,7 @@ function WatcherPage() {
   const run = async () => {
     setRunning(true);
     try { setData(await api.runWatcher()); toast('Check complete'); }
-    catch (e: any) { toast(e?.message || 'The check didn’t finish. Try again in a minute.'); }
+    catch (e: any) { toast(humanThrown(e, 'The check didn’t finish. Try again in a minute.')); }
     finally { setRunning(false); }
   };
 
@@ -205,13 +206,13 @@ function Reviews({ data, setData }: { data: WatcherState; setData: (w: WatcherSt
     if (q.trim().length < 3) return;
     setSearching(true);
     try { setFound(await api.findPlaces(q.trim())); }
-    catch (err: any) { toast(err?.message || 'Google search didn’t work. Try again.'); }
+    catch (err: any) { toast(humanThrown(err, 'Google search didn’t work. Try again.')); }
     finally { setSearching(false); }
   };
   const choose = async (id: string) => {
     setChoosing(id);
     try { setData(await api.selectPlace(id)); setChanging(false); toast('Google listing connected. Reviews update every morning.'); }
-    catch (err: any) { toast(err?.message || 'That didn’t save. Try again.'); }
+    catch (err: any) { toast(humanThrown(err, 'That didn’t save. Try again.')); }
     finally { setChoosing(null); }
   };
   const draft = async (r: ReviewItem) => {
@@ -441,13 +442,13 @@ function Competitors({ data, setData }: { data: WatcherState; setData: (w: Watch
   const act = async (op: 'dismiss' | 'watch' | 'restore' | 'instagram', key: string, handle?: string, done?: string) => {
     setBusy(key + op);
     try { setData(await api.updateCompetitor(op, key, handle)); if (done) toast(done); }
-    catch (e: any) { toast(e?.message || 'That didn’t save. Try again.'); }
+    catch (e: any) { toast(humanThrown(e, 'That didn’t save. Try again.')); }
     finally { setBusy(null); }
   };
   const find = async () => {
     setFinding(true);
     try { const r = await api.findCompetitors(); toast(r.started ? 'Searching Google for businesses near you. Check back in a few minutes.' : r.message || 'Searched recently.'); }
-    catch (e: any) { toast(e?.message || 'That didn’t work. Try again in a minute.'); }
+    catch (e: any) { toast(humanThrown(e, 'That didn’t work. Try again in a minute.')); }
     finally { setFinding(false); }
   };
 

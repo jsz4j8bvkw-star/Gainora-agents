@@ -5,6 +5,7 @@ import type {
 } from './types';
 import { analyseWeeks, metricsFor } from '../../shared/metrics';
 import { planToday } from '../../shared/today';
+import { humanError, parseJsonBody } from './errors';
 
 declare const __SUPABASE_URL__: string;
 declare const __SUPABASE_ANON_KEY__: string;
@@ -27,12 +28,21 @@ function writeSession(s: Session | null) {
   try { s ? localStorage.setItem(SESSION_KEY, JSON.stringify(s)) : localStorage.removeItem(SESSION_KEY); } catch { /* private mode */ }
 }
 
+/** Reads a body that may be JSON, empty (PostgREST's 201/204) or an HTML error page, without ever throwing. */
+async function readBody(res: Response): Promise<any> {
+  const text = await res.text().catch(() => '');
+  return parseJsonBody(text);
+}
+
 async function authFetch(path: string, body: unknown) {
   const res = await fetch(`${URL_}/auth/v1/${path}`, {
     method: 'POST', headers: { apikey: ANON, 'Content-Type': 'application/json' }, body: JSON.stringify(body),
   });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new ApiError(data.msg || data.error_description || 'Sign-in failed. Try again.', res.status);
+  const data = (await readBody(res)) ?? {};
+  if (!res.ok) {
+    const m = typeof data.msg === 'string' ? data.msg : typeof data.error_description === 'string' ? data.error_description : '';
+    throw new ApiError(m && !/json|token|jwt/i.test(m) ? m : humanError({ status: res.status, doing: 'signing in' }), res.status);
+  }
   return data;
 }
 
@@ -72,32 +82,51 @@ async function token(): Promise<string> {
   return s.access_token;
 }
 
-/** PostgREST call, protected by row-level security. */
-async function rest<T>(path: string, init: { method?: string; body?: unknown; prefer?: string } = {}): Promise<T> {
-  const res = await fetch(`${URL_}/rest/v1/${path}`, {
-    method: init.method || 'GET',
-    headers: {
-      apikey: ANON, Authorization: `Bearer ${await token()}`, 'Content-Type': 'application/json',
-      ...(init.prefer ? { Prefer: init.prefer } : {}),
-    },
-    body: init.body === undefined ? undefined : JSON.stringify(init.body),
-  });
-  if (!res.ok) {
-    const e = await res.json().catch(() => ({}));
-    throw new ApiError(e.message || 'Something went wrong saving your changes. Try again.', res.status);
+/**
+ * PostgREST call, protected by row-level security. A write without `return=representation`
+ * comes back as 201 or 204 with an empty body, which is success, not an error; and PostgREST's
+ * own error text is logged, never shown.
+ */
+async function rest<T>(path: string, init: { method?: string; body?: unknown; prefer?: string; doing?: string } = {}): Promise<T> {
+  let res: Response;
+  try {
+    res = await fetch(`${URL_}/rest/v1/${path}`, {
+      method: init.method || 'GET',
+      headers: {
+        apikey: ANON, Authorization: `Bearer ${await token()}`, 'Content-Type': 'application/json',
+        ...(init.prefer ? { Prefer: init.prefer } : {}),
+      },
+      body: init.body === undefined ? undefined : JSON.stringify(init.body),
+    });
+  } catch (e) {
+    if (e instanceof ApiError) throw e;
+    throw new ApiError(humanError({ status: 0, doing: init.doing }), 0);
   }
-  return res.status === 204 ? (undefined as T) : res.json();
+  const data = await readBody(res);
+  if (!res.ok) {
+    console.error('[gainora] data error', res.status, path.split('?')[0], data?.message || data?.code || '');
+    throw new ApiError(humanError({ status: res.status, body: data, doing: init.doing ?? (init.method && init.method !== 'GET' ? 'saving your changes' : 'loading your data') }), res.status);
+  }
+  return (data === undefined ? undefined : data) as T;
 }
 
-/** Netlify function call for agent work. */
-async function fn<T>(name: string, body?: unknown): Promise<T> {
-  const res = await fetch(`/api/${name}`, {
-    method: body === undefined ? 'GET' : 'POST',
-    headers: { Authorization: `Bearer ${await token()}`, 'Content-Type': 'application/json' },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new ApiError(data.error || 'The agent could not finish that. Try again in a minute.', res.status);
+/** Netlify function call for agent work. `timeoutMs` gives up with a plain message rather than hanging. */
+async function fn<T>(name: string, body?: unknown, opts: { timeoutMs?: number; doing?: string } = {}): Promise<T> {
+  let res: Response;
+  try {
+    res = await fetch(`/api/${name}`, {
+      method: body === undefined ? 'GET' : 'POST',
+      headers: { Authorization: `Bearer ${await token()}`, 'Content-Type': 'application/json' },
+      body: body === undefined ? undefined : JSON.stringify(body),
+      ...(opts.timeoutMs ? { signal: AbortSignal.timeout(opts.timeoutMs) } : {}),
+    });
+  } catch (e: any) {
+    if (e instanceof ApiError) throw e;
+    if (e?.name === 'TimeoutError' || e?.name === 'AbortError') throw new ApiError(`That took too long${opts.doing ? ` ${opts.doing}` : ''}. Try again.`, 504);
+    throw new ApiError(humanError({ status: 0, doing: opts.doing }), 0);
+  }
+  const data = (await readBody(res)) ?? {};
+  if (!res.ok) throw new ApiError(humanError({ status: res.status, body: data, doing: opts.doing ?? 'running that' }), res.status);
   return data as T;
 }
 
@@ -151,7 +180,8 @@ export function createLiveApi(): Api {
     async saveProfile(p) {
       const s = await session();
       const { completedAt, ...data } = p;
-      await rest('profiles?on_conflict=user_id', { method: 'POST', prefer: 'resolution=merge-duplicates', body: { user_id: s!.user.id, data, completed_at: completedAt ?? null, updated_at: new Date().toISOString() } });
+      // return=minimal: PostgREST answers 201 with no body, which readBody treats as success.
+      await rest('profiles?on_conflict=user_id', { method: 'POST', prefer: 'resolution=merge-duplicates,return=minimal', doing: 'saving your details', body: { user_id: s!.user.id, data, completed_at: completedAt ?? null, updated_at: new Date().toISOString() } });
       if (completedAt) fn('agents-start', {}).catch(() => {}); // first runs start in the background
     },
     async getPlan(): Promise<Plan> {

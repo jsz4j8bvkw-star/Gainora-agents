@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { humanThrown } from '../lib/errors';
 import { api } from '../lib/api';
 import { useApp } from '../app';
 import { ErrorNote, Icon, Loading, useLoad } from '../components/ui';
@@ -34,7 +35,7 @@ export function Ask() {
       const reply = await api.sendChat(t);
       setData((d) => [...(d ?? []), reply]);
     } catch (e: any) {
-      setSendError(e?.message || 'No answer came back. Try asking again.');
+      setSendError(humanThrown(e, 'No answer came back. Try asking again.'));
     } finally { setThinking(false); boxRef.current?.focus(); }
   };
 

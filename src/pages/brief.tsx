@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { humanThrown } from '../lib/errors';
 import { api } from '../lib/api';
 import { Locked, useApp } from '../app';
 import { Button, ErrorNote, Field, Loading, Sparkline, Tabs, copyText, useLoad, useToast } from '../components/ui';
@@ -68,7 +69,7 @@ function BriefPage() {
       setForm({}); setNote('');
       toast('Your Brief is updated');
       window.scrollTo({ top: 0, behavior: 'smooth' });
-    } catch (err: any) { setFormError(err?.message || 'Couldn’t update your Brief. Try again.'); }
+    } catch (err: any) { setFormError(humanThrown(err, 'Couldn’t update your Brief. Try again.')); }
     finally { setBusy(false); }
   };
 
@@ -163,7 +164,7 @@ function Winback({ changes }: { changes: MetricChange[] }) {
   const write = async () => {
     setBusy(true);
     try { setDrafts(await api.draftWinback()); }
-    catch (e: any) { toast(e?.message || 'Couldn’t write the messages. Try again.'); }
+    catch (e: any) { toast(humanThrown(e, 'Couldn’t write the messages. Try again.')); }
     finally { setBusy(false); }
   };
   // Opened from Home ("Write my messages"): start writing straight away and bring the section into view.

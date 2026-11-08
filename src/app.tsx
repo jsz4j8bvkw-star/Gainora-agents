@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { humanThrown } from './lib/errors';
 import { api } from './lib/api';
 import type { AgentId, BusinessProfile, Plan, User } from './lib/types';
 import { Link, navigate, usePath } from './lib/router';
@@ -41,7 +42,7 @@ export function App() {
       if (!u) return;
       const [p, pl] = await Promise.all([api.getProfile(), api.getPlan()]);
       setProfile(p); setPlan(pl);
-    } catch (e: any) { setError(e?.message || 'Gainora could not load. Check your connection and refresh.'); }
+    } catch (e: any) { setError(humanThrown(e, 'Gainora could not load. Check your connection and refresh.')); }
   };
   useEffect(() => { load(); }, []);
 

@@ -1,4 +1,5 @@
 import { socialUrl } from '../../shared/social';
+import { humanThrown } from '../lib/errors';
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../lib/api';
 import type { BusinessProfile } from '../lib/types';
@@ -123,7 +124,7 @@ export function Onboarding({ initial, onDone }: { initial: BusinessProfile | nul
     setFinishing(true); setFinishError(null);
     const done = { ...profile, business: { ...profile.business, instagram: socialUrl('instagram', profile.business.instagram), facebook: socialUrl('facebook', profile.business.facebook) }, competitors: { ...profile.competitors, list: profile.competitors.list.filter((c) => c.name.trim() || c.url.trim()) }, completedAt: new Date().toISOString() };
     try { await api.saveProfile(done); onDone(done); }
-    catch (e: any) { setFinishError(e?.message || 'We couldn’t save your answers. Check your connection and try again.'); setFinishing(false); }
+    catch (e: any) { setFinishError(humanThrown(e, 'We couldn’t save your answers. Check your connection and try again.')); setFinishing(false); }
   };
 
   const reachable = (i: number) => i === 0 || i <= step || SECTIONS.slice(0, i - 1).every((s) => sectionComplete(s, profile));

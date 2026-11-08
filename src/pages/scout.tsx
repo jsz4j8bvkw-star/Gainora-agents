@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { humanThrown } from '../lib/errors';
 import { api } from '../lib/api';
 import { Locked, useApp } from '../app';
 import { Button, ErrorNote, Field, Icon, Loading, Modal, Tabs, copyText, useLoad, useToast } from '../components/ui';
@@ -95,7 +96,7 @@ function Research({ onLeadAdded }: { onLeadAdded: () => void }) {
     try {
       const s = await api.startScout(q, area.trim() || 'United Kingdom', kind);
       setData([s, ...data]); setSelected(s.id); setQuery('');
-    } catch (err: any) { setFormError(err?.message || 'The search couldn’t start. Try again.'); }
+    } catch (err: any) { setFormError(humanThrown(err, 'The search couldn’t start. Try again.')); }
     finally { setStarting(false); }
   };
 
@@ -109,7 +110,7 @@ function Research({ onLeadAdded }: { onLeadAdded: () => void }) {
       setData(data.map((s) => (s.id === current.id ? { ...s, results: s.results.map((x) => (x.id === r.id ? { ...x, saved: true } : x)) } : s)));
       onLeadAdded();
       toast(`${r.name} added to your leads`);
-    } catch (err: any) { toast(err?.message || 'That didn’t save. Try again.'); }
+    } catch (err: any) { toast(humanThrown(err, 'That didn’t save. Try again.')); }
     finally { setAdding(null); }
   };
 
@@ -296,7 +297,7 @@ function Leads({ state, goResearch }: { state: ReturnType<typeof useLoad<Lead[]>
       const next = await api.updateLead(lead.id, patch);
       setData(data.map((l) => (l.id === lead.id ? next : l)));
       if (message) toast(message);
-    } catch (e: any) { toast(e?.message || 'That didn’t save. Try again.'); }
+    } catch (e: any) { toast(humanThrown(e, 'That didn’t save. Try again.')); }
     finally { setBusy(null); }
   };
   const groups: { title: string; hint: string; list: Lead[] }[] = [
