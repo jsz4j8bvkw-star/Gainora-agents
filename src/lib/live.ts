@@ -3,7 +3,8 @@ import type {
   Action, AgentId, Alert, BriefReport, BusinessProfile, ChatMessage, FeedbackRecord, HomeData, Lead, PlaceSummary, Plan, ScoutSearch,
   Tender, User, ValueEvent, WatcherState, WeekNumbers, WinbackDrafts,
 } from './types';
-import { metricsFor } from '../../shared/metrics';
+import { analyseWeeks, metricsFor } from '../../shared/metrics';
+import { planToday } from '../../shared/today';
 
 declare const __SUPABASE_URL__: string;
 declare const __SUPABASE_ANON_KEY__: string;
@@ -160,15 +161,19 @@ export function createLiveApi(): Api {
     async billingUrl() { return (await fn<{ url: string }>('billing-portal', {})).url; },
 
     async getHome(): Promise<HomeData> {
-      const [profile, notes, actions, alerts, watcher, searches, briefs, numbers] = await Promise.all([
+      const [profile, plan, notes, actions, alerts, watcher, changeRows, searches, briefs, numbers, leads, tenders] = await Promise.all([
         this.getProfile(),
+        this.getPlan(),
         rest<any[]>('agent_notes?select=agent,body,created_at&order=created_at.desc&limit=12'),
         rest<any[]>('actions?select=*&order=created_at.desc&limit=30'),
         rest<any[]>('alerts?select=*&order=created_at.desc&limit=20'),
         rest<any[]>('watcher_state?select=state,updated_at'),
+        rest<any[]>('competitor_changes?select=*&order=created_at.desc&limit=10').catch(() => [] as any[]),
         rest<any[]>('scout_searches?select=*&order=created_at.desc&limit=5'),
         rest<any[]>('briefs?select=*&order=week_of.desc&limit=1'),
-        rest<any[]>('week_numbers?select=week_of,values&order=week_of.desc&limit=1'),
+        rest<any[]>('week_numbers?select=week_of,values&order=week_of.desc&limit=6'),
+        rest<any[]>('leads?select=*&order=created_at.desc&limit=300').catch(() => [] as any[]),
+        rest<any[]>('tender_matches?select=id,tender_id,fit,reason,status,created_at,tenders(*)&status=in.(new,saved)&order=created_at.desc&limit=50').catch(() => [] as any[]),
       ]);
       const p = profile!;
       const latestNote: Partial<Record<AgentId, string>> = {};
@@ -176,18 +181,30 @@ export function createLiveApi(): Api {
       const ws: WatcherState | undefined = watcher[0]?.state;
       const s0 = searches[0] ? mapSearch(searches[0]) : undefined;
       const strong = s0?.results.filter((r) => r.fit === 'strong').length ?? 0;
-      const saved = searches.flatMap((x) => mapSearch(x).results).filter((r) => r.saved).length;
+      const leadList = leads.map(mapLead);
+      const won = leadList.filter((l) => l.stage === 'won').length;
+      const inProgress = leadList.filter((l) => l.stage === 'contacted' || l.stage === 'replied' || l.stage === 'meeting').length;
       const isWholesale = /wholesale|b2b/i.test(p.goals.focus);
       const focusMetric = /enquir/i.test(p.goals.focus) ? 'enquiries' : /order value/i.test(p.goals.focus) ? 'revenue' : 'orders';
       const started = new Date(p.completedAt || Date.now()).getTime();
       const urgent = ws?.issues.filter((i) => i.level === 'urgent').length ?? 0;
+      const metrics = metricsFor(p.numbers.track);
+      const weeks = numbers.map((n) => ({ weekOf: n.week_of, values: n.values })).reverse();
+      const thisWeek = (() => { const x = new Date(); const d = (x.getDay() + 6) % 7; x.setDate(x.getDate() - d); x.setHours(0, 0, 0, 0); return x.toISOString().slice(0, 10); })();
+      const today = planToday({
+        profile: p, agents: plan.agents,
+        watcher: ws ? { ...ws, changes: changeRows.map((c) => ({ id: c.id, competitor: c.competitor, url: c.url, at: c.created_at, kind: c.kind, summary: c.summary, detail: c.detail ?? undefined })) } : null,
+        leads: leadList, tenders: tenders.map(mapTender), searches: searches.length,
+        changes: weeks.length ? analyseWeeks(weeks, metrics) : [], hasThisWeeksNumbers: weeks.some((w) => w.weekOf === thisWeek),
+      });
       return {
+        today,
         notes: (['watcher', 'scout', 'brief'] as AgentId[]).filter((a) => latestNote[a]).map((a) => ({ agent: a, body: latestNote[a]! })),
         actions: actions.map(mapAction),
         alerts: alerts.map(mapAlert),
         goalProgress: isWholesale
-          ? { current: saved, target: firstNumber(p.goals.target), label: 'leads in progress', weeksLeft: Math.max(0, Math.ceil((started + 90 * DAY - Date.now()) / (7 * DAY))) }
-          : { current: numbers[0]?.values?.[focusMetric] ?? null, target: firstNumber(p.goals.target), label: metricsFor(p.numbers.track).find((m) => m.id === focusMetric)?.label.toLowerCase() ?? 'this week', weeksLeft: Math.max(0, Math.ceil((started + 90 * DAY - Date.now()) / (7 * DAY))) },
+          ? { current: won, target: firstNumber(p.goals.target), label: 'stockists won', weeksLeft: Math.max(0, Math.ceil((started + 90 * DAY - Date.now()) / (7 * DAY))), detail: inProgress ? `${inProgress} more in conversation` : undefined }
+          : { current: numbers[0]?.values?.[focusMetric] ?? null, target: firstNumber(p.goals.target), label: metrics.find((m) => m.id === focusMetric)?.label.toLowerCase() ?? 'this week', weeksLeft: Math.max(0, Math.ceil((started + 90 * DAY - Date.now()) / (7 * DAY))) },
         agentStatus: {
           watcher: { line: ws ? (urgent ? `${urgent} urgent issue${urgent > 1 ? 's' : ''} to fix` : 'Your site looks healthy') : 'First check in progress', lastRun: ws?.lastCheck, nextRun: ws?.nextCheck },
           scout: { line: s0 ? (s0.status === 'running' ? 'Researching now' : `${strong} strong-fit leads ready`) : 'Start your first search', lastRun: s0?.createdAt },

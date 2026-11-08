@@ -200,6 +200,8 @@ p { margin: 0; }
 
 .topbar { display: none; }
 .tabbar { display: none; }
+.lede-date { display: none; }
+@media (max-width: 900px) { .lede-date { display: inline; } }
 
 .demo-flag {
   display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap;
@@ -253,6 +255,20 @@ p { margin: 0; }
 @media (max-width: 1080px) { .grid-2 { grid-template-columns: minmax(0, 1fr); } }
 
 /* ---------- Home ---------- */
+/* "Do these today": the one place the owner looks first. Numbered because it is an order. */
+.today-item { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 6px 18px; align-items: start; padding: 22px 24px 22px 20px; }
+.today-num { font-family: var(--serif); font-size: 2rem; line-height: 1; color: var(--gold); font-weight: 500; padding-top: 2px; font-variant-numeric: tabular-nums; }
+.today-body { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.today-why { max-width: 64ch; }
+.today-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.today-actions .btn-primary svg, .today-actions .btn-secondary svg { width: 16px; height: 16px; margin-right: -4px; }
+.today .section-head { flex-wrap: wrap; }
+@media (max-width: 760px) {
+  .today .section-head > span { flex-basis: 100%; margin-top: -6px; }
+  .today-item { grid-template-columns: 32px minmax(0, 1fr); padding: 18px 18px 18px 16px; }
+  .today-num { font-size: 1.625rem; }
+  .today-actions { grid-column: 2; flex-direction: row; align-items: center; justify-content: flex-start; flex-wrap: wrap; margin-top: 6px; }
+}
 .letter { padding: 36px 40px 32px; }
 .letter-entry { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 20px; padding: 18px 0; }
 .letter-entry + .letter-entry { border-top: 1px solid var(--line); }
@@ -281,6 +297,9 @@ p { margin: 0; }
 .todo label:not(.check) { flex: 1; min-width: 0; cursor: pointer; display: flex; flex-direction: column; gap: 2px; }
 .todo.done .todo-text { color: var(--ink-faint); text-decoration: line-through; text-decoration-color: var(--line-strong); }
 .todo:has(input:focus-visible) .check { outline: 2px solid var(--forest); outline-offset: 2px; }
+.todo-go { display: grid; place-items: center; width: 36px; height: 36px; margin: -7px -8px -7px 0; border-radius: 6px; color: var(--ink-faint); flex: none; align-self: center; }
+.todo-go:hover { background: var(--forest-wash); color: var(--ink); }
+.todo-go svg { width: 18px; height: 18px; }
 .add-todo { display: flex; gap: 8px; padding: 12px 20px 16px; }
 .add-todo .input { min-height: 40px; }
 
@@ -290,6 +309,7 @@ p { margin: 0; }
 .agent-icon svg { width: 22px; height: 22px; }
 .agent-row .chev { width: 18px; height: 18px; color: var(--ink-faint); }
 .agent-row.locked .agent-icon { background: var(--canvas); color: var(--ink-faint); }
+@media (max-width: 640px) { .agent-row { padding: 16px 18px; gap: 14px; } }
 
 .alert-row { display: grid; grid-template-columns: 8px minmax(0, 1fr); gap: 14px; padding: 14px 20px; }
 .alert-row .dot { margin-top: 8px; }

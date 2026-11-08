@@ -4,12 +4,15 @@ import { Locked, useApp } from '../app';
 import { Button, ErrorNote, Field, Icon, Loading, Modal, Tabs, copyText, useLoad, useToast } from '../components/ui';
 import { Feedback } from '../components/feedback';
 import { csv, hostOf, money, relative, shortDate } from '../lib/format';
+import { queryParam } from '../lib/router';
 import { pending } from '../components/palette';
 import { isDue } from '../../shared/leads';
 import { daysLeft } from '../../shared/tenders';
 import type { Lead, LeadStage, ScoutKind, ScoutResult, ScoutSearch, Tender } from '../lib/types';
 
 type Tab = 'research' | 'leads' | 'contracts';
+const TABS: Tab[] = ['research', 'leads', 'contracts'];
+const initialTab = (): Tab => { const t = queryParam('tab') as Tab | null; return t && TABS.includes(t) ? t : 'research'; };
 
 export function Scout() {
   const { plan } = useApp();
@@ -17,7 +20,7 @@ export function Scout() {
 }
 
 function ScoutPage() {
-  const [tab, setTab] = useState<Tab>('research');
+  const [tab, setTab] = useState<Tab>(initialTab);
   const leads = useLoad(() => api.listLeads());
   const tenders = useLoad(() => api.listTenders());
   const due = leads.data?.filter((l) => l.stage === 'contacted' && isDue(l.nextFollowUp)).length ?? 0;
@@ -267,6 +270,22 @@ function Leads({ state, goResearch }: { state: ReturnType<typeof useLoad<Lead[]>
   const [busy, setBusy] = useState<string | null>(null);
   const toast = useToast();
 
+  const openDraft = async (lead: Lead, kind: 'intro' | 'follow') => {
+    setDraft({ lead, kind, text: null });
+    try { setDraft({ lead, kind, text: kind === 'intro' ? await api.draftIntro('', lead.id) : await api.draftFollowUp(lead.id) }); }
+    catch { setDraft(null); toast('Couldn’t write it. Try again.'); }
+  };
+  // Opened from Home ("Open the follow-up" / "Open the introduction"): go straight to that lead's draft.
+  const wanted = queryParam('lead');
+  useEffect(() => {
+    if (!wanted || !data) return;
+    const l = data.find((x) => x.id === wanted);
+    if (!l) return;
+    if (l.stage === 'to_contact') openDraft(l, 'intro');
+    else if (l.stage === 'contacted' && isDue(l.nextFollowUp)) openDraft(l, 'follow');
+    else document.getElementById(`lead-${l.id}`)?.scrollIntoView({ block: 'center' });
+  }, [data === undefined]);
+
   if (loading && !data) return <Loading />;
   if (error || !data) return <ErrorNote message={error ?? 'Your leads could not load.'} retry={reload} />;
 
@@ -279,12 +298,6 @@ function Leads({ state, goResearch }: { state: ReturnType<typeof useLoad<Lead[]>
     } catch (e: any) { toast(e?.message || 'That didn’t save. Try again.'); }
     finally { setBusy(null); }
   };
-  const openDraft = async (lead: Lead, kind: 'intro' | 'follow') => {
-    setDraft({ lead, kind, text: null });
-    try { setDraft({ lead, kind, text: kind === 'intro' ? await api.draftIntro('', lead.id) : await api.draftFollowUp(lead.id) }); }
-    catch { setDraft(null); toast('Couldn’t write it. Try again.'); }
-  };
-
   const groups: { title: string; hint: string; list: Lead[] }[] = [
     { title: 'Follow up today', hint: 'A short, friendly nudge often gets the reply.', list: data.filter((l) => l.stage === 'contacted' && isDue(l.nextFollowUp)) },
     { title: 'To contact', hint: 'Introductions are drafted for you.', list: data.filter((l) => l.stage === 'to_contact') },
@@ -321,7 +334,7 @@ function Leads({ state, goResearch }: { state: ReturnType<typeof useLoad<Lead[]>
           <div className="section-head"><h2 className="heading">{g.title} <span className="count">{g.list.length}</span></h2>{g.hint && <span className="small faint">{g.hint}</span>}</div>
           <div className="panel rows">
             {g.list.map((l) => (
-              <article className="pipeline-row" key={l.id}>
+              <article className="pipeline-row" key={l.id} id={`lead-${l.id}`}>
                 <div className="stack gap-4" style={{ minWidth: 0 }}>
                   <div className="row gap-8 wrap"><h3 className="lead-name">{l.name}</h3><span className={`tag ${STAGE_TAG[l.stage].cls}`}>{STAGE_TAG[l.stage].label}</span></div>
                   <span className="small muted">{l.location}{l.website && <>, <a href={l.website} target="_blank" rel="noreferrer">{hostOf(l.website)}</a></>}</span>

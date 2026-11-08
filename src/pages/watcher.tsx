@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { Locked, useApp } from '../app';
 import { Button, ErrorNote, Field, Icon, Loading, Modal, Sparkline, Stars, Tabs, copyText, useLoad, useToast } from '../components/ui';
 import { Feedback } from '../components/feedback';
 import { hostOf, relative, shortDate } from '../lib/format';
+import { queryParam } from '../lib/router';
 import { priceValue } from '../../shared/prices';
 import { scoreLabel } from '../../shared/speed';
 import type { CompetitorChange, PlaceSummary, ReviewItem, WatcherState } from '../lib/types';
@@ -16,6 +17,8 @@ const KIND: Record<CompetitorChange['kind'], { label: string; cls: string }> = {
 };
 
 type Tab = 'overview' | 'reviews' | 'speed' | 'competitors';
+const TABS: Tab[] = ['overview', 'reviews', 'speed', 'competitors'];
+const initialTab = (): Tab => { const t = queryParam('tab') as Tab | null; return t && TABS.includes(t) ? t : 'overview'; };
 
 export function Watcher() {
   const { plan } = useApp();
@@ -26,7 +29,7 @@ function WatcherPage() {
   const { profile } = useApp();
   const { data, setData, error, loading, reload } = useLoad(() => api.getWatcher());
   const [running, setRunning] = useState(false);
-  const [tab, setTab] = useState<Tab>('overview');
+  const [tab, setTab] = useState<Tab>(initialTab);
   const toast = useToast();
 
   if (loading && !data) return <Loading />;
@@ -171,6 +174,12 @@ function Reviews({ data, setData }: { data: WatcherState; setData: (w: WatcherSt
     try { setReply({ review: r, text: await api.draftReviewReply(r.id) }); }
     catch { setReply(null); toast('Couldn’t write the reply. Try again.'); }
   };
+  // Opened from Home ("Open the drafted reply"): go straight to the draft for that review.
+  useEffect(() => {
+    const id = queryParam('review');
+    const r = id && rv?.reviews.find((x) => x.id === id);
+    if (r) draft(r);
+  }, []);
 
   if (changing || !rv) {
     return (

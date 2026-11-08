@@ -7,7 +7,7 @@ let memPath = '/';
 
 function current(): string {
   if (memory) return memPath;
-  return location.pathname || '/';
+  return (location.pathname || '/') + (location.search || '');
 }
 
 const listeners = new Set<() => void>();
@@ -38,6 +38,18 @@ export function usePath(): string {
 
 export function href(to: string): string {
   return memory ? '#' : to;
+}
+
+/** The query string of the current route, so pages can open on a tab or item from a link. */
+export function useQuery(): URLSearchParams {
+  const path = usePath();
+  return new URLSearchParams(path.includes('?') ? path.slice(path.indexOf('?')) : '');
+}
+
+/** A query value from the current route, read once (used for the first tab or item a page opens on). */
+export function queryParam(name: string): string | null {
+  const path = current();
+  return new URLSearchParams(path.includes('?') ? path.slice(path.indexOf('?')) : '').get(name);
 }
 
 export function Link(props: { to: string; className?: string; children?: any; 'aria-current'?: any; onClick?: () => void }) {

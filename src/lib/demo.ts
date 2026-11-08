@@ -9,6 +9,7 @@ import { writeBrief } from '../../shared/brief-writer';
 import { fallbackReply } from '../../shared/reviews';
 import { followUpSent, moveLead } from '../../shared/leads';
 import { hostOf } from '../../shared/learning';
+import { planToday } from '../../shared/today';
 import { mondayOf, uid } from './format';
 
 const KEY = 'gainora.agents.demo.v2';
@@ -204,6 +205,7 @@ function seed(s: DemoState) {
     toLead(results[0], { stage: 'contacted', contactedAt: iso(now - 4 * DAY), nextFollowUp: today9.toISOString() }),
     toLead(results[1], {}),
     toLead(results[2], { stage: 'replied', contactedAt: iso(now - 8 * DAY), followUps: 1 }),
+    { id: uid('l_'), name: 'The Linen Cupboard', location: 'Truro', website: 'https://example.com', reason: 'Stocks several small UK makers and lists a wholesale enquiries contact on its website.', source: { title: 'The Linen Cupboard – about page (sample)', url: 'https://example.com' }, stage: 'won', contactedAt: iso(now - 23 * DAY), followUps: 1, value: 1200, createdAt: iso(now - 24 * DAY) },
   ];
 
   // Public contracts
@@ -348,13 +350,20 @@ export function createDemoApi(): Api {
       const latest = s.numbers[s.numbers.length - 1];
       const focusMetric = /enquir/i.test(p.goals.focus) ? 'enquiries' : /order value/i.test(p.goals.focus) ? 'revenue' : 'orders';
       const isWholesale = /wholesale|b2b/i.test(p.goals.focus);
-      const inProgress = s.leads.filter((l) => l.stage !== 'to_contact' && l.stage !== 'lost').length;
+      const won = s.leads.filter((l) => l.stage === 'won').length;
+      const inProgress = s.leads.filter((l) => l.stage === 'contacted' || l.stage === 'replied' || l.stage === 'meeting').length;
       const target = firstNumber(p.goals.target);
       const started = new Date(p.completedAt || Date.now()).getTime();
       const weeksLeft = Math.max(0, Math.ceil((started + 90 * DAY - Date.now()) / (7 * DAY)));
       const strong = s.scout[0]?.results.filter((r) => r.fit === 'strong').length ?? 0;
       const due = s.leads.filter((l) => l.stage === 'contacted' && l.nextFollowUp && new Date(l.nextFollowUp).getTime() < Date.now() + DAY);
+      const thisWeek = mondayOf();
+      const today = planToday({
+        profile: p, agents: ['watcher', 'scout', 'brief'], watcher: s.watcher, leads: s.leads, tenders: s.tenders, searches: s.scout.length,
+        changes: analyseWeeks(s.numbers, metrics), hasThisWeeksNumbers: s.numbers.some((w) => w.weekOf === thisWeek),
+      });
       return {
+        today,
         notes: [
           { agent: 'watcher', body: `Mark D. left a 2-star review about a chipped bowl. Reply today; I’ve drafted it. Your contact page also returned an error on Sunday night, so some enquiries may not be reaching you.` },
           { agent: 'scout', body: `${due.length ? `${due[0].name} is due a follow-up today. ` : ''}I also found a public contract for locally made gifts worth £18,000 that fits you closely, and ${strong} shops that could stock your range.` },
@@ -363,7 +372,7 @@ export function createDemoApi(): Api {
         actions: s.actions,
         alerts: s.alerts,
         goalProgress: isWholesale
-          ? { current: inProgress, target, label: 'stockists in conversation', weeksLeft }
+          ? { current: won, target, label: 'stockists won', weeksLeft, detail: inProgress ? `${inProgress} more in conversation` : undefined }
           : { current: latest?.values[focusMetric] ?? null, target, label: metrics.find((m) => m.id === focusMetric)?.label.toLowerCase() ?? 'this week', weeksLeft },
         agentStatus: {
           watcher: { line: '1 urgent issue, 3 new reviews, 3 competitor changes', lastRun: s.watcher?.lastCheck, nextRun: s.watcher?.nextCheck },
