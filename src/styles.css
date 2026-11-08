@@ -910,6 +910,11 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .
 .funnel-row:last-child .funnel-track span { background: var(--sage); }
 .funnel-row strong { text-align: right; }
 
+.advice-row { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 16px; align-items: start; padding: 18px 22px; }
+.advice-num { width: 30px; height: 30px; border-radius: 50%; background: var(--forest); color: var(--sage); display: grid; place-items: center; font-family: var(--serif); font-size: 1.125rem; }
+.advice-row p { max-width: 70ch; }
+@media (max-width: 640px) { .advice-row { grid-template-columns: 30px minmax(0, 1fr); } .advice-row .btn { grid-column: 2; justify-self: start; } }
+
 /* Settings */
 .plan-includes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 24px; padding: 20px 24px; }
 .plan-includes span { display: flex; gap: 10px; font-size: var(--t-sm); }

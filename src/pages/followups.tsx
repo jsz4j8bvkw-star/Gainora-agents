@@ -6,8 +6,9 @@ import { Button, ErrorNote, Icon, Loading, useToast } from '../components/ui';
 import { Compose } from '../components/compose';
 import { who } from '../components/enquiry';
 import { money, relative, shortDate } from '../lib/format';
-import { followUps, paymentReminder, quoteChaser, reviewRequest, words, type FollowItem } from '../../shared/capture';
-import type { EnquiryPatch } from '../lib/types';
+import { followUps, isBeauty, paymentReminder, quoteChaser, reviewRequest, words, type FollowItem } from '../../shared/capture';
+import { rebookDue, rebookText, topicOf, type RebookItem } from '../../shared/insight';
+import type { EnquiryPatch, EnquiryRecord } from '../lib/types';
 
 const GROUPS: { kind: FollowItem['kind']; title: string; hint: string; icon: string }[] = [
   { kind: 'quote', title: 'Chase quotes', hint: 'A friendly nudge on day 3 and a last one on day 8.', icon: 'pound' },
@@ -23,8 +24,21 @@ const whenLabel = (f: FollowItem) => {
 export function FollowUps() {
   const { enquiries, enquiriesError, reloadEnquiries, settings, putEnquiry, messages } = useApp();
   const [draft, setDraft] = useState<FollowItem | null>(null);
+  const [back, setBack] = useState<RebookItem | null>(null);
+  const [quiet, setQuiet] = useState<EnquiryRecord | null>(null);
   const toast = useToast();
+  const appts = settings.business.kind === 'appointments';
+  const beauty = isBeauty(settings.business);
   const items = useMemo(() => followUps(enquiries ?? []), [enquiries]);
+  const dueBack = useMemo(() => rebookDue((enquiries ?? []), settings), [enquiries, settings]);
+  // Went quiet: they asked (often about a price) and were replied to, but nothing was booked and nothing has happened for a few days.
+  const wentQuiet = useMemo(() => {
+    const now = Date.now();
+    return (enquiries ?? []).filter((e) => !e.isTest && appts && (e.status === 'replied' || (e.status === 'new' && e.kind === 'quote')) && e.urgency !== 'emergency' && e.kind !== 'complaint' && now - new Date(e.repliedAt ?? e.receivedAt).getTime() > 3 * 86_400_000 && now - new Date(e.receivedAt).getTime() < 42 * 86_400_000)
+      .filter((e) => !messages.some((m) => m.enquiryId === e.id && m.direction === 'in' && now - new Date(m.createdAt).getTime() < 3 * 86_400_000))
+      .sort((a, b) => a.receivedAt.localeCompare(b.receivedAt));
+  }, [enquiries, messages, appts]);
+  const rebookSent = (b: RebookItem) => messages.find((m) => m.enquiryId === b.enquiry.id && m.direction === 'out' && m.workflow === 'rebook' && m.status === 'sent');
   const wfFor = (f: FollowItem) => (f.kind === 'quote' ? 'quote' : f.kind === 'payment' ? 'payment' : 'review') as 'quote' | 'payment' | 'review';
   const stepFor = (f: FollowItem) => (f.kind === 'quote' ? `chase${f.stage}` : f.kind === 'payment' ? `pay${f.stage}` : 'review') as 'chase1';
   const isAuto = (f: FollowItem) => { const w = settings.automations[wfFor(f)]; return !!w?.on && !!w.steps[stepFor(f)]?.on && new Date(w.since) <= new Date(f.enquiry.receivedAt); };
@@ -35,6 +49,13 @@ export function FollowUps() {
 
   const due = items.filter((f) => f.due);
   const later = items.filter((f) => !f.due);
+  const backValue = dueBack.reduce((a, b) => a + (b.value?.amount ?? 0), 0);
+  const backFrom = dueBack.some((b) => b.value?.from);
+  const quietText = (e: EnquiryRecord) => {
+    const topic = topicOf(e, settings);
+    const first = e.name.split(' ')[0] || 'there';
+    return `Hi ${first}, it's ${settings.business.ownerName} from ${settings.business.name}. You asked about ${topic || 'a treatment'} a few days ago and I didn't want you to feel forgotten. ${beauty ? 'If it would help to talk it through first, a free chat is always welcome.' : 'Happy to answer anything.'} Would you like me to find you a time? ${settings.business.ownerName}`;
+  };
   const quoteValue = items.filter((f) => f.kind === 'quote').reduce((a, f) => a + (f.enquiry.quoteAmount ?? 0), 0);
   const owed = items.filter((f) => f.kind === 'payment').reduce((a, f) => a + (f.enquiry.jobValue ?? 0), 0);
 
@@ -78,22 +99,74 @@ export function FollowUps() {
       <div className="page-head">
         <div>
           <h1 className="title">Follow-ups</h1>
-          <p className="lede">The messages that win the job and get you paid. Each one is written for you. You read it, then send it from your own phone or email.</p>
+          <p className="lede">{appts ? 'Clients due their next treatment, and enquiries that went quiet. Each message is written for you: read it, change a word, send it.' : 'The messages that win the job and get you paid. Each one is written for you. You read it, then send it from your own phone or email.'}</p>
         </div>
       </div>
 
       <section className="panel" aria-label="Follow-ups at a glance">
         <div className="stats stats-3">
-          <div className="stat"><span className="stat-label">Due now</span><span className="stat-value" style={{ color: due.length ? 'var(--brass)' : undefined }}>{due.length}</span><span className="stat-note">{due.length ? 'Messages drafted and ready' : 'You’re up to date'}</span></div>
-          <div className="stat"><span className="stat-label">Quotes waiting on an answer</span><span className="stat-value">{money(quoteValue)}</span><span className="stat-note">{items.filter((f) => f.kind === 'quote').length} quotes</span></div>
-          <div className="stat"><span className="stat-label">Waiting to be paid</span><span className="stat-value">{money(owed)}</span><span className="stat-note">{items.filter((f) => f.kind === 'payment').length} jobs</span></div>
+          {appts ? <>
+            <div className="stat"><span className="stat-label">Due back</span><span className="stat-value" style={{ color: dueBack.length ? 'var(--brass)' : undefined }}>{dueBack.length}</span><span className="stat-note">{dueBack.length ? `Worth ${backFrom ? 'at least ' : ''}${money(backValue)} by your prices` : 'Nobody due yet'}</span></div>
+            <div className="stat"><span className="stat-label">Went quiet</span><span className="stat-value">{wentQuiet.length}</span><span className="stat-note">Asked, then nothing booked</span></div>
+            <div className="stat"><span className="stat-label">Other follow-ups due</span><span className="stat-value">{due.length}</span><span className="stat-note">{owed ? `${money(owed)} waiting to be paid` : due.length ? 'Drafted and ready' : 'You’re up to date'}</span></div>
+          </> : <>
+            <div className="stat"><span className="stat-label">Due now</span><span className="stat-value" style={{ color: due.length ? 'var(--brass)' : undefined }}>{due.length}</span><span className="stat-note">{due.length ? 'Messages drafted and ready' : 'You’re up to date'}</span></div>
+            <div className="stat"><span className="stat-label">Quotes waiting on an answer</span><span className="stat-value">{money(quoteValue)}</span><span className="stat-note">{items.filter((f) => f.kind === 'quote').length} quotes</span></div>
+            <div className="stat"><span className="stat-label">Waiting to be paid</span><span className="stat-value">{money(owed)}</span><span className="stat-note">{items.filter((f) => f.kind === 'payment').length} jobs</span></div>
+          </>}
         </div>
       </section>
 
-      {items.length === 0 && (
+      {appts && dueBack.length > 0 && (
+        <section className="section" aria-labelledby="back-h">
+          <div className="section-head"><h2 className="heading" id="back-h">Due back <span className="count">{dueBack.length}</span></h2><span className="small faint">By the interval you set for each treatment. Nobody who has been back in touch since.</span></div>
+          <div className="panel rows">
+            {dueBack.map((b) => {
+              const sent = rebookSent(b);
+              return (
+                <article className="follow-row" key={b.enquiry.id}>
+                  <div className="stack gap-4" style={{ minWidth: 0 }}>
+                    <div className="row gap-8 wrap"><Link to={`/enquiries/${b.enquiry.id}`} className="lead-name">{who(b.enquiry)}</Link><span className={`tag ${b.overdueDays > 0 ? 'tag-brass' : 'tag-plain'}`}>{b.overdueDays > 0 ? `Due ${b.overdueDays === 1 ? 'yesterday' : `${b.overdueDays} days ago`}` : b.overdueDays === 0 ? 'Due today' : `Due in ${-b.overdueDays} days`}</span>{sent && <span className="tag tag-forest"><Icon name="bolt" className="tag-ico" />Invited {relative(sent.createdAt)}</span>}</div>
+                    <span className="small">{b.type}{b.enquiry.bookedWith ? ` with ${b.enquiry.bookedWith}` : ''}, usually every {b.weeks} weeks</span>
+                    <span className="small muted">Last visit {shortDate(b.enquiry.bookedFor ?? b.enquiry.receivedAt)}{b.value ? ` · ${b.value.from ? 'from ' : ''}${money(b.value.amount)}` : ''}</span>
+                  </div>
+                  <div className="lead-actions">
+                    <Button small icon="send" kind={sent ? 'secondary' : 'primary'} onClick={() => setBack(b)}>{sent ? 'Text again' : 'Invite them back'}</Button>
+                    {b.enquiry.phone && <a className="btn btn-secondary btn-small" href={`tel:${b.enquiry.phone}`}><Icon name="phone" />Call</a>}
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {appts && wentQuiet.length > 0 && (
+        <section className="section" aria-labelledby="quiet-h">
+          <div className="section-head"><h2 className="heading" id="quiet-h">Went quiet <span className="count">{wentQuiet.length}</span></h2><span className="small faint">They asked and heard back, but nothing was booked. One gentle nudge, then leave it.</span></div>
+          <div className="panel rows">
+            {wentQuiet.map((e) => (
+              <article className="follow-row" key={e.id}>
+                <div className="stack gap-4" style={{ minWidth: 0 }}>
+                  <div className="row gap-8 wrap"><Link to={`/enquiries/${e.id}`} className="lead-name">{who(e)}</Link><span className="tag tag-plain">{relative(e.receivedAt)}</span></div>
+                  <span className="small enq-summary">{e.summary}</span>
+                </div>
+                <div className="lead-actions">
+                  <Button small icon="send" onClick={() => setQuiet(e)}>Draft a nudge</Button>
+                  <Button kind="secondary" small onClick={() => navigate(`/enquiries/${e.id}`)}>Open</Button>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {items.length === 0 && !(appts && (dueBack.length || wentQuiet.length)) && (
         <div className="panel empty section">
           <h2 className="heading">Nothing to follow up</h2>
-          <p className="muted mt-8">When you mark an enquiry as “Quote sent” or “{words(settings.business.kind).won}”, its chasers, payment reminders and review request appear here on the right day.</p>
+          <p className="muted mt-8">{appts
+            ? 'Clients appear here when they’re due their next treatment (set the weeks for each treatment in Settings → Bookings), when an enquiry goes quiet, or when a payment is outstanding.'
+            : `When you mark an enquiry as “Quote sent” or “${words(settings.business.kind).won}”, its chasers, payment reminders and review request appear here on the right day.`}</p>
         </div>
       )}
 
@@ -115,7 +188,25 @@ export function FollowUps() {
         </section>
       )}
 
-      <p className="xsmall faint section"><Icon name="info" className="inline-icon" />Quote chasers and payment reminders are about work the customer asked you for. Review requests are treated as marketing, so they always include an opt-out line.</p>
+      <p className="xsmall faint section"><Icon name="info" className="inline-icon" />{appts ? 'Rebook invitations and review requests are treated as marketing, so they always include an opt-out line, and nobody who replied STOP is texted. Payment reminders are about work the client asked for.' : 'Quote chasers and payment reminders are about work the customer asked you for. Review requests are treated as marketing, so they always include an opt-out line.'}</p>
+
+      {back && (
+        <Compose
+          title={`Invite ${who(back.enquiry)} back`}
+          load={() => rebookText(back, settings)}
+          phone={back.enquiry.phone || undefined} email={back.enquiry.email || undefined}
+          note="A rebook invitation counts as marketing, so the opt-out line stays in. Gainora never sends messages for you."
+          onSent={async () => { toast('Noted. If they book, mark the new enquiry as booked.'); }}
+          onClose={() => setBack(null)} />
+      )}
+      {quiet && (
+        <Compose
+          title={`A nudge for ${who(quiet)}`}
+          load={() => quietText(quiet)}
+          phone={quiet.phone || undefined} email={quiet.email || undefined}
+          onSent={() => update(quiet.id, { replied: true }, 'Logged.')}
+          onClose={() => setQuiet(null)} />
+      )}
 
       {draft && (
         <Compose

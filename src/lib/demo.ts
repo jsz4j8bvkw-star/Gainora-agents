@@ -3,7 +3,7 @@
 import type { Api } from './api';
 import type { CaptureSettings, EnquiryRecord, MessageRecord, Source, User } from './types';
 import { afterSend, defaultAutomations, dueNow, fieldsFor, ownerAlert, patchForStep, render, stepDef, type MessageLite, type StepId, type WorkflowId } from '../../shared/automations';
-import { applyPatch, DEFAULT_BEAUTY_SAFETY, DEFAULT_GREETING, DEFAULT_SAFETY, greetingFor, isAfterHours, isBeauty, lines, normaliseEnquiry, triage } from '../../shared/capture';
+import { applyPatch, DEFAULT_BEAUTY_SAFETY, DEFAULT_GREETING, DEFAULT_SAFETY, greetingFor, isAfterHours, isBeauty, lines, normaliseEnquiry, rebookWeeksFor, triage } from '../../shared/capture';
 import { suggestReply } from '../../shared/insight';
 import { uid } from './format';
 
@@ -341,6 +341,11 @@ function seedMessages(list: EnquiryRecord[], s: CaptureSettings, sample: Sample)
       const c = h.text.match(/^Quote chaser (\d) sent/); if (c && e.quotedAt) auto(e, 'quote', `chase${c[1]}` as StepId, `chase${c[1]}@${e.quotedAt}`, h.at);
       const p = h.text.match(/^Payment reminder (\d) sent/); if (p && e.invoiceDue) auto(e, 'payment', `pay${p[1]}` as StepId, `pay${p[1]}@${e.invoiceDue.slice(0, 10)}`, h.at);
       if (h.text === 'Review requested') auto(e, 'review', 'review', 'review', h.at);
+      // "Time to rebook" went out on the day it was due, at 9am.
+      if (/^Attended/.test(h.text) && s.business.kind === 'appointments') {
+        const due = new Date(new Date(h.at).getTime() + rebookWeeksFor(e.bookedType, s) * 7 * 86_400_000); due.setHours(9, 0, 0, 0);
+        if (due.getTime() < Date.now()) auto(e, 'rebook', 'rebook', `rebook@${h.at.slice(0, 10)}`, due.toISOString());
+      }
     }
   }
   // A few replies from customers, as they'd really come in.
