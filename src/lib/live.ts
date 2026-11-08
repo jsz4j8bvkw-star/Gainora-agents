@@ -6,6 +6,7 @@ import type {
 import { analyseWeeks, metricsFor } from '../../shared/metrics';
 import { planToday } from '../../shared/today';
 import { humanError, parseJsonBody } from './errors';
+import { POLL_DELAYS_MS } from '../../shared/chat';
 
 declare const __SUPABASE_URL__: string;
 declare const __SUPABASE_ANON_KEY__: string;
@@ -315,8 +316,20 @@ export function createLiveApi(): Api {
     async updateTender(id, status) { await fn('tenders', { id, status }); },
     async draftWinback(): Promise<WinbackDrafts> { return fn<WinbackDrafts>('winback', {}); },
 
-    async getChat() { return (await rest<any[]>('chat_messages?select=*&order=created_at.asc&limit=100')).map(mapMsg); },
-    async sendChat(text) { return mapMsg(await fn<any>('chat', { text })); },
+    // The newest 100, oldest first (asc+limit would return the OLDEST 100 and hide new replies).
+    async getChat() { return (await rest<any[]>('chat_messages?select=*&order=created_at.desc&limit=100')).map(mapMsg).reverse(); },
+    async sendChat(text) {
+      const r = await fn<{ queued: boolean; question: any; reply?: any }>('chat', { text }, { timeoutMs: 25_000, doing: 'sending your question' });
+      if (!r.queued && r.reply) return mapMsg(r.reply);
+      const question = mapMsg(r.question);
+      // The answer is written in the background and saved to the conversation: poll for it.
+      for (const delay of POLL_DELAYS_MS) {
+        await new Promise((res) => setTimeout(res, delay));
+        const rows = await rest<any[]>(`chat_messages?select=*&role=eq.agent&created_at=gt.${encodeURIComponent(question.at)}&order=created_at.asc&limit=1`).catch(() => [] as any[]);
+        if (rows[0]) return mapMsg(rows[0]);
+      }
+      throw new ApiError('The answer is taking longer than usual. It is saved to this conversation when it is ready; check again in a moment.', 504);
+    },
   };
 }
 

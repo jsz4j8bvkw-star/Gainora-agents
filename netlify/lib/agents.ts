@@ -8,6 +8,7 @@ import { daysLeft } from '../../shared/tenders';
 import { fallbackReply, type ReviewItem } from '../../shared/reviews';
 import type { Learned } from '../../shared/learning';
 import { ASK_SOURCE_LINE, block, parseSources, sourceCatalogue } from '../../shared/ask';
+import { failureReply } from '../../shared/chat';
 
 const rid = () => 'r_' + Math.random().toString(36).slice(2, 10);
 const isHttp = (u: unknown) => { try { const x = new URL(String(u)); return x.protocol === 'https:' || x.protocol === 'http:'; } catch { return false; } };
@@ -278,9 +279,32 @@ export async function runBrief(userId: string, profile: any, weekOf: string) {
 }
 
 /* ---------- Ask ---------- */
-export async function answer(userId: string, profile: any, question: string) {
+/** Saves the owner's question as the next message in the conversation and returns the row. */
+export async function saveQuestion(userId: string, question: string) {
+  const rows = await insert('chat_messages', { user_id: userId, role: 'user', text: question.slice(0, 2000) });
+  return rows[0];
+}
+
+/**
+ * Writes the answer to a question that is already saved (see saveQuestion) and saves it as the
+ * next agent message. `question` is the saved row, so the history excludes it and nothing is
+ * sent twice. Never throws without saving a reply: when the AI cannot answer, a plain message is
+ * saved instead so the owner is never left waiting.
+ */
+export async function answer(userId: string, profile: any, question: { id: string; text: string; created_at?: string }) {
+  try {
+    return await writeAnswer(userId, profile, question);
+  } catch (e: any) {
+    console.error('[gainora] ask failed', e?.message);
+    const rows = await insert('chat_messages', { user_id: userId, role: 'agent', text: failureReply(e instanceof HttpError ? e.message : null), sources: null });
+    return rows[0];
+  }
+}
+
+async function writeAnswer(userId: string, profile: any, question: { id: string; text: string; created_at?: string }) {
+  const before = question.created_at ? `&created_at=lt.${enc(question.created_at)}` : '';
   const [history, ws, changes, scout, briefs, nums, leads, tenders, learned] = await Promise.all([
-    db<any[]>(`chat_messages?select=role,text&user_id=eq.${userId}&order=created_at.desc&limit=16`),
+    db<any[]>(`chat_messages?select=id,role,text&user_id=eq.${userId}${before}&order=created_at.desc&limit=12`),
     db<any[]>(`watcher_state?select=state&user_id=eq.${userId}`),
     db<any[]>(`competitor_changes?select=competitor,summary,detail,created_at&user_id=eq.${userId}&order=created_at.desc&limit=6`),
     db<any[]>(`scout_searches?select=query,kind,summary,results,created_at&user_id=eq.${userId}&status=eq.ready&order=created_at.desc&limit=3`),
@@ -310,17 +334,21 @@ export async function answer(userId: string, profile: any, question: string) {
   ].filter(Boolean).join('\n\n');
   const catalogue = sourceCatalogue({ site: day(w?.lastCheck), speed: day(w?.speed?.checkedAt), reviews: day(rv?.checkedAt), prices: day(w?.prices?.checkedAt), brief: briefs[0] ? `week of ${new Date(briefs[0].week_of).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}` : '' });
 
-  await insert('chat_messages', { user_id: userId, role: 'user', text: question.slice(0, 2000) });
-  const msgs = history.reverse().map((m) => ({ role: m.role === 'agent' ? 'assistant' as const : 'user' as const, content: m.text }));
+  // The model needs turns to alternate; the saved question is the last user turn.
+  const msgs = history.filter((m) => m.id !== question.id).reverse().map((m) => ({ role: m.role === 'agent' ? 'assistant' as const : 'user' as const, content: String(m.text).slice(0, 1500) }));
+  const turns: { role: 'user' | 'assistant'; content: string }[] = [];
+  for (const m of msgs) { if (turns.length && turns[turns.length - 1].role === m.role) turns[turns.length - 1].content += `\n\n${m.content}`; else turns.push({ ...m }); }
+  if (turns.length && turns[turns.length - 1].role === 'user') turns.pop();
+  if (turns.length && turns[0].role === 'assistant') turns.shift();
   const r = await ai({
-    userId, agent: 'ask', maxTokens: 900, fast: true,
-    system: `${HOUSE_STYLE}\nYou are Gainora, the owner's business assistant. Answer using the business context below and general good business sense. Be concrete: name the lead, contract, review or fix you mean, and say which agent found it ("The Watcher saw…", "The Scout found…"). When the context has a figure, use it; never estimate money or results. If the answer depends on something not in the context, say what you'd need. Keep answers short: two to four short paragraphs, or a short list when steps are needed. Finish with the one thing to do next. You cannot send emails, post or change anything; you advise and draft. ${ASK_SOURCE_LINE}\n\nCONTEXT\n${context}`,
-    messages: [...msgs, { role: 'user', content: question.slice(0, 2000) }],
+    userId, agent: 'ask', maxTokens: 700, fast: true,
+    system: `${HOUSE_STYLE}\nYou are Gainora, the owner's business assistant. Answer using the business context below and general good business sense. Be concrete: name the lead, contract, review, competitor or fix you mean, and say which agent found it ("The Watcher saw…", "The Scout found…"). When the context has a figure, use it; never estimate money or results. Compare prices only for the same treatment and the same amount (1ml with 1ml, one area with one area). If the answer depends on something not in the context, say what you'd need. Keep answers short: two to four short paragraphs, or a short list when steps are needed. Finish with the one thing to do next. You cannot send emails, post or change anything; you advise and draft. ${ASK_SOURCE_LINE}\n\nCONTEXT\n${context}`,
+    messages: [...turns, { role: 'user', content: question.text.slice(0, 2000) }],
   });
   const parsed = parseSources(r.text, catalogue);
   const text = hasBanned(parsed.text) ? parsed.text.replace(/guarantee(d)?/gi, 'expect') : parsed.text;
   const sources = [...parsed.sources, ...r.citations].slice(0, 6);
-  const rows = await insert('chat_messages', { user_id: userId, role: 'agent', text: text.trim().slice(0, 6000), sources: sources.length ? sources : null });
+  const rows = await insert('chat_messages', { user_id: userId, role: 'agent', text: (text.trim() || 'I don’t have enough to answer that yet. Ask me about your website, reviews, competitors, prices, leads or numbers.').slice(0, 6000), sources: sources.length ? sources : null });
   return rows[0];
 }
 

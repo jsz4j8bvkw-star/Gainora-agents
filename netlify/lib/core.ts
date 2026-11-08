@@ -99,15 +99,20 @@ export async function body<T = any>(req: Request): Promise<T> {
   try { return await req.json(); } catch { throw new HttpError(400, 'The request was not readable.'); }
 }
 
-/** Calls another function in this site (used to start background work). */
-export async function callInternal(name: string, payload: unknown): Promise<void> {
+/** Calls another function in this site (used to start background work). Returns false when the hand-off failed. */
+export async function callInternal(name: string, payload: unknown): Promise<boolean> {
   const base = env('URL') || env('DEPLOY_PRIME_URL');
-  const res = await fetch(`${base}/.netlify/functions/${name}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-gainora-internal': env('INTERNAL_SECRET') },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok && res.status !== 202) console.error('[gainora] internal call failed', name, res.status);
+  if (!base || !env('INTERNAL_SECRET')) { console.error('[gainora] internal call skipped', name, 'URL or INTERNAL_SECRET missing'); return false; }
+  try {
+    const res = await fetch(`${base}/.netlify/functions/${name}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-gainora-internal': env('INTERNAL_SECRET') },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(8_000),
+    });
+    if (!res.ok && res.status !== 202) { console.error('[gainora] internal call failed', name, res.status); return false; }
+    return true;
+  } catch (e: any) { console.error('[gainora] internal call failed', name, e?.message); return false; }
 }
 
 export function requireInternal(req: Request) {
