@@ -64,8 +64,8 @@ showing the receptionist’s opening line and rules.
 
 1. **Database:** in the Supabase SQL editor of the Gainora project, run
    `supabase/migrations/20261108_capture_convert.sql` (rollback file alongside).
-2. **Stripe:** create three products: Answer (£249/month, £595 setup), Answer & Book (£399/month,
-   £995 setup) and Front Desk (£599/month, £1,995 setup). Founding clients: Answer & Book at £299/month, £495 setup. Add a webhook endpoint
+2. **Stripe:** create three products: Never Miss a Call (£249/month, £595 setup), Call to Booking (£399/month,
+   £995 setup) and Full Front Desk (£599/month, £1,995 setup). Founding clients: Call to Booking at £299/month, £495 setup. Add a webhook endpoint
    `https://<this site>/api/stripe-webhook` for `checkout.session.completed` and
    `customer.subscription.created/updated/deleted`.
 3. **Netlify:** new site from this repo. Environment variables:

@@ -4,7 +4,7 @@ import type { CaptureSettings, EnquiryRecord, MessageRecord, Plan, User } from '
 import { Link, navigate, usePath } from './lib/router';
 import { Icon, Loading, ToastProvider } from './components/ui';
 import { longDate } from './lib/format';
-import { followUps } from '../shared/capture';
+import { followUps, isBeauty } from '../shared/capture';
 import { SignIn } from './pages/signin';
 import { Setup } from './pages/setup';
 import { Today } from './pages/today';
@@ -169,7 +169,7 @@ function Shell() {
         </header>
         {api.mode === 'demo' && (
           <div className="demo-flag" role="note">
-            You’re viewing a demo with sample data for {settings.business.kind === 'appointments' ? 'a physio clinic' : 'a plumbing business'}.
+            You’re viewing a demo with sample data for {isBeauty(settings.business) ? 'a beauty and aesthetics clinic' : settings.business.kind === 'appointments' ? 'a physio clinic' : 'a plumbing business'}.
             <button onClick={() => { api.resetDemo?.(); location.reload(); }}>Start over</button>
           </div>
         )}

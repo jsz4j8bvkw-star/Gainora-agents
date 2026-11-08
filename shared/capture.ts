@@ -22,6 +22,8 @@ const clean = (s: unknown, max = 300) => String(s ?? '').replace(/\s+/g, ' ').tr
 
 const DEFAULT_EMERGENCIES = ['water leaking or flooding', 'no heating or hot water for someone vulnerable', 'no power', 'a security risk, such as a broken lock or window'];
 export const DEFAULT_GREETING = '{greeting}, you’re through to {business}. How can I help?';
+/** Beauty and aesthetics: concerns after a treatment that go straight to the clinic. Never to 999 or any other service: the clinic decides. */
+export const DEFAULT_BEAUTY_SAFETY = 'Severe or worsening pain, swelling or redness after a treatment\nSkin that has turned white, grey, blue or blotchy after a filler or injectable\nAny change to eyesight after a treatment\nSwelling of the lips, tongue or throat, or a rash spreading after a treatment\nBlistering or a burn after laser, a peel or waxing\nSigns of infection after a treatment: hot, painful skin, pus or a high temperature';
 export const DEFAULT_SAFETY = 'New numbness or tingling around the bottom, groin or genitals\nNew problems controlling the bladder or bowels\nWeakness in both legs, or getting worse quickly\nChest pain or difficulty breathing\nA recent serious fall or accident';
 
 function timeOfDay(d = new Date()): string {
@@ -50,6 +52,7 @@ export function greetingFor(s: Pick<CaptureSettings, 'business' | 'calls'>, now 
 export function packFromSettings(s: CaptureSettings): ReceptionistPack {
   const b = s.business;
   const appts = b.kind === 'appointments';
+  const beauty = isBeauty(b);
   const name = clean(b.name, 80) || 'the business';
   const owner = clean(b.ownerName, 40) || 'the owner';
   const team = appts ? 'the team' : owner;
@@ -61,7 +64,7 @@ export function packFromSettings(s: CaptureSettings): ReceptionistPack {
   const types = (bk.types || []).filter((t) => clean(t.name));
   const staff = lines(bk.staff);
   const mode = bk.mode;
-  const who = appts ? 'patient or client' : 'customer';
+  const who = beauty ? 'client' : appts ? 'patient or client' : 'customer';
 
   const sections: PackSection[] = [
     { title: 'Who you are', lines: [
@@ -101,7 +104,15 @@ export function packFromSettings(s: CaptureSettings): ReceptionistPack {
       `Tell them they'll get a text confirming the details.`,
       'At the end, sum up what happens next in one sentence and thank them for calling.',
     ] },
-    { title: appts ? 'Safety' : 'Emergencies', lines: appts ? [
+    { title: appts ? 'Safety' : 'Emergencies', lines: beauty ? [
+      'Never give medical or aftercare advice, and never say whether something is normal.',
+      `If the caller describes any of these, treat it as urgent and do not book: ${lines(s.calls.safety || DEFAULT_BEAUTY_SAFETY).join('; ')}.`,
+      s.calls.emergencyLine
+        ? `For any of these, ${s.calls.transferEmergency ? `put the call straight through to the clinic's emergency line, ${clean(s.calls.emergencyLine, 30)}. If it isn't answered, ` : ''}give the caller the clinic's emergency line, ${clean(s.calls.emergencyLine, 30)}, read it back slowly, and ask them to call it now. Say you are alerting ${team} straight away as well.`
+        : `For any of these, tell the caller you are alerting ${team} straight away and that the clinic will call them back as a priority. Take their best number and check it.`,
+      'Do not direct callers to 999, A&E, NHS 111, a pharmacy, a GP or any other service. The clinic handles every concern about its treatments itself.',
+      ...(s.calls.transferTo ? [`For anything else urgent: ${clean(s.calls.transferTo, 160)}.`] : []),
+    ] : appts ? [
       'Never diagnose or give medical advice. You can say it sounds like something the team can help with.',
       `If the caller describes any of these, do not book. Tell them to call 999 or go to A&E now, or call NHS 111 if they are unsure, and say you will let ${team} know: ${lines(s.calls.safety || DEFAULT_SAFETY).join('; ')}.`,
       'If anyone is in danger or seriously hurt, tell them to call 999.',
@@ -122,7 +133,7 @@ export function packFromSettings(s: CaptureSettings): ReceptionistPack {
     ] },
     { title: 'Never', lines: [
       'Never take card or bank details over the phone.',
-      appts ? 'Never give medical advice or a diagnosis.' : 'Never give technical or safety advice beyond the emergency lines above.',
+      beauty ? 'Never give medical or aftercare advice, and never send callers to any other service.' : appts ? 'Never give medical advice or a diagnosis.' : 'Never give technical or safety advice beyond the emergency lines above.',
       'Never criticise other businesses.',
       'Never make up an answer: if unsure, say you will check and someone will get back to them.',
     ] },
@@ -228,6 +239,7 @@ export interface Triage { urgency: Urgency; kind: EnquiryKind; gas: boolean; rea
 
 const GAS = /\b(smell(s|ing)? (of )?gas|gas (leak|smell|escape)|leaking gas)\b/i;
 const EMERGENCY = /\b(chest pain|can'?t breathe|difficulty breathing|(lost|losing|no) control of (my |his |her |their |the )?(bladder|bowels?)|numb(ness)? (around|in) (my |his |her |their |the )?(groin|bottom|genitals)|flood(ed|ing)?|burst|water (pouring|everywhere|coming through)|no (heating|heat|hot water|power|electric(ity)?)|sparking|smoke|fire|carbon monoxide|co alarm|locked out|break[- ]?in|broken (lock|window|door)|ceiling (collaps|coming down)|sewage|overflowing)\b/i;
+const REACTION = /\b((lip|lips|face|cheek|eye|eyes|tongue|throat) (is |are |has |have )?(very |really )?(swollen|swelling|blistered|burn(ed|t|ing)?)|(swollen|swelling of (my |the )?)(lips?|tongue|throat|face)|(turned|turning|gone|going|looks?) (white|grey|gray|blue|blotchy|mottled)|(blurr(ed|y)|lost|losing|changes? (to|in)|problems? with) (my )?(vision|eyesight|sight)|(vision|eyesight|sight) (is |has gone |went |going )?(blurr(ed|y)|funny|strange|double|dark)|blister(s|ed|ing)?|(burn|burnt|burned) (after|from)|reaction (after|to) (the |my )?(filler|botox|treatment|injection|peel|laser))\b/i;
 const URGENT = /\b(urgent(ly)?|asap|as soon as possible|today|tonight|emergency|right away|leak(ing)?|dripping|not working|broken down|stopped working)\b/i;
 const VULNERABLE = /\b(elderly|baby|newborn|disabled|pregnant|vulnerable|poorly|oxygen)\b/i;
 const COMPLAINT = /\b(complain|complaint|not happy|unhappy|disappointed|refund|still broken|came back|botched|shoddy)\b/i;
@@ -243,6 +255,7 @@ export function triage(text: string): Triage {
   let urgency: Urgency = 'normal';
   if (gas) { urgency = 'emergency'; reasons.push('Caller mentioned a gas smell or leak'); }
   else if (EMERGENCY.test(t)) { urgency = 'emergency'; reasons.push(`Mentions: ${t.match(EMERGENCY)![0].toLowerCase()}`); }
+  else if (REACTION.test(t)) { urgency = 'emergency'; reasons.push(`Possible reaction after a treatment: ${t.match(REACTION)![0].toLowerCase()}`); }
   else if (URGENT.test(t)) { urgency = 'urgent'; reasons.push(`Mentions: ${t.match(URGENT)![0].toLowerCase()}`); }
   if (VULNERABLE.test(t) && urgency !== 'emergency') { urgency = 'urgent'; reasons.push('Someone vulnerable may be affected'); }
   if (VULNERABLE.test(t) && urgency === 'emergency') reasons.push('Someone vulnerable may be affected');
@@ -365,6 +378,7 @@ export interface CaptureSettings {
     booking: 'calendar' | 'callback'; gasWork: boolean; recording: boolean;
     notify: 'all' | 'urgent';
     greeting: string; announceAi: boolean; safety: string;
+    emergencyLine: string; transferEmergency: boolean;                  // beauty and aesthetics: the clinic's own emergency line
     alertText: 'emergencies' | 'urgent' | 'off';
   };
   bookings: Bookings;
@@ -376,8 +390,24 @@ export interface CaptureSettings {
 }
 
 export const TRADES = ['Plumbing and heating', 'Electrical', 'Building and renovation', 'Roofing', 'Locksmith', 'Cleaning', 'Landscaping and gardening', 'Pest control', 'Removals', 'Other trade or home service'];
-export const CLINICS = ['Physiotherapy', 'Chiropractic', 'Osteopathy', 'Sports massage and therapy', 'Podiatry', 'Hair and beauty', 'Dental', 'Other clinic or appointments'];
-export const BOOKING_SYSTEMS = ['Google Calendar', 'Microsoft Outlook or 365', 'Apple Calendar (iCloud)', 'Calendly', 'Cal.com', 'Cliniko', 'Jane', 'WriteUpp', 'Fresha', 'Setmore', 'Acuity Scheduling', 'Square Appointments', 'Jobber', 'Tradify', 'ServiceM8', 'A paper diary, or nothing yet', 'Something else'];
+export const BEAUTY = ['Aesthetics clinic', 'Skin clinic', 'Beauty salon', 'Hair salon', 'Barber', 'Nails, lashes and brows', 'Spa and wellness'];
+export const CLINICS = ['Physiotherapy', 'Chiropractic', 'Osteopathy', 'Sports massage and therapy', 'Podiatry', 'Dental', ...BEAUTY, 'Other clinic or appointments'];
+/** Beauty and aesthetics businesses get their own safety rules: concerns go to the clinic, never to 999. */
+export const isBeauty = (b: { kind: BusinessKind; trade: string }) => b.kind === 'appointments' && (BEAUTY.includes(b.trade) || /hair and beauty/i.test(b.trade));
+
+const CALENDARS = ['Google Calendar', 'Microsoft Outlook or 365', 'Apple Calendar (iCloud)', 'Calendly', 'Cal.com'];
+const BEAUTY_SYSTEMS = ['Fresha', 'Phorest', 'Timely', 'Treatwell', 'Booksy', 'Salonized', 'Shortcuts', 'Kitomba', 'Vagaro', 'Zenoti', 'Pabau', 'Clinicminds', 'Aesthetic Nurse Software (ANS)', 'SimplyBook.me', 'Goldie'];
+const CLINIC_SYSTEMS = ['Cliniko', 'Jane', 'WriteUpp', 'Pabau', 'Setmore', 'Acuity Scheduling', 'Square Appointments', 'SimplyBook.me'];
+const TRADE_SYSTEMS = ['Jobber', 'Tradify', 'ServiceM8'];
+const LAST = ['A paper diary, or nothing yet', 'Something else'];
+const uniq = (a: string[]) => [...new Set(a)];
+export const BOOKING_SYSTEMS = uniq([...CALENDARS, ...BEAUTY_SYSTEMS, ...CLINIC_SYSTEMS, ...TRADE_SYSTEMS, ...LAST]);
+/** The booking systems to offer, most likely first, for the business type. */
+export function bookingSystemsFor(b: { kind: BusinessKind; trade: string }): string[] {
+  if (b.kind !== 'appointments') return uniq([...CALENDARS, ...TRADE_SYSTEMS, 'Square Appointments', 'Setmore', ...LAST]);
+  if (isBeauty(b)) return uniq([...BEAUTY_SYSTEMS, ...CALENDARS, 'Square Appointments', 'Setmore', 'Acuity Scheduling', ...LAST]);
+  return uniq([...CLINIC_SYSTEMS, ...CALENDARS, 'Fresha', ...LAST]);
+}
 /** Systems Gainora can book straight into today; the rest are connected client by client. */
 export const DIRECT_SYSTEMS = ['Google Calendar', 'Microsoft Outlook or 365', 'Cal.com', 'Calendly'];
 export const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -386,7 +416,7 @@ export function emptySettings(email = ''): CaptureSettings {
   return {
     business: { kind: 'trade', name: '', ownerName: '', trade: '', location: '', website: '', phone: '', alertEmail: email, alertMobile: '' },
     work: { services: '', notDone: '', areas: '' },
-    calls: { days: [1, 2, 3, 4, 5], open: '08:00', close: '17:30', emergencies: '', transferTo: '', quotePolicy: 'never', priceNotes: '', booking: 'callback', gasWork: false, recording: true, notify: 'urgent', greeting: DEFAULT_GREETING, announceAi: false, safety: '', alertText: 'urgent' },
+    calls: { days: [1, 2, 3, 4, 5], open: '08:00', close: '17:30', emergencies: '', transferTo: '', quotePolicy: 'never', priceNotes: '', booking: 'callback', gasWork: false, recording: true, notify: 'urgent', greeting: DEFAULT_GREETING, announceAi: false, safety: '', alertText: 'urgent', emergencyLine: '', transferEmergency: true },
     bookings: { system: '', systemOther: '', account: '', mode: 'callback', address: '', arrival: '', types: [], staff: '', noticeHours: 2, aheadWeeks: 4, cancellation: '', status: 'not_connected' },
     followUps: { reviewLink: '', payLink: '', paymentDays: 14 },
     provider: { name: '', aiNumber: '' },
@@ -620,8 +650,8 @@ export function replyTime(mins: number | null): string {
 export type PackageId = 'answer' | 'book' | 'desk';
 export interface Package { id: PackageId; name: string; setup: number; monthly: number; minutes: number; adds: string[] }
 export const PACKAGES: Package[] = [
-  { id: 'answer', name: 'Answer', setup: 595, monthly: 249, minutes: 300, adds: ['Human-sounding receptionist, day and night', 'Emergencies passed to your mobile', 'Enquiries inbox, follow-ups and monthly report', 'Ongoing care of your receptionist'] },
-  { id: 'book', name: 'Answer & Book', setup: 995, monthly: 399, minutes: 600, adds: ['Everything in Answer', 'Books into your diary and texts a confirmation', 'Recognises returning callers'] },
-  { id: 'desk', name: 'Front Desk', setup: 1995, monthly: 599, minutes: 1200, adds: ['Everything in Answer & Book', 'Several staff, numbers or call transfers'] },
+  { id: 'answer', name: 'Never Miss a Call', setup: 595, monthly: 249, minutes: 300, adds: ['A professional receptionist, day and night', 'Urgent calls passed to your mobile', 'Enquiries inbox, follow-ups and monthly report', 'Ongoing care of your receptionist'] },
+  { id: 'book', name: 'Call to Booking', setup: 995, monthly: 399, minutes: 600, adds: ['Everything in Never Miss a Call', 'Books into your diary and texts a confirmation', 'Recognises returning callers'] },
+  { id: 'desk', name: 'Full Front Desk', setup: 1995, monthly: 599, minutes: 1200, adds: ['Everything in Call to Booking', 'Several staff, numbers or call transfers'] },
 ];
 export const EXTRA_MINUTES = '£25 per 100 extra minutes';

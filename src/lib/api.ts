@@ -8,7 +8,7 @@ export interface Api {
   mode: 'demo' | 'live';
   getUser(): Promise<User | null>;
   /** In the demo, which sample business to open: a plumber or a physio clinic. */
-  requestSignIn(email: string, sample?: 'trade' | 'clinic'): Promise<void>;
+  requestSignIn(email: string, sample?: 'trade' | 'clinic' | 'beauty'): Promise<void>;
   signOut(): Promise<void>;
 
   getPlan(): Promise<Plan>;

@@ -16,7 +16,7 @@ export function verifyStripeSignature(payload: string, header: string | null, se
 /**
  * STRIPE_CAPTURE_PRODUCTS lists the Stripe products that unlock Capture & Convert and which package each is:
  * "prod_A:answer,prod_B:book,prod_C:desk" (a founding product can point at the same package).
- * A product id with no package is treated as Answer & Book. Products not on the list are ignored here;
+ * A product id with no package is treated as Call to Booking. Products not on the list are ignored here;
  * Command Centre products are handled by the Gainora Agents app.
  */
 export function captureTier(productId: string): 'answer' | 'book' | 'desk' | null {

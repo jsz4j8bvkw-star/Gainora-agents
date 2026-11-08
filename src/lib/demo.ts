@@ -3,15 +3,15 @@
 import type { Api } from './api';
 import type { CaptureSettings, EnquiryRecord, MessageRecord, Source, User } from './types';
 import { afterSend, defaultAutomations, dueNow, fieldsFor, ownerAlert, patchForStep, render, stepDef, type MessageLite, type StepId, type WorkflowId } from '../../shared/automations';
-import { applyPatch, DEFAULT_GREETING, DEFAULT_SAFETY, firstReply, greetingFor, isAfterHours, normaliseEnquiry, triage } from '../../shared/capture';
+import { applyPatch, DEFAULT_BEAUTY_SAFETY, DEFAULT_GREETING, DEFAULT_SAFETY, firstReply, greetingFor, isAfterHours, isBeauty, lines, normaliseEnquiry, triage } from '../../shared/capture';
 import { uid } from './format';
 
-const KEY = 'gainora.capture.demo.v1';
+const KEY = 'gainora.capture.demo.v2';
 const DAY = 86_400_000;
 
-export type Sample = 'trade' | 'clinic';
+export type Sample = 'trade' | 'clinic' | 'beauty';
 interface DemoState { user: User | null; sample: Sample; settings: CaptureSettings | null; enquiries: EnquiryRecord[]; sources: Source[]; messages: MessageRecord[]; optOuts: string[] }
-const fresh = (): DemoState => ({ user: null, sample: 'trade', settings: null, enquiries: [], sources: [], messages: [], optOuts: [] });
+const fresh = (): DemoState => ({ user: null, sample: 'beauty', settings: null, enquiries: [], sources: [], messages: [], optOuts: [] });
 
 function load(): DemoState {
   try { const raw = localStorage.getItem(KEY); if (raw) return { ...fresh(), ...JSON.parse(raw) }; } catch { /* no storage */ }
@@ -32,7 +32,7 @@ export const DEMO_SETTINGS: CaptureSettings = {
     emergencies: 'No heating or hot water for someone vulnerable\nWater leaking or a burst pipe\nNo water at all',
     transferTo: 'Text Dave on 07700 900111 and say it’s urgent',
     quotePolicy: 'ranges', priceNotes: 'Boiler service from £85. Call-out and first hour £75. New boilers and bathrooms are quoted after a visit.',
-    booking: 'callback', gasWork: true, recording: true, notify: 'urgent', greeting: DEFAULT_GREETING, announceAi: false, safety: '', alertText: 'urgent',
+    booking: 'callback', gasWork: true, recording: true, notify: 'urgent', greeting: DEFAULT_GREETING, announceAi: false, safety: '', alertText: 'urgent', emergencyLine: '', transferEmergency: true,
   },
   bookings: { system: 'Google Calendar', systemOther: '', account: 'dave@smithplumbing.example', mode: 'offer', address: '', arrival: '', types: [{ name: 'Quote visit', minutes: 30, price: 'Free', who: 'Dave' }, { name: 'Boiler service', minutes: 60, price: '£85', who: 'Dave' }], staff: 'Dave Smith', noticeHours: 24, aheadWeeks: 4, cancellation: '', status: 'connected' },
   followUps: { reviewLink: 'https://g.page/r/smith-plumbing/review', payLink: 'https://pay.example/smith-plumbing', paymentDays: 14 },
@@ -48,7 +48,7 @@ export const CLINIC_SETTINGS: CaptureSettings = {
   calls: {
     days: [1, 2, 3, 4, 5, 6], open: '08:00', close: '19:00', emergencies: '', transferTo: 'Text Sarah on 07700 900222',
     quotePolicy: 'fixed', priceNotes: '', booking: 'calendar', gasWork: false, recording: true, notify: 'urgent',
-    greeting: DEFAULT_GREETING, announceAi: false, safety: DEFAULT_SAFETY, alertText: 'emergencies',
+    greeting: DEFAULT_GREETING, announceAi: false, safety: DEFAULT_SAFETY, alertText: 'emergencies', emergencyLine: '', transferEmergency: true,
   },
   bookings: {
     system: 'Cliniko', systemOther: '', account: 'Lemon Street Physio', mode: 'book', address: '12 Lemon Street, Truro TR1 2LS',
@@ -63,6 +63,36 @@ export const CLINIC_SETTINGS: CaptureSettings = {
   completedAt: new Date(Date.now() - 40 * DAY).toISOString(),
 };
 
+export const BEAUTY_SETTINGS: CaptureSettings = {
+  business: { kind: 'appointments', name: 'Willow Skin & Beauty', ownerName: 'Amy', trade: 'Aesthetics clinic', location: 'Falmouth, Cornwall', website: 'https://willowskin.example', phone: '01326 000200', alertEmail: 'amy@willowskin.example', alertMobile: '07700 900444' },
+  work: { services: 'Anti-wrinkle treatments\nDermal fillers\nSkin peels and HydraFacials\nLaser hair removal\nLash lifts and brows\nGel nails', notDone: 'Tattoo removal\nTreatments for under-18s', areas: '' },
+  calls: {
+    days: [2, 3, 4, 5, 6], open: '09:00', close: '19:00', emergencies: '', transferTo: 'Text Amy on 07700 900444',
+    quotePolicy: 'fixed', priceNotes: '', booking: 'calendar', gasWork: false, recording: true, notify: 'urgent',
+    greeting: DEFAULT_GREETING, announceAi: false, safety: DEFAULT_BEAUTY_SAFETY, alertText: 'emergencies', emergencyLine: '07700 900444', transferEmergency: true,
+  },
+  bookings: {
+    system: 'Phorest', systemOther: '', account: 'Willow Skin & Beauty', mode: 'book', address: '4 Arwenack Street, Falmouth TR11 3JA',
+    arrival: 'Please arrive 5 minutes early with clean skin and no make-up on the area being treated. Pay-and-display parking on Arwenack Street.',
+    types: [
+      { name: 'Free consultation', minutes: 30, price: 'Free', who: 'Amy' },
+      { name: 'Anti-wrinkle treatment', minutes: 30, price: 'from £180', who: 'Amy' },
+      { name: 'Lip filler', minutes: 45, price: '£250', who: 'Amy' },
+      { name: 'HydraFacial', minutes: 60, price: '£120', who: 'Leah' },
+      { name: 'Laser hair removal', minutes: 30, price: 'from £60', who: 'Leah' },
+      { name: 'Lash lift and tint', minutes: 45, price: '£55', who: 'Jess' },
+      { name: 'Gel nails', minutes: 60, price: '£35', who: 'Jess' },
+    ],
+    staff: 'Amy Carter\nLeah Price\nJess Morgan', noticeHours: 2, aheadWeeks: 8, cancellation: 'Please give 48 hours’ notice to cancel or move, or the deposit is kept.', status: 'connected',
+  },
+  followUps: { reviewLink: 'https://g.page/r/willow-skin/review', payLink: 'https://pay.example/willow-skin', paymentDays: 0 },
+  provider: { name: 'Retell', aiNumber: '01326 000201' },
+  automations: defaultAutomations('appointments', new Date(Date.now() - 60 * DAY).toISOString()),
+  texting: { number: '07700 900700', status: 'on' },
+  completedAt: new Date(Date.now() - 38 * DAY).toISOString(),
+};
+const SAMPLE_SETTINGS: Record<Sample, CaptureSettings> = { trade: DEMO_SETTINGS, clinic: CLINIC_SETTINGS, beauty: BEAUTY_SETTINGS };
+
 interface Seed {
   name: string; phone?: string; email?: string; channel: EnquiryRecord['channel']; summary: string;
   days: number; hour: number; min?: number;
@@ -75,7 +105,7 @@ function seed(settings: CaptureSettings): EnquiryRecord[] {
   const now = Date.now();
   const at = (days: number, hour = 10, min = 0) => { const d = new Date(now - days * DAY); d.setHours(hour, min, 0, 0); return d; };
   const step = (e: EnquiryRecord, d: Date, p: Parameters<typeof applyPatch>[1]) => applyPatch(e, p, settings, d);
-  const S: Seed[] = settings.business.kind === 'appointments' ? clinicSeeds(step, now) : [
+  const S: Seed[] = isBeauty(settings.business) ? beautySeeds(step, now) : settings.business.kind === 'appointments' ? clinicSeeds(step, now) : [
     { name: 'Jane Price', phone: '07700 900123', channel: 'call', days: 0, hour: 0, ago: 1.4, summary: 'Boiler stopped overnight. No heating or hot water and her elderly mother is staying. Postcode TR1 2AB. Wants someone today if at all possible.' },
     { name: 'Tom Hughes', phone: '07700 900456', email: 'tom.hughes@example.com', channel: 'form', days: 0, hour: 0, ago: 0.6, summary: 'Quote for replacing a small family bathroom: bath, basin, toilet and tiling. TR3 6JE. Flexible on dates, ideally before Christmas.' },
     { name: 'Jo Martin', phone: '07700 900789', channel: 'call', days: 1, hour: 12, min: 5, summary: 'Asked for a call back about a new boiler quote. Current boiler is 18 years old. TR2 4HL.' },
@@ -144,6 +174,43 @@ function seed(settings: CaptureSettings): EnquiryRecord[] {
 type Step = (e: EnquiryRecord, d: Date, p: Parameters<typeof applyPatch>[1]) => EnquiryRecord;
 const rec0Booked = (x: Seed) => /booked|book(ing)? (an|a)/i.test(x.summary);
 
+/** Five weeks at an aesthetics clinic: treatments booked on the call, a reaction after filler sent to the clinic's line, nails and lashes. */
+function beautySeeds(step: Step, now: number): Seed[] {
+  const slot = (daysAhead: number, h: number, m = 0) => { const d = new Date(now + daysAhead * DAY); d.setHours(h, m, 0, 0); return d.toISOString(); };
+  const booked = (type: string, who: string, daysAhead: number, h: number, m = 0) => (e: EnquiryRecord) => step(e, new Date(new Date(e.receivedAt).getTime() + 3 * 60_000), { status: 'booked', bookedFor: slot(daysAhead, h, m), bookedType: type, bookedWith: who });
+  const attended = (fee: number, type: string, who: string, review = true) => (e: EnquiryRecord, t: (d: number, h?: number) => Date) => {
+    const d0 = (Date.now() - new Date(e.receivedAt).getTime()) / DAY;
+    let x = step(e, new Date(new Date(e.receivedAt).getTime() + 4 * 60_000), { status: 'booked', bookedFor: t(Math.max(0, Math.floor(d0) - 3), 11).toISOString(), bookedType: type, bookedWith: who });
+    x = step(x, t(Math.max(0, Math.floor(d0) - 3), 12), { status: 'won', jobValue: fee });
+    x = step(x, t(Math.max(0, Math.floor(d0) - 3), 12.2), { paid: true });
+    if (review) x = step(x, t(Math.max(0, Math.floor(d0) - 4), 10), { reviewAsked: true });
+    return x;
+  };
+  return [
+    { name: 'Chloe Martin', phone: '07700 900410', channel: 'call', days: 0, hour: 0, ago: 0.5, summary: 'New client. Would like anti-wrinkle treatment on her forehead before a wedding next month. Booked a free consultation with Amy.', then: booked('Free consultation', 'Amy', 2, 11) },
+    { name: 'Sophie Reed', phone: '07700 900411', channel: 'call', days: 0, hour: 0, ago: 1.6, summary: 'Had lip filler on Tuesday. Her top lip is very swollen and a patch has turned white and painful. Receptionist did not book, put her through to the clinic’s emergency line and alerted Amy.',
+      then: (e) => ({ ...step(e, new Date(new Date(e.receivedAt).getTime() + 6 * 60_000), { replied: true }), notes: 'Amy saw her at the clinic within the hour and treated it. Follow-up call booked for tomorrow.' }) },
+    { name: 'Megan Hall', phone: '07700 900412', channel: 'call', days: 0, hour: 0, ago: 3.1, summary: 'Called during a treatment. Wants gel nails and a lash lift together on Saturday morning. Booked with Jess.', then: booked('Gel nails', 'Jess', 6 - new Date(now).getDay() || 7, 10) },
+    { name: 'Laura Bennett', email: 'laura.bennett@example.com', phone: '07700 900413', channel: 'form', days: 1, hour: 22, min: 5, summary: 'Asked how many laser hair removal sessions she would need for underarms and whether she needs a patch test first.' },
+    { name: 'Glow Leads Ltd', phone: '02079 460222', channel: 'call', days: 1, hour: 11, summary: 'Caller offered Instagram marketing and more Google reviews for the clinic.' },
+    { name: 'Hannah Price', phone: '07700 900414', channel: 'call', days: 2, hour: 19, min: 20, summary: 'Returning client. HydraFacial with Leah. Booked.', then: booked('HydraFacial', 'Leah', 3, 15) },
+    { name: 'Zara Khan', phone: '07700 900415', channel: 'call', days: 4, hour: 13, min: 10, summary: 'Asked the price of lip filler and said she would think about it.', then: (e, t) => step(e, t(4, 13.5), { replied: true }) },
+    { name: 'Ella Watson', phone: '07700 900416', channel: 'call', days: 6, hour: 18, min: 40, summary: 'Anti-wrinkle top-up, returning client. Booked with Amy.', then: attended(180, 'Anti-wrinkle treatment', 'Amy') },
+    { name: 'Olivia Grant', phone: '07700 900417', channel: 'call', days: 8, hour: 12, summary: 'Lash lift and tint. Booked with Jess.', then: attended(55, 'Lash lift and tint', 'Jess') },
+    { name: 'Freya Collins', email: 'freya.collins@example.com', phone: '07700 900418', channel: 'form', days: 9, hour: 21, min: 30, summary: 'Would like a HydraFacial before a holiday. Booked.', then: attended(120, 'HydraFacial', 'Leah') },
+    { name: 'Rosie Turner', phone: '07700 900419', channel: 'call', days: 11, hour: 10, min: 15, summary: 'Lip filler, first time. Booked after a consultation.', then: attended(250, 'Lip filler', 'Amy') },
+    { name: 'Jade Morris', phone: '07700 900420', channel: 'call', days: 13, hour: 17, min: 55, summary: 'Gel nails, returning client. Booked.', then: attended(35, 'Gel nails', 'Jess', false) },
+    { name: 'Amelia Ward', phone: '07700 900421', channel: 'call', days: 15, hour: 9, min: 30, summary: 'Anti-wrinkle treatment for crow’s feet. Booked.', then: attended(180, 'Anti-wrinkle treatment', 'Amy') },
+    { name: 'Lily Evans', phone: '07700 900422', channel: 'call', days: 17, hour: 19, min: 10, summary: 'Asked whether we do tattoo removal.', then: (e, t) => step(step(e, t(17, 19.5), { replied: true }), t(16, 10), { status: 'lost' }) },
+    { name: 'Grace Hughes', phone: '07700 900423', channel: 'call', days: 19, hour: 11, summary: 'HydraFacial and brows. Booked.', then: attended(120, 'HydraFacial', 'Leah') },
+    { name: 'Poppy Shaw', phone: '07700 900424', channel: 'call', days: 22, hour: 18, min: 20, summary: 'Lip filler top-up. Booked.', then: attended(250, 'Lip filler', 'Amy') },
+    { name: 'Isla Roberts', phone: '07700 900425', channel: 'call', days: 25, hour: 12, min: 40, summary: 'Lash lift before a wedding. Booked.', then: attended(55, 'Lash lift and tint', 'Jess') },
+    { name: 'Evie Clarke', phone: '07700 900426', channel: 'call', days: 28, hour: 20, min: 5, summary: 'Anti-wrinkle treatment, new client after a consultation. Booked.', then: attended(180, 'Anti-wrinkle treatment', 'Amy') },
+    { name: 'Mia Lewis', phone: '07700 900427', channel: 'call', days: 31, hour: 10, summary: 'Gel nails. Booked.', then: attended(35, 'Gel nails', 'Jess') },
+    { name: 'Ruby Adams', phone: '07700 900428', channel: 'call', days: 34, hour: 17, min: 30, summary: 'Laser hair removal course, booked the first session.', then: attended(90, 'Laser hair removal', 'Leah') },
+  ];
+}
+
 /** Five weeks at a physio clinic: bookings, a red-flag call, attended appointments and a few unpaid. */
 function clinicSeeds(step: Step, now: number): Seed[] {
   const slot = (daysAhead: number, h: number, m = 0) => { const d = new Date(now + daysAhead * DAY); d.setHours(h, m, 0, 0); return d.toISOString(); };
@@ -198,10 +265,11 @@ function demoTranscript(name: string, summary: string, s: CaptureSettings, booke
   const opening = `Receptionist: ${greetingFor(s, new Date(Date.now() - 3 * 3_600_000))}`;
   if (s.business.kind === 'appointments') {
     const t = s.bookings.types[0];
+    const [p1 = 'Sarah', p2 = 'James'] = lines(s.bookings.staff).map((n) => n.split(' ')[0]);
     return [
       opening,
       `Caller: Hi, it's ${first}. ${summary.split('.')[0]}.`,
-      `Receptionist: Oh, I'm sorry to hear that. That's something our physios help with a lot. Have you been to us before, or would this be your first visit?`,
+      isBeauty(s.business) ? `Receptionist: Lovely, that's something we do a lot of. Have you been to us before, or would this be your first visit?` : `Receptionist: Oh, I'm sorry to hear that. That's something our physios help with a lot. Have you been to us before, or would this be your first visit?`,
       'Caller: First time.',
       `Receptionist: Lovely. Can I take your full name, please?`,
       `Caller: ${name}.`,
@@ -210,9 +278,9 @@ function demoTranscript(name: string, summary: string, s: CaptureSettings, booke
       `Receptionist: Perfect. Is the number you're calling from the best one to reach you?`,
       'Caller: Yes.',
       ...(booked ? [
-        `Receptionist: I've got Tuesday at 10am with Sarah, or Wednesday at half four with James. Which suits you better?`,
+        `Receptionist: I've got Tuesday at 10am with ${p1}, or Wednesday at half four with ${p2}. Which suits you better?`,
         'Caller: Tuesday, please.',
-        `Receptionist: Lovely, you're booked in for ${t ? `an ${t.name.toLowerCase()}` : 'an appointment'} on Tuesday at 10am with Sarah, at ${s.bookings.address}. ${s.bookings.cancellation ? 'If you need to move it, just let us know 24 hours before.' : ''} I'll text you the details now. Is there anything else I can help with?`,
+        `Receptionist: Lovely, you're booked in for ${t ? `an ${t.name.toLowerCase()}` : 'an appointment'} on Tuesday at 10am with ${p1}, at ${s.bookings.address}. ${s.bookings.cancellation ? 'If you need to move it, just let us know in good time.' : ''} I'll text you the details now. Is there anything else I can help with?`,
         'Caller: No, that’s great, thanks.',
         `Receptionist: You're welcome, ${first}. See you on Tuesday. Bye for now.`,
       ] : [
@@ -273,7 +341,11 @@ function seedMessages(list: EnquiryRecord[], s: CaptureSettings, sample: Sample)
     const e = list.find((x) => x.name === name); if (!e) return;
     out.push(msg({ enquiryId: e.id, direction: 'in', channel: 'text', from: e.phone, body, createdAt: new Date(Date.now() - minsAgo * 60_000).toISOString(), read }));
   };
-  if (sample === 'clinic') {
+  if (sample === 'beauty') {
+    reply('Chloe Martin', 'Thank you! Is it OK to wear make-up to the consultation?', 20, false);
+    reply('Laura Bennett', 'Weekday evenings are best for me', 90, false);
+    reply('Megan Hall', 'Amazing, see you Saturday 💅', 4 * 60, true);
+  } else if (sample === 'clinic') {
     reply('George Hammond', 'Thanks! Is there parking at the clinic?', 25, false);
     reply('Priya Shah', 'After 5pm any weekday is best for me, thanks', 70, false);
     reply('Emma Wilson', 'Perfect, see you Saturday 😊', 6 * 60, true);
@@ -289,11 +361,11 @@ export function createDemoApi(): Api {
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(s)); } catch { /* demo works without storage */ } };
   const ensure = () => {
     if (s.settings) return;
-    s.settings = structuredClone(s.sample === 'clinic' ? CLINIC_SETTINGS : DEMO_SETTINGS);
+    s.settings = structuredClone(SAMPLE_SETTINGS[s.sample] ?? DEMO_SETTINGS);
     s.enquiries = seed(s.settings);
     s.sources = [
       { id: uid('src_'), label: 'Retell receptionist', channel: 'call', active: true, createdAt: new Date(Date.now() - 35 * DAY).toISOString(), lastUsedAt: s.enquiries.find((e) => e.channel === 'call')?.receivedAt ?? null },
-      { id: uid('src_'), label: s.sample === 'clinic' ? 'Website booking form' : 'Website contact form', channel: 'form', active: true, createdAt: new Date(Date.now() - 35 * DAY).toISOString(), lastUsedAt: s.enquiries.find((e) => e.channel === 'form')?.receivedAt ?? null },
+      { id: uid('src_'), label: s.sample === 'trade' ? 'Website contact form' : 'Website booking form', channel: 'form', active: true, createdAt: new Date(Date.now() - 35 * DAY).toISOString(), lastUsedAt: s.enquiries.find((e) => e.channel === 'form')?.receivedAt ?? null },
     ];
     s.messages = seedMessages(s.enquiries, s.settings, s.sample);
     run();

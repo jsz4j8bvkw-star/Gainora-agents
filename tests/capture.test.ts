@@ -270,3 +270,44 @@ test('settings with nothing saved still work', () => {
   assert.equal(s.business.alertEmail, 'a@b.co');
   assert.match(packFromSettings({ ...s, business: { ...s.business, name: 'X' } }).greeting, /you’re through to X\. Calls are recorded/);
 });
+
+/* ---------- Beauty and aesthetics ---------- */
+{
+  const { packFromSettings, triage, isBeauty, bookingSystemsFor, emptySettings, DEFAULT_BEAUTY_SAFETY } = await import('../shared/capture');
+  const s = emptySettings('amy@example.com');
+  s.business = { ...s.business, kind: 'appointments', name: 'Willow Skin', trade: 'Aesthetics clinic', ownerName: 'Amy' };
+  s.calls.safety = DEFAULT_BEAUTY_SAFETY;
+  s.calls.emergencyLine = '07700 900444';
+  s.calls.transferEmergency = true;
+  test('beauty: recognised from the type of business', () => { assert(isBeauty(s.business)); assert(!isBeauty({ kind: 'appointments', trade: 'Physiotherapy' })); assert(!isBeauty({ kind: 'trade', trade: 'Beauty salon' })); });
+  test('beauty: script never sends callers to 999 or other services', () => {
+    const text = packFromSettings(s).text;
+    assert(!/call 999|go to A&E|call NHS 111/i.test(text), 'mentions 999, A&E or 111 as an instruction');
+    assert(/emergency line, 07700 900444/.test(text), 'missing the clinic emergency line');
+    assert(/put the call straight through/.test(text), 'missing transfer');
+    assert(/Do not direct callers to 999/.test(text), 'missing the rule against other services');
+  });
+  test('beauty: without an emergency line, the clinic calls back as a priority', () => {
+    const t = packFromSettings({ ...s, calls: { ...s.calls, emergencyLine: '' } }).text;
+    assert(/call them back as a priority/.test(t)); assert(!/call 999/i.test(t));
+  });
+  test('physio clinics keep their 999 safety script', () => {
+    const p = packFromSettings({ ...s, business: { ...s.business, trade: 'Physiotherapy' }, calls: { ...s.calls, safety: '' } }).text;
+    assert(/call 999 or go to A&E/.test(p));
+  });
+  test('triage: reactions after a treatment are emergencies', () => {
+    for (const t of ['My top lip is very swollen and a patch has turned white', 'Since the filler my vision is blurry', 'I have blisters after laser yesterday', 'I think I am having a reaction to the botox']) {
+      assert(triage(t).urgency === 'emergency', t);
+    }
+    assert(triage('Can I book a lash lift on Saturday?').urgency === 'normal');
+  });
+  test('booking systems: salon systems first for beauty, trade systems for trades', () => {
+    const b = bookingSystemsFor(s.business);
+    for (const x of ['Fresha', 'Phorest', 'Timely', 'Treatwell', 'Booksy', 'Salonized', 'Pabau']) assert(b.includes(x), x);
+    assert(b[0] === 'Fresha' && b.indexOf('Phorest') < b.indexOf('Google Calendar'));
+    assert(!b.includes('Jobber'));
+    const t = bookingSystemsFor({ kind: 'trade', trade: 'Electrical' });
+    assert(t.includes('Jobber') && !t.includes('Phorest'));
+    assert(b[b.length - 1] === 'Something else' && t[t.length - 1] === 'Something else');
+  });
+}

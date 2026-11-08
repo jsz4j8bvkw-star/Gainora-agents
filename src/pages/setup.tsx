@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { api } from '../lib/api';
 import { BASE } from '../app';
 import { Button, Choices, Field, Icon, useToast } from '../components/ui';
-import { BOOKING_SYSTEMS, CLINICS, DAYS, DEFAULT_SAFETY, emptySettings, greetingFor, hoursText, lines, packFromSettings, TRADES } from '../../shared/capture';
+import { bookingSystemsFor, CLINICS, DAYS, DEFAULT_BEAUTY_SAFETY, DEFAULT_SAFETY, emptySettings, greetingFor, hoursText, isBeauty, lines, packFromSettings, TRADES } from '../../shared/capture';
 import type { CaptureSettings, User } from '../lib/types';
 import type { AppointmentType } from '../../shared/capture';
 import { defaultAutomations } from '../../shared/automations';
@@ -13,6 +13,8 @@ type Kind = 'text' | 'email' | 'url' | 'tel' | 'textarea' | 'select' | 'days' | 
 export interface Q {
   path: string; label: string; help?: string; kind: Kind; required?: boolean; wide?: boolean; placeholder?: string;
   options?: { value: any; label: string }[];
+  /** Options that depend on earlier answers, e.g. booking systems for the business type. */
+  optionsFor?: (s: CaptureSettings) => { value: any; label: string }[];
   showIf?: (s: CaptureSettings) => boolean;
 }
 export interface SetupSection { id: string; title: string; question: string; intro: string; fields: Q[] }
@@ -20,17 +22,19 @@ export interface SetupSection { id: string; title: string; question: string; int
 const YES_NO = [{ value: true, label: 'Yes' }, { value: false, label: 'No' }];
 const isAppts = (s: CaptureSettings) => s.business.kind === 'appointments';
 const isTrade = (s: CaptureSettings) => !isAppts(s);
+const isBeautyS = (s: CaptureSettings) => isBeauty(s.business);
+const isMedical = (s: CaptureSettings) => isAppts(s) && !isBeautyS(s);
 
 export const SETUP: SetupSection[] = [
   {
     id: 'business', title: 'Your business', question: 'Tell us about your business.',
     intro: 'Your receptionist answers in your business name, and these details go on every message sent for you.',
     fields: [
-      { path: 'business.kind', label: 'What kind of business is it?', kind: 'choice', required: true, wide: true, options: [{ value: 'trade', label: 'A trade or home service: we quote and visit' }, { value: 'appointments', label: 'Appointments: a clinic, salon or studio' }] },
+      { path: 'business.kind', label: 'What kind of business is it?', kind: 'choice', required: true, wide: true, options: [{ value: 'trade', label: 'A trade or home service: we quote and visit' }, { value: 'appointments', label: 'Appointments: a clinic, salon or studio, including beauty and aesthetics' }] },
       { path: 'business.name', label: 'Business name', kind: 'text', required: true, placeholder: 'Lemon Street Physio' },
       { path: 'business.ownerName', label: 'Your first name', kind: 'text', required: true, help: 'Messages are signed with it.' },
       { path: 'business.trade', label: 'Your trade', kind: 'select', required: true, options: TRADES.map((t) => ({ value: t, label: t })), showIf: isTrade },
-      { path: 'business.trade', label: 'Your type of practice', kind: 'select', required: true, options: CLINICS.map((t) => ({ value: t, label: t })), showIf: isAppts },
+      { path: 'business.trade', label: 'Your type of business', kind: 'select', required: true, options: CLINICS.map((t) => ({ value: t, label: t })), showIf: isAppts },
       { path: 'business.location', label: 'Town or area', kind: 'text', required: true, placeholder: 'Truro, Cornwall' },
       { path: 'business.phone', label: 'Your business phone number', kind: 'tel', required: true, help: 'The number customers ring now. You keep it.' },
       { path: 'business.website', label: 'Website', kind: 'url', placeholder: 'https://', help: 'Optional.' },
@@ -51,9 +55,9 @@ export const SETUP: SetupSection[] = [
     id: 'bookings', title: 'Bookings', question: 'How do you take bookings?',
     intro: 'Tell us where your diary lives and what people can book. We connect it with you on your setup call, so your receptionist books into the same diary you already use.',
     fields: [
-      { path: 'bookings.system', label: 'Your booking system or calendar', kind: 'select', required: true, wide: true, options: BOOKING_SYSTEMS.map((x) => ({ value: x, label: x })) },
+      { path: 'bookings.system', label: 'Your booking system or calendar', kind: 'select', required: true, wide: true, help: 'The one you use today. If it isn’t listed, choose “Something else” and tell us its name.', optionsFor: (s) => bookingSystemsFor(s.business).map((x) => ({ value: x, label: x })) },
       { path: 'bookings.systemOther', label: 'Which one?', kind: 'text', required: true, showIf: (s) => s.bookings.system === 'Something else' },
-      { path: 'bookings.account', label: 'The account or calendar to book into', kind: 'text', wide: true, placeholder: 'bookings@lemonstreetphysio.co.uk', help: 'Optional. For example the Google account’s email, or your practice name in Cliniko.', showIf: (s) => !!s.bookings.system && !/paper/i.test(s.bookings.system) },
+      { path: 'bookings.account', label: 'The account or calendar to book into', kind: 'text', wide: true, placeholder: 'bookings@lemonstreetphysio.co.uk', help: 'Optional. For example the Google account’s email, or your business name in Fresha, Phorest or Cliniko.', showIf: (s) => !!s.bookings.system && !/paper/i.test(s.bookings.system) },
       { path: 'bookings.mode', label: 'When someone wants to book, your receptionist should', kind: 'choice', required: true, wide: true, options: [{ value: 'book', label: 'Book them straight in' }, { value: 'offer', label: 'Offer times, I confirm' }, { value: 'callback', label: 'Take details, I call back' }] },
       { path: 'bookings.types', label: 'What people can book', kind: 'types', wide: true, help: 'Name, length, price and who does it. Leave the price blank to keep it private.' },
       { path: 'bookings.staff', label: 'Who takes bookings', kind: 'textarea', wide: true, help: 'Optional. One name per line.', placeholder: 'Sarah Bennett\nJames Hooper' },
@@ -73,7 +77,10 @@ export const SETUP: SetupSection[] = [
       { path: 'calls.recording', label: 'Record calls?', kind: 'choice', options: YES_NO, help: 'If yes, the greeting says so.' },
       { path: 'calls.days', label: 'Days you’re open', kind: 'days', required: true, wide: true },
       { path: 'calls.hours', label: 'Your hours', kind: 'hours', wide: true, help: 'Enquiries outside these hours are marked “out of hours”, so you can see what you’d otherwise have missed.' },
-      { path: 'calls.safety', label: 'When it must not book, and should send people for urgent help', kind: 'textarea', wide: true, help: 'One per line. Agree this with your lead clinician. Callers are told to call 999, go to A&E or call NHS 111.', showIf: isAppts },
+      { path: 'calls.safety', label: 'When it must not book, and should send people for urgent help', kind: 'textarea', wide: true, help: 'One per line. Agree this with your lead clinician. Callers are told to call 999, go to A&E or call NHS 111.', showIf: isMedical },
+      { path: 'calls.safety', label: 'Concerns after a treatment that must come straight to the clinic', kind: 'textarea', wide: true, help: 'One per line. Your receptionist won’t book; it gives the caller your emergency line or puts them through, and texts you at once. It never sends callers to 999 or any other service.', showIf: isBeautyS },
+      { path: 'calls.emergencyLine', label: 'Your clinic’s emergency line', kind: 'tel', required: true, help: 'The number for a reaction or urgent concern after a treatment. Callers are given it, or put through to it.', showIf: isBeautyS },
+      { path: 'calls.transferEmergency', label: 'Put those calls straight through to it?', kind: 'choice', options: YES_NO, help: 'If the line isn’t answered, the caller is given the number and you get an urgent text.', showIf: isBeautyS },
       { path: 'calls.emergencies', label: 'What counts as an emergency for you', kind: 'textarea', wide: true, help: 'One per line. Gas smells, floods and no heating for someone vulnerable are always flagged.', placeholder: 'Water leaking or a burst pipe\nNo heating or hot water for someone vulnerable', showIf: isTrade },
       { path: 'calls.transferTo', label: 'What to do with something urgent', kind: 'text', wide: true, placeholder: 'Text Sarah on 07700 900111 and say it’s urgent' },
       { path: 'calls.quotePolicy', label: 'Can it talk about prices?', kind: 'choice', required: true, wide: true, options: [{ value: 'never', label: 'No, I quote every job myself' }, { value: 'ranges', label: 'Guide prices only' }, { value: 'fixed', label: 'Yes, I have fixed prices' }], showIf: isTrade },
@@ -94,6 +101,28 @@ export const SETUP: SetupSection[] = [
   },
 ];
 
+const CLINIC_TYPES: AppointmentType[] = [{ name: 'Initial consultation', minutes: 45, price: '', who: '' }, { name: 'Follow-up', minutes: 30, price: '', who: '' }];
+const BEAUTY_TYPES: AppointmentType[] = [{ name: 'Consultation', minutes: 30, price: '', who: '' }, { name: 'Treatment', minutes: 60, price: '', who: '' }];
+const sameTypes = (a: AppointmentType[], b: AppointmentType[]) => a.length === b.length && a.every((t, i) => t.name === b[i].name && t.minutes === b[i].minutes && !t.price && !t.who);
+
+/** Applies one answer, and refreshes the starting answers that depend on it (only ones the owner hasn't changed). */
+export function applyAnswer(s: CaptureSettings, path: string, v: any): CaptureSettings {
+  const next = setPath(s, path, v);
+  if (path === 'business.kind') return withKindDefaults(next);
+  if (path === 'business.trade' && next.business.kind === 'appointments') {
+    const beauty = isBeauty(next.business);
+    const untouchedSafety = !next.calls.safety || next.calls.safety === DEFAULT_SAFETY || next.calls.safety === DEFAULT_BEAUTY_SAFETY;
+    const untouchedTypes = !next.bookings.types.length || sameTypes(next.bookings.types, CLINIC_TYPES) || sameTypes(next.bookings.types, BEAUTY_TYPES);
+    const systems = bookingSystemsFor(next.business);
+    return {
+      ...next,
+      calls: { ...next.calls, safety: untouchedSafety ? (beauty ? DEFAULT_BEAUTY_SAFETY : DEFAULT_SAFETY) : next.calls.safety },
+      bookings: { ...next.bookings, types: untouchedTypes ? (beauty ? BEAUTY_TYPES : CLINIC_TYPES) : next.bookings.types, system: next.bookings.system && !systems.includes(next.bookings.system) ? '' : next.bookings.system },
+    };
+  }
+  return next;
+}
+
 /** Sensible starting answers when the business type changes. */
 export function withKindDefaults(s: CaptureSettings): CaptureSettings {
   // Message wording follows the business type ("your appointment" or "your visit").
@@ -102,8 +131,8 @@ export function withKindDefaults(s: CaptureSettings): CaptureSettings {
   return {
     ...s,
     automations,
-    calls: { ...s.calls, safety: s.calls.safety || DEFAULT_SAFETY, quotePolicy: s.calls.quotePolicy === 'ranges' ? 'fixed' : s.calls.quotePolicy, gasWork: false },
-    bookings: { ...s.bookings, mode: s.bookings.mode === 'callback' && !s.bookings.types.length ? 'book' : s.bookings.mode, types: s.bookings.types.length ? s.bookings.types : [{ name: 'Initial consultation', minutes: 45, price: '', who: '' }, { name: 'Follow-up', minutes: 30, price: '', who: '' }] },
+    calls: { ...s.calls, safety: s.calls.safety || (isBeauty(s.business) ? DEFAULT_BEAUTY_SAFETY : DEFAULT_SAFETY), quotePolicy: s.calls.quotePolicy === 'ranges' ? 'fixed' : s.calls.quotePolicy, gasWork: false },
+    bookings: { ...s.bookings, mode: s.bookings.mode === 'callback' && !s.bookings.types.length ? 'book' : s.bookings.mode, types: s.bookings.types.length ? s.bookings.types : (isBeauty(s.business) ? BEAUTY_TYPES : CLINIC_TYPES) },
     followUps: { ...s.followUps, paymentDays: s.followUps.paymentDays === 14 ? 0 : s.followUps.paymentDays },
   };
 }
@@ -190,9 +219,9 @@ export function QField({ f, s, onChange, error }: { f: Q; s: CaptureSettings; on
       {(id, d) => f.kind === 'textarea'
         ? <textarea id={id} className="textarea" value={v ?? ''} placeholder={f.placeholder} aria-describedby={d} aria-invalid={!!error} onChange={(e: any) => onChange(f.path, e.target.value)} />
         : f.kind === 'select'
-          ? <select id={id} className="select" value={String(v ?? '')} aria-describedby={d} aria-invalid={!!error} onChange={(e: any) => { const o = f.options!.find((x) => String(x.value) === e.target.value); onChange(f.path, o ? o.value : e.target.value); }}>
+          ? <select id={id} className="select" value={String(v ?? '')} aria-describedby={d} aria-invalid={!!error} onChange={(e: any) => { const o = optsOf(f, s).find((x) => String(x.value) === e.target.value); onChange(f.path, o ? o.value : e.target.value); }}>
               {typeof v === 'string' && !v && <option value="">Choose…</option>}
-              {f.options!.map((o) => <option key={String(o.value)} value={String(o.value)}>{o.label}</option>)}
+              {optsOf(f, s).map((o) => <option key={String(o.value)} value={String(o.value)}>{o.label}</option>)}
             </select>
           : <input id={id} className="input" type={f.kind === 'number' ? 'number' : f.kind} value={v ?? ''} placeholder={f.placeholder} aria-describedby={d} aria-invalid={!!error}
               autoComplete={f.kind === 'email' ? 'email' : f.kind === 'tel' ? 'tel' : undefined} onChange={(e: any) => onChange(f.path, e.target.value)} />}
@@ -200,13 +229,15 @@ export function QField({ f, s, onChange, error }: { f: Q; s: CaptureSettings; on
   );
 }
 
+const optsOf = (f: Q, s: CaptureSettings) => (f.optionsFor ? f.optionsFor(s) : f.options ?? []);
+
 export function display(f: Q, s: CaptureSettings): string {
   if (f.showIf && !f.showIf(s)) return '';
   if (f.kind === 'types') return s.bookings.types.filter((t) => t.name.trim()).map((t) => `${t.name} (${t.minutes} min${t.price ? `, ${t.price}` : ''})`).join(' · ') || '–';
   if (f.kind === 'greeting') return `“${greetingFor(s)}”`;
   if (f.kind === 'days' || f.kind === 'hours') return f.kind === 'hours' ? hoursText(s.calls) : s.calls.days.map((d) => DAYS[d - 1]).join(', ');
   const v = getPath(s, f.path);
-  if (f.options) return f.options.find((o) => o.value === v)?.label ?? '–';
+  if (f.options || f.optionsFor) return optsOf(f, s).find((o) => o.value === v)?.label ?? (String(v ?? '').trim() || '–');
   if (f.kind === 'textarea') return lines(v).join(' · ') || '–';
   return String(v ?? '').trim() || '–';
 }
@@ -252,7 +283,7 @@ export function Setup({ user, initial, onDone }: { user: User; initial: CaptureS
 
   useEffect(() => { head.current?.focus(); window.scrollTo({ top: 0 }); }, [step]);
   const change = (path: string, v: any) => {
-    const next = path === 'business.kind' ? withKindDefaults(setPath(s, path, v)) : setPath(s, path, v);
+    const next = applyAnswer(s, path, v);
     setS(next); setSaved('saving');
     if (errors[path]) setErrors((e) => { const x = { ...e }; delete x[path]; return x; });
     clearTimeout(timer.current);

@@ -3,12 +3,14 @@ import { api } from '../lib/api';
 import { BASE } from '../app';
 import { Button, Choices, Field } from '../components/ui';
 
+const SAMPLES: { id: 'trade' | 'clinic' | 'beauty'; label: string }[] = [{ id: 'beauty', label: 'A beauty and aesthetics clinic' }, { id: 'clinic', label: 'A physio clinic' }, { id: 'trade', label: 'A plumber' }];
+
 export function SignIn({ onSignedIn }: { onSignedIn: () => void }) {
   const [email, setEmail] = useState('');
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [sample, setSample] = useState<'trade' | 'clinic'>('trade');
+  const [sample, setSample] = useState<'trade' | 'clinic' | 'beauty'>('beauty');
 
   const submit = async (e: any) => {
     e.preventDefault();
@@ -61,7 +63,7 @@ export function SignIn({ onSignedIn }: { onSignedIn: () => void }) {
             </Field>
             {api.mode === 'demo' && (
               <Field label="Sample business" as="group">
-                {(_, d) => <Choices name="sample" options={['A plumber', 'A physio clinic']} value={sample === 'trade' ? 'A plumber' : 'A physio clinic'} describedBy={d} onChange={(v: string) => setSample(v === 'A plumber' ? 'trade' : 'clinic')} />}
+                {(_, d) => <Choices name="sample" options={SAMPLES.map((x) => x.label)} value={SAMPLES.find((x) => x.id === sample)!.label} describedBy={d} onChange={(v: string) => setSample(SAMPLES.find((x) => x.label === v)!.id)} />}
               </Field>
             )}
             <Button type="submit" block busy={busy}>{api.mode === 'demo' ? 'Open the demo' : 'Send sign-in link'}</Button>

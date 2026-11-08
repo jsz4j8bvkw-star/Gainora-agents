@@ -5,7 +5,7 @@ import { Link, navigate } from '../lib/router';
 import { Button, Choices, ErrorNote, Field, Icon, Loading, Modal, Tabs, copyText, useLoad, useToast } from '../components/ui';
 import { ScriptPreview } from './setup';
 import { relative, shortDate } from '../lib/format';
-import { CHANNEL_LABEL, DIRECT_SYSTEMS, packFromSettings } from '../../shared/capture';
+import { CHANNEL_LABEL, DIRECT_SYSTEMS, isBeauty, packFromSettings } from '../../shared/capture';
 import type { Source } from '../lib/types';
 
 type Tab = 'script' | 'connect' | 'test';
@@ -56,7 +56,7 @@ function Script() {
         </div>
       </div>
       <ScriptPreview s={settings} full />
-      <p className="xsmall faint mt-16"><Icon name="info" className="inline-icon" />The opening line always says it’s an AI assistant{settings.calls.recording ? ' and that calls are recorded' : ''}. It never takes card details or gives safety advice beyond the emergency numbers.</p>
+      <p className="xsmall faint mt-16"><Icon name="info" className="inline-icon" />It never claims to be a person and answers honestly if asked{settings.calls.recording ? ', and the opening line says calls are recorded' : ''}. It never takes card details{isBeauty(settings.business) ? ', and sends every concern after a treatment to your clinic, never to another service' : ' or gives safety advice beyond the emergency numbers'}.</p>
     </>
   );
 }
