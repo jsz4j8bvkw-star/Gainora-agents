@@ -13,7 +13,7 @@ export interface ReviewItem {
   seenAt?: string;       // when the Watcher first saw it
 }
 
-export interface PlaceSummary { id: string; name: string; address: string; rating: number | null; count: number | null; website?: string }
+export interface PlaceSummary { id: string; name: string; address: string; rating: number | null; count: number | null; website?: string; lat?: number; lng?: number }
 
 export interface ReviewPoint { at: string; rating: number | null; count: number | null }
 
@@ -49,14 +49,15 @@ export function parsePlace(json: any): { rating: number | null; count: number | 
   };
 }
 
-export function parseSearch(json: any): PlaceSummary[] {
-  return (json?.places || []).slice(0, 5).map((p: any) => ({
+export function parseSearch(json: any, max = 5): PlaceSummary[] {
+  return (json?.places || []).slice(0, max).map((p: any) => ({
     id: String(p.id),
     name: String(p.displayName?.text || p.displayName || 'Unnamed place'),
     address: String(p.formattedAddress || ''),
     rating: typeof p.rating === 'number' ? p.rating : null,
     count: typeof p.userRatingCount === 'number' ? p.userRatingCount : null,
     ...(p.websiteUri ? { website: String(p.websiteUri) } : {}),
+    ...(typeof p.location?.latitude === 'number' && typeof p.location?.longitude === 'number' ? { lat: p.location.latitude, lng: p.location.longitude } : {}),
   }));
 }
 

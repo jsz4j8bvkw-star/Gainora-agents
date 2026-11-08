@@ -1,45 +1,21 @@
-// The Watcher: website health, Google reviews, Google's speed test, competitor changes and prices.
+// The Watcher: website health, Google reviews, Google's speed test, competitor changes and prices,
+// and (netlify/lib/reach.ts) the competition found nearby, their services, prices, offers and Instagram.
 import { linksTo, socialLabel, socialUrl } from '../../shared/social';
 import { connect } from 'node:tls';
 import { addActions, addAlert, addNote, addValue, db, enc, insert, learnedFor, upsert } from './core';
 import { ai, HOUSE_STYLE, extractJson, hasBanned, profileContext } from './ai';
 import { googleConfigured, pageSpeed, placeDetails, searchPlaces } from './google';
+import { fetchPage, linkStatus, okPage, pool, type Fetched } from './http';
+import { checkReach, ratingsFor, socialLinksIn, type Gathered, type PageLines } from './reach';
+import { reviewsSince, type CompetitorsState, type ReachEvent, type TrackedCompetitor } from '../../shared/competitors';
 import { describeDiff, diffSnapshots, extractForms, extractLinks, snapshot, visibleText, type PageSnapshot } from '../../shared/pages';
 import { countWeekAgo, mapsUrl, markNew, pickCompetitorPlace, type ReviewItem, type ReviewsState } from '../../shared/reviews';
 import { carryDone, type SpeedState } from '../../shared/speed';
 import { diffPriceTables, priceLines, pricePageCandidates, validatePriceTable, type PriceMove, type PriceTable } from '../../shared/prices';
 import type { Learned } from '../../shared/learning';
 
-const UA = 'Mozilla/5.0 (compatible; GainoraWatcher/1.0; +https://gainora.co.uk/watcher)';
-const MAX_BYTES = 2_000_000;
-
-export interface Fetched { url: string; finalUrl: string; status: number; ms: number; html: string; contentType: string }
-
-export async function fetchPage(url: string, timeoutMs = 15_000): Promise<Fetched> {
-  const t0 = Date.now();
-  try {
-    const res = await fetch(url, { headers: { 'User-Agent': UA, Accept: 'text/html,*/*;q=0.5' }, redirect: 'follow', signal: AbortSignal.timeout(timeoutMs) });
-    const ct = res.headers.get('content-type') || '';
-    let html = '';
-    if (/html|xml|text/i.test(ct)) {
-      const buf = await res.arrayBuffer();
-      html = new TextDecoder().decode(buf.byteLength > MAX_BYTES ? buf.slice(0, MAX_BYTES) : buf);
-    } else { await res.body?.cancel().catch(() => {}); }
-    return { url, finalUrl: res.url || url, status: res.status, ms: Date.now() - t0, html, contentType: ct };
-  } catch {
-    return { url, finalUrl: url, status: 0, ms: Date.now() - t0, html: '', contentType: '' };
-  }
-}
-
-export async function linkStatus(url: string): Promise<number> {
-  const opts = { headers: { 'User-Agent': UA }, redirect: 'follow' as const, signal: AbortSignal.timeout(10_000) };
-  try {
-    let r = await fetch(url, { ...opts, method: 'HEAD' });
-    if (r.status === 405 || r.status === 403 || r.status === 501) r = await fetch(url, { ...opts, method: 'GET', signal: AbortSignal.timeout(10_000) });
-    await r.body?.cancel().catch(() => {});
-    return r.status;
-  } catch { return 0; }
-}
+export { fetchPage, linkStatus, socialLinksIn };
+export type { Fetched };
 
 export function sslDaysLeft(host: string): Promise<number | null> {
   return new Promise((resolve) => {
@@ -54,29 +30,12 @@ export function sslDaysLeft(host: string): Promise<number | null> {
   });
 }
 
-async function pool<T, R>(items: T[], size: number, fn: (x: T) => Promise<R>): Promise<R[]> {
-  const out: R[] = new Array(items.length);
-  let i = 0;
-  await Promise.all(Array.from({ length: Math.min(size, items.length) }, async () => {
-    while (i < items.length) { const k = i++; out[k] = await fn(items[k]); }
-  }));
-  return out;
-}
-
 export interface SiteCheck {
   up: boolean; responseMs: number; sslDaysLeft: number | null; pagesChecked: number;
   brokenLinks: { url: string; foundOn: string; status: number }[];
   contactProblem: string | null;
   /** Instagram and Facebook links found on the pages checked. */
   socialLinks: string[];
-}
-
-const SOCIAL_HREF = /href\s*=\s*["']([^"']*(?:instagram\.com|instagr\.am|facebook\.com|fb\.com|fb\.me)[^"']*)["']/gi;
-/** Every Instagram or Facebook link in the pages' HTML. */
-export function socialLinksIn(htmls: string[]): string[] {
-  const out = new Set<string>();
-  for (const h of htmls) for (const m of (h || '').matchAll(SOCIAL_HREF)) out.add(m[1].replace(/&amp;/g, '&'));
-  return [...out].slice(0, 40);
 }
 
 /** Notices about the owner's social pages that a website check can prove: the site should link to them. */
@@ -129,13 +88,17 @@ export async function checkSite(site: string, maxPages = 25, maxLinks = 150): Pr
 
 interface StoredSnap { page: PageSnapshot; links: string[] }
 
-/** Compares each competitor page with yesterday's copy and records what changed. Skips kinds the owner muted. */
-export async function checkCompetitors(userId: string, profile: any, learned?: Learned | null) {
+/**
+ * Compares each competitor's home page with yesterday's copy and records what changed. Skips kinds
+ * the owner muted. `comps` defaults to the competitors the owner typed; the daily run passes the
+ * whole watched list (typed and found) with the home pages it has already fetched.
+ */
+export async function checkCompetitors(userId: string, profile: any, learned?: Learned | null, comps?: { name: string; url: string; page?: Fetched }[]) {
   const muted = new Set(learned?.mutedChangeKinds ?? []);
-  const comps: { name: string; url: string }[] = (profile?.competitors?.list || []).filter((c: any) => c.url).slice(0, 5);
+  const list: { name: string; url: string; page?: Fetched }[] = (comps ?? (profile?.competitors?.list || [])).filter((c: any) => c.url).slice(0, 9);
   const found: { competitor: string; url: string; kind: 'price' | 'offer' | 'content' | 'new-page'; summary: string; raw: any }[] = [];
-  for (const c of comps) {
-    const page = await fetchPage(c.url);
+  for (const c of list) {
+    const page = c.page && okPage(c.page) ? c.page : await fetchPage(c.url);
     if (!page.html) continue;
     const now: StoredSnap = { page: snapshot(page.finalUrl, page.html), links: extractLinks(page.html, page.finalUrl) };
     const prevRows = await db<any[]>(`page_snapshots?select=snapshot&user_id=eq.${userId}&url=eq.${enc(c.url)}`);
@@ -192,18 +155,19 @@ async function competitorRatings(profile: any): Promise<ReviewsState['competitor
 }
 
 /** Reads the client's public Google listing, and how competitors' ratings compare (weekly). */
-export async function checkReviews(placeId: string, placeName: string | null, profile: any, prev: ReviewsState | null | undefined, now = new Date()) {
+export async function checkReviews(placeId: string, placeName: string | null, profile: any, prev: ReviewsState | null | undefined, now = new Date(), refreshCompetitors = true) {
   const d = await placeDetails(placeId, true);
   const same = !!prev && prev.placeId === placeId;
   const reviews = markNew(same ? prev!.reviews : null, d.reviews, now);
   const history = [...(same ? prev!.history ?? [] : []), { at: now.toISOString(), rating: d.rating, count: d.count }].slice(-60);
-  const compsDue = !same || !prev!.competitorsCheckedAt || now.getTime() - new Date(prev!.competitorsCheckedAt).getTime() > WEEK
-    || prev!.competitors.map((c) => c.name).join('|') !== compNames(profile).join('|');
-  const competitors = compsDue ? await competitorRatings(profile) : prev!.competitors;
+  // When the reach check owns competitor ratings (the daily run), this weekly text search is skipped.
+  const compsDue = refreshCompetitors && (!same || !prev!.competitorsCheckedAt || now.getTime() - new Date(prev!.competitorsCheckedAt).getTime() > WEEK
+    || prev!.competitors.map((c) => c.name).join('|') !== compNames(profile).join('|'));
+  const competitors = compsDue ? await competitorRatings(profile) : (prev?.competitors ?? []);
   const state: ReviewsState = {
     placeId, placeName: d.name || placeName || profile?.business?.name || 'Your business', mapsUrl: mapsUrl(placeId),
     rating: d.rating, count: d.count, previousCount: countWeekAgo(history, now), reviews, competitors,
-    checkedAt: now.toISOString(), competitorsCheckedAt: compsDue ? now.toISOString() : prev!.competitorsCheckedAt, history,
+    checkedAt: now.toISOString(), competitorsCheckedAt: compsDue ? now.toISOString() : prev?.competitorsCheckedAt, history,
   };
   const fresh = same ? reviews.filter((r) => r.isNew && !prev!.reviews.some((p) => p.id === r.id)) : [];
   const unseen = same && prev!.count != null && d.count != null ? Math.max(0, d.count - prev!.count - fresh.length) : 0;
@@ -241,12 +205,12 @@ function syncDone(latest: SpeedState | null | undefined, next: SpeedState | null
 }
 
 /* ---------- Price comparison (weekly) ---------- */
-async function sitePrices(site: string, sources: Record<string, string>): Promise<{ url: string; lines: string[] }[]> {
+async function sitePrices(site: string, sources: Record<string, string>): Promise<PageLines[]> {
   const home = await fetchPage(site);
   if (!home.html || home.status >= 400) return [];
   const extra = pricePageCandidates(extractLinks(home.html, home.finalUrl), 3);
   const pages = [home, ...(await pool(extra, 3, (u) => fetchPage(u, 12_000)))];
-  const out: { url: string; lines: string[] }[] = [];
+  const out: PageLines[] = [];
   for (const p of pages) {
     if (!p.html || p.status >= 400 || p.status === 0) continue;
     const text = visibleText(p.html);
@@ -261,22 +225,26 @@ async function sitePrices(site: string, sources: Record<string, string>): Promis
 /**
  * Builds a like-for-like price table. The AI only pairs up comparable items; every price it
  * reports is checked against the page it came from (validatePriceTable), or it is dropped.
+ * `gathered` is what the reach check already read today (own site, competitors' sites and their
+ * public booking pages), so nothing is fetched twice; without it the pages are read here.
  */
-export async function buildPriceTable(userId: string, profile: any, now = new Date()): Promise<PriceTable | null> {
-  const comps: { name: string; url: string }[] = (profile?.competitors?.list || []).filter((c: any) => c.url && c.name).slice(0, 4);
+export async function buildPriceTable(userId: string, profile: any, now = new Date(), gathered?: Gathered, tracked?: TrackedCompetitor[]): Promise<PriceTable | null> {
+  const comps: { name: string; url: string; key?: string }[] = tracked
+    ? tracked.filter((c) => c.url && c.name).slice(0, 5).map((c) => ({ name: c.name, url: c.url, key: c.key }))
+    : (profile?.competitors?.list || []).filter((c: any) => c.url && c.name).slice(0, 4);
   const site = profile?.business?.website;
   if (!site || !comps.length) return null;
-  const sources: Record<string, string> = {};
-  const mine = await sitePrices(site, sources);
-  const theirs: { url: string; lines: string[] }[][] = [];
-  for (const c of comps) theirs.push(await sitePrices(c.url, sources));
+  const sources: Record<string, string> = gathered?.sources ?? {};
+  const mine = gathered ? gathered.mine : await sitePrices(site, sources);
+  const theirs: PageLines[][] = [];
+  for (const c of comps) theirs.push(gathered && c.key ? gathered.theirs[c.key] ?? [] : await sitePrices(c.url, sources));
   const empty: PriceTable = { checkedAt: now.toISOString(), competitors: comps.map((c) => c.name), rows: [] };
   if ((mine.length ? 1 : 0) + theirs.filter((t) => t.length).length < 2) return empty;
-  const fmt = (pages: { url: string; lines: string[] }[]) => pages.map((p) => `Page: ${p.url}\n${p.lines.join('\n')}`).join('\n\n') || '(no prices found)';
+  const fmt = (pages: PageLines[]) => pages.map((p) => `Page: ${p.url}${p.booking ? ' (public booking page)' : ''}\n${p.lines.join('\n')}`).join('\n\n') || '(no prices found)';
   const r = await ai({
     userId, agent: 'watcher', maxTokens: 2000, fast: true,
-    system: `${HOUSE_STYLE}\nYou build a like-for-like price comparison for a business. You get lines of text containing prices from the owner's website and from competitors' websites, each with the page it came from. Pair up products or services a customer would genuinely compare (same kind of item, similar size or scope). Use only prices that appear in the lines, copied exactly, with the exact page URL they came from. Use null when a business has no comparable item. Return JSON only: {"rows": [{"item": "short generic name, e.g. Large serving bowl", "yours": {"price": "£48", "name": "the owner's product name", "url": "page url"} or null, "theirs": [one entry per competitor, in the order given, same shape or null], "note": "optional, under 15 words"}]}. At most 10 rows, the most useful comparisons first.`,
-    messages: [{ role: 'user', content: `${profileContext(profile)}\n\nTHE OWNER'S WEBSITE\n${fmt(mine)}\n\n${comps.map((c, i) => `COMPETITOR ${i + 1}: ${c.name}\n${fmt(theirs[i])}`).join('\n\n')}` }],
+    system: `${HOUSE_STYLE}\nYou build a like-for-like price comparison for a business. You get lines of text containing prices from the owner's website and from competitors' websites and public booking pages, each with the page it came from. Pair up products or services a customer would genuinely compare (same kind of item or treatment, similar size, scope or duration). Use only prices that appear in the lines, copied exactly, with the exact page URL they came from. Use null when a business has no comparable item. Return JSON only: {"rows": [{"item": "short generic name, e.g. Large serving bowl or Lip filler 1ml", "yours": {"price": "£48", "name": "the owner's product name", "url": "page url"} or null, "theirs": [one entry per competitor, in the order given, same shape or null], "note": "optional, under 15 words"}]}. At most 10 rows, the most useful comparisons first.`,
+    messages: [{ role: 'user', content: `${profileContext(profile)}\n\nTHE OWNER'S WEBSITE\n${fmt(mine)}\n\n${comps.map((c, i) => `COMPETITOR ${i + 1}: ${c.name}\n${fmt(theirs[i])}`).join('\n\n')}`.slice(0, 60_000) }],
   });
   const raw = extractJson<any>(r.text);
   return validatePriceTable({ ...empty, rows: Array.isArray(raw?.rows) ? raw.rows : [] }, sources);
@@ -293,12 +261,42 @@ export const baseState = (site: string) => ({
   site, up: true, responseMs: 0, uptime30d: 100, sslDaysLeft: null, pagesChecked: 0, brokenLinks: [], issues: [], history: [], changes: [],
 });
 
+/** Alerts, to-dos and value entries for what the reach check found today. Only the new events. */
+async function reachAlerts(userId: string, added: ReachEvent[], comps: CompetitorsState) {
+  const important = added.filter((e) => e.kind !== 'followers').slice(0, 3);
+  for (const e of important) {
+    await addValue(userId, 'watcher', 'competitor_change', e.summary.slice(0, 200));
+    const advice = comps.advice?.lines.find((l) => l.key === e.key);
+    await addAlert(userId, 'watcher', e.kind === 'new-nearby' ? 'notice' : 'notice', e.summary.slice(0, 160), `${e.detail ? `${e.detail} ` : ''}${advice ? advice.action : 'Details are on the Competitors tab.'}`.slice(0, 500), e.url);
+  }
+  const actions: string[] = [];
+  const surge = added.find((e) => e.kind === 'reviews');
+  if (surge) actions.push(`Ask your recent customers for a Google review (${surge.competitor} is getting more than you)`);
+  const offer = added.find((e) => e.kind === 'offer' || e.kind === 'post');
+  if (offer) actions.push(`Decide how to answer ${offer.competitor}’s new offer`);
+  const nearby = added.find((e) => e.kind === 'new-nearby');
+  if (nearby) actions.push(`Look at ${nearby.competitor}, newly listed near you`);
+  await addActions(userId, 'watcher', actions);
+}
+
+/** The daily reach check, with the pieces the rest of the run needs. Never fails the run. */
+async function reachStep(userId: string, profile: any, prev: any, row: any, reviews: ReviewsState | null, opts: { manual?: boolean; findNow?: boolean }, learned: Learned | null, now: Date) {
+  try {
+    const r = await checkReach({
+      userId, profile, prev: prev?.competitors ?? null, placeId: row?.place_id ?? null, now, manual: !!opts.manual, findNow: !!opts.findNow, learned,
+      you: { rating: reviews?.rating ?? null, count: reviews?.count ?? null, history: reviews?.history ?? [] },
+    });
+    return r;
+  } catch (e: any) { console.error('[gainora] reach', e?.message); return null; }
+}
+
 /**
  * One client's Watcher run: site checks and competitor changes daily, Google reviews daily
- * (once a listing is chosen), Google's speed test and the price comparison weekly.
+ * (once a listing is chosen), the competition's listings, pages and Instagram daily (reach),
+ * Google's speed test and the price comparison weekly.
  * `only: 'reviews'` refreshes just the Google listing (used straight after the owner picks it).
  */
-export async function runWatcher(userId: string, profile: any, opts: { quiet?: boolean; only?: 'reviews'; manual?: boolean } = {}) {
+export async function runWatcher(userId: string, profile: any, opts: { quiet?: boolean; only?: 'reviews'; manual?: boolean; findNow?: boolean } = {}) {
   const site: string = profile?.business?.website || '';
   const now = new Date();
   const [row] = await db<any[]>(`watcher_state?select=state,place_id,place_name&user_id=eq.${userId}`);
@@ -307,34 +305,11 @@ export async function runWatcher(userId: string, profile: any, opts: { quiet?: b
   let reviews: ReviewsState | null = prev?.reviews ?? null;
   let fresh: ReviewItem[] = []; let unseen = 0;
   if (row?.place_id && googleConfigured()) {
-    try { const r = await checkReviews(row.place_id, row.place_name, profile, prev?.reviews, now); reviews = r.state; fresh = r.fresh; unseen = r.unseen; }
+    try { const r = await checkReviews(row.place_id, row.place_name, profile, prev?.reviews, now, opts.only === 'reviews'); reviews = r.state; fresh = r.fresh; unseen = r.unseen; }
     catch (e: any) { console.error('[gainora] reviews', e?.message); if (opts.only === 'reviews') throw e; }
   }
 
   const social = { instagram: socialUrl('instagram', profile?.business?.instagram), facebook: socialUrl('facebook', profile?.business?.facebook) };
-
-  // No website: the reviews and competitor checks still run every day.
-  if (!site && opts.only !== 'reviews') {
-    const learned = await learnedFor(userId);
-    const changes: any[] = await checkCompetitors(userId, profile, learned).catch((e) => { console.error('[gainora] competitors', e?.message); return []; });
-    const state = { ...baseState(''), ...(prev ?? {}), site: '', up: true, issues: [], brokenLinks: [], reviews, social, lastCheck: now.toISOString(), nextCheck: new Date(now.getTime() + DAY).toISOString() };
-    await upsert('watcher_state', { user_id: userId, state, updated_at: new Date().toISOString() }, 'user_id');
-    for (const c of changes.slice(0, 3)) await addAlert(userId, 'watcher', 'notice', c.summary, c.detail || `Spotted on ${c.competitor}’s website.`, c.url || undefined);
-    if (reviews) await reviewAlerts(userId, reviews, fresh, unseen);
-    const actions: string[] = [];
-    if (changes.length) actions.push(`Review what ${changes[0].competitor} changed and decide whether to respond`);
-    if (!prev && !row?.place_id && googleConfigured()) actions.push('Find your Google listing so the Watcher can track your reviews');
-    await addActions(userId, 'watcher', actions);
-    if (!opts.quiet) {
-      const newCount = fresh.length + unseen;
-      const parts = [
-        newCount ? `You have ${newCount} new Google review${newCount > 1 ? 's' : ''}${fresh.some((r) => r.rating <= 3) ? ', including one that needs a reply' : ''}.` : '',
-        changes.length ? `On the competitor side: ${changes[0].summary}` : 'No competitor changes since the last check.',
-      ];
-      await addNote(userId, 'watcher', parts.filter(Boolean).join(' '));
-    }
-    return state;
-  }
 
   if (opts.only === 'reviews') {
     const state = { ...baseState(site), ...(prev ?? {}), reviews, social };
@@ -345,8 +320,37 @@ export async function runWatcher(userId: string, profile: any, opts: { quiet?: b
   }
 
   const learned = await learnedFor(userId);
+  // The competition: who is nearby, their listings, pages, booking pages and Instagram.
+  const reach = await reachStep(userId, profile, prev, row, reviews, opts, learned, now);
+  const competitors: CompetitorsState | null = reach?.state ?? prev?.competitors ?? null;
+  if (reviews && competitors) reviews = { ...reviews, competitors: ratingsFor(competitors), competitorsCheckedAt: competitors.checkedAt };
+  const tracked = (competitors?.list ?? []).filter((c) => c.url).map((c) => ({ name: c.name, url: c.url, page: reach?.gathered.homes[c.key] }));
+  const compsForDiff = tracked.length ? tracked : undefined;
+  const changes: any[] = await checkCompetitors(userId, profile, learned, compsForDiff).catch((e) => { console.error('[gainora] competitors', e?.message); return []; });
+
+  // No website: the reviews and competitor checks still run every day.
+  if (!site) {
+    const state = { ...baseState(''), ...(prev ?? {}), site: '', up: true, issues: [], brokenLinks: [], reviews, social, competitors, lastCheck: now.toISOString(), nextCheck: new Date(now.getTime() + DAY).toISOString() };
+    await upsert('watcher_state', { user_id: userId, state, updated_at: new Date().toISOString() }, 'user_id');
+    for (const c of changes.slice(0, 3)) await addAlert(userId, 'watcher', 'notice', c.summary, c.detail || `Spotted on ${c.competitor}’s website.`, c.url || undefined);
+    if (reviews) await reviewAlerts(userId, reviews, fresh, unseen);
+    if (reach && competitors) await reachAlerts(userId, reach.added, competitors);
+    const actions: string[] = [];
+    if (changes.length) actions.push(`Review what ${changes[0].competitor} changed and decide whether to respond`);
+    if (!prev && !row?.place_id && googleConfigured()) actions.push('Find your Google listing so the Watcher can track your reviews');
+    await addActions(userId, 'watcher', actions);
+    if (!opts.quiet) {
+      const newCount = fresh.length + unseen;
+      const parts = [
+        newCount ? `You have ${newCount} new Google review${newCount > 1 ? 's' : ''}${fresh.some((r) => r.rating <= 3) ? ', including one that needs a reply' : ''}.` : '',
+        reach?.added.length ? `On the competitor side: ${reach.added[0].summary}` : changes.length ? `On the competitor side: ${changes[0].summary}` : `No competitor changes since the last check${competitors?.list.length ? ` (${competitors.list.length} watched)` : ''}.`,
+      ];
+      await addNote(userId, 'watcher', parts.filter(Boolean).join(' '));
+    }
+    return state;
+  }
+
   const check = await checkSite(site);
-  const changes: any[] = await checkCompetitors(userId, profile, learned).catch((e) => { console.error('[gainora] competitors', e?.message); return []; });
   const sp = await checkSpeed(site, prev?.speed, !!opts.manual);
 
   // Prices: weekly, and only when there are competitors with websites.
@@ -354,7 +358,7 @@ export async function runWatcher(userId: string, profile: any, opts: { quiet?: b
   let moves: PriceMove[] = [];
   if (!prices || now.getTime() - new Date(prices.checkedAt).getTime() > WEEK) {
     try {
-      const table = await buildPriceTable(userId, profile, now);
+      const table = await buildPriceTable(userId, profile, now, reach?.gathered, competitors?.list);
       if (table) {
         moves = learned.mutedChangeKinds.includes('price') ? [] : diffPriceTables(prices, table);
         prices = table;
@@ -364,6 +368,7 @@ export async function runWatcher(userId: string, profile: any, opts: { quiet?: b
   }
   const priceRows = moves
     .filter((m) => !changes.some((c) => c.competitor === m.competitor && c.kind === 'price' && String(c.summary).includes(m.to)))
+    .filter((m) => !(reach?.added ?? []).some((e) => e.kind === 'price' && e.competitor === m.competitor && e.summary.includes(m.to)))
     .slice(0, 5)
     .map((m) => {
       const cell = prices!.rows.find((r) => r.item === m.item)?.theirs[prices!.competitors.indexOf(m.competitor)];
@@ -395,7 +400,7 @@ export async function runWatcher(userId: string, profile: any, opts: { quiet?: b
     site, lastCheck: now.toISOString(), nextCheck: new Date(now.getTime() + DAY).toISOString(),
     up: check.up, responseMs: check.responseMs, uptime30d: Math.round((upCount / history.length) * 1000) / 10,
     sslDaysLeft: check.sslDaysLeft, pagesChecked: check.pagesChecked, brokenLinks: check.brokenLinks, issues, history, changes: [],
-    reviews, speed, prices, social,
+    reviews, speed, prices, social, competitors,
   };
   await upsert('watcher_state', { user_id: userId, state, updated_at: new Date().toISOString() }, 'user_id');
 
@@ -409,6 +414,7 @@ export async function runWatcher(userId: string, profile: any, opts: { quiet?: b
   if (prev) for (const id of [...prevIds].filter((x) => !nowIds.has(x))) if (FIXED_TITLE[id]) await addValue(userId, 'you', 'issue_fixed', FIXED_TITLE[id]);
   for (const c of changes.slice(0, 3)) await addAlert(userId, 'watcher', 'notice', c.summary, c.detail || `Spotted on ${c.competitor}’s website.`, c.url || undefined);
   if (reviews) await reviewAlerts(userId, reviews, fresh, unseen);
+  if (reach && competitors) await reachAlerts(userId, reach.added, competitors);
 
   let newFixes: SpeedState['fixes'] = [];
   if (sp.ran && speed) {
@@ -441,7 +447,12 @@ export async function runWatcher(userId: string, profile: any, opts: { quiet?: b
     const newCount = fresh.length + unseen;
     if (newCount) parts.push(`You have ${newCount} new Google review${newCount > 1 ? 's' : ''}${fresh.some((r) => r.rating <= 3) ? ', including one that needs a reply' : ''}.`);
     if (sp.ran && speed && newFixes.length) parts.push(`Google’s speed test scored your home page ${speed.scores.performance ?? '–'}/100 on phones; the biggest fix is to ${lower1(newFixes[0].title)}.`);
-    parts.push(changes.length ? `On the competitor side: ${changes[0].summary}` : 'No competitor changes since the last check.');
+    const reviews30 = reviewsSince(reviews?.history, 30, now);
+    const busiest = (competitors?.list ?? []).map((c) => ({ c, n: reviewsSince(c.history, 30, now) })).filter((x) => x.n != null && x.n > 0).sort((a, b) => (b.n ?? 0) - (a.n ?? 0))[0];
+    if (reach?.added.length) parts.push(`On the competitor side: ${reach.added[0].summary}`);
+    else if (changes.length) parts.push(`On the competitor side: ${changes[0].summary}`);
+    else if (busiest && reviews30 != null) parts.push(`On the competitor side, nothing new; ${busiest.c.name} picked up ${busiest.n} Google review${busiest.n === 1 ? '' : 's'} in the last 30 days to your ${reviews30}.`);
+    else parts.push(`No competitor changes since the last check${competitors?.list.length ? ` (${competitors.list.length} watched)` : ''}.`);
     await addNote(userId, 'watcher', parts.filter(Boolean).join(' '));
   }
   return state;

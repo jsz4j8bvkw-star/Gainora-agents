@@ -1,5 +1,7 @@
 // Google APIs used by The Watcher: Places API (New) for the client's public listing and reviews,
-// and PageSpeed Insights for the weekly speed test. One key (GOOGLE_API_KEY) covers both.
+// nearby competitors and their ratings, and PageSpeed Insights for the weekly speed test.
+// One key (GOOGLE_API_KEY) covers both. Every Places call asks for the smallest field mask that
+// does the job, because Google bills by the fields requested.
 import { env, HttpError, requireEnv } from './core';
 import { parsePlace, parseSearch, type PlaceSummary, type ReviewItem } from '../../shared/reviews';
 import { parsePageSpeed, type SpeedState } from '../../shared/speed';
@@ -25,11 +27,23 @@ async function places(path: string, fields: string, body?: unknown): Promise<any
   return res.json();
 }
 
-/** Text Search: listings that match a name and town, with rating and review count. */
-export async function searchPlaces(query: string, opts: { pageSize?: number; withWebsite?: boolean } = {}): Promise<PlaceSummary[]> {
-  const fields = ['places.id', 'places.displayName', 'places.formattedAddress', 'places.rating', 'places.userRatingCount', ...(opts.withWebsite ? ['places.websiteUri'] : [])].join(',');
-  const json = await places('places:searchText', fields, { textQuery: query.slice(0, 200), regionCode: 'GB', languageCode: 'en-GB', pageSize: opts.pageSize ?? 5 });
-  return parseSearch(json);
+export interface SearchOpts {
+  pageSize?: number;
+  withWebsite?: boolean;
+  withLocation?: boolean;
+  /** Prefer results near a point (a circle in metres). Used to find competitors around the client. */
+  near?: { lat: number; lng: number; radiusM: number };
+}
+
+/** Text Search: listings that match a query, with rating and review count (and website, coordinates on request). */
+export async function searchPlaces(query: string, opts: SearchOpts = {}): Promise<PlaceSummary[]> {
+  const fields = ['places.id', 'places.displayName', 'places.formattedAddress', 'places.rating', 'places.userRatingCount',
+    ...(opts.withWebsite ? ['places.websiteUri'] : []), ...(opts.withLocation ? ['places.location'] : [])].join(',');
+  const size = Math.min(20, opts.pageSize ?? 5);
+  const body: any = { textQuery: query.slice(0, 200), regionCode: 'GB', languageCode: 'en-GB', pageSize: size };
+  if (opts.near) body.locationBias = { circle: { center: { latitude: opts.near.lat, longitude: opts.near.lng }, radius: Math.min(50_000, Math.max(500, opts.near.radiusM)) } };
+  const json = await places('places:searchText', fields, body);
+  return parseSearch(json, size);
 }
 
 /** Place Details: rating, review count and the (up to five) reviews Google shares. */
@@ -38,6 +52,22 @@ export async function placeDetails(id: string, withReviews = true): Promise<{ na
   const fields = withReviews ? 'id,displayName,rating,userRatingCount,reviews' : 'id,displayName,rating,userRatingCount';
   const json = await places(`places/${id}?languageCode=en-GB&regionCode=GB`, fields);
   return { name: String(json?.displayName?.text || ''), ...parsePlace(json) };
+}
+
+/** Place Details with the smallest mask for a competitor: just the rating and review count. */
+export async function placeRating(id: string): Promise<{ rating: number | null; count: number | null }> {
+  if (!/^[\w-]{10,300}$/.test(id)) throw new HttpError(400, 'That Google listing is not valid.');
+  const json = await places(`places/${id}`, 'id,rating,userRatingCount');
+  const { rating, count } = parsePlace(json);
+  return { rating, count };
+}
+
+/** Where a listing is, for finding businesses around it. */
+export async function placeLocation(id: string): Promise<{ lat: number; lng: number } | null> {
+  if (!/^[\w-]{10,300}$/.test(id)) throw new HttpError(400, 'That Google listing is not valid.');
+  const json = await places(`places/${id}`, 'id,location');
+  const lat = json?.location?.latitude; const lng = json?.location?.longitude;
+  return typeof lat === 'number' && typeof lng === 'number' ? { lat, lng } : null;
 }
 
 /** Google's own speed and quality test, as a phone visitor would see the page. */
