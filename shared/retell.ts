@@ -156,15 +156,19 @@ export function retellSetup(s: CaptureSettings, o: RetellOptions = {}): RetellSe
     response_engine: { type: 'retell-llm', llm_id: 'FILLED_IN_AFTER_CREATING_THE_LLM' },
     voice_id: o.voiceId || 'CHOOSE_IN_DASHBOARD',
     language: 'en-GB',
+    // Sounding like a person (Retell create-agent settings, checked 8 Nov 2026). Starting points to audition, not final.
     voice_temperature: 1.1,
     voice_speed: 1,
-    responsiveness: 0.9,
-    interruption_sensitivity: 0.8,
+    enable_dynamic_voice_speed: true,       // follows the caller's pace
+    responsiveness: 0.85,                   // a beat before replying, like a person thinking
+    enable_dynamic_responsiveness: true,
+    interruption_sensitivity: 0.7,          // stops when the caller talks over her, but not at every cough
+    begin_message_delay_ms: 600,            // the half-second pause of someone picking up the phone
     enable_backchannel: true,
-    backchannel_frequency: 0.6,
-    backchannel_words: ['mm-hmm', 'yes', 'of course', 'okay'],
+    backchannel_frequency: 0.5,             // people don't "mm-hmm" at every pause
+    backchannel_words: ['mm-hmm', 'yeah', 'right', 'okay'],
     boosted_keywords: keywords,
-    ambient_sound: null,
+    ambient_sound: null,                    // try 'call-center' at volume 0.3 in the test calls; keep only if it sounds better
     end_call_after_silence_ms: 30000,
     max_call_duration_ms: 900000,
     data_storage_setting: s.calls.recording ? 'everything' : 'everything_except_pii',
@@ -172,6 +176,7 @@ export function retellSetup(s: CaptureSettings, o: RetellOptions = {}): RetellSe
     voicemail_option: null,
     ...(o.webhookUrl ? { webhook_url: o.webhookUrl, webhook_events: ['call_analyzed'] } : {}),
   };
+  todo.push('Sounding real: in the dashboard, turn on the Colloquial model, and Expressive mode with only the empathetic, happy and pause tags (Expressive mode works with Retell platform voices only, so audition 2–3 British female platform voices). Then one test call per change, keeping only what sounds better.');
   if (!o.voiceId) todo.push('Voice: a British woman’s voice. Audition the British female voices in the dashboard (the expressive, conversational ones, not the newsreader ones) with the test calls, and pick the one that sounds most like a friendly receptionist. Keep the speed at 1, or just under if she sounds rushed.');
   if (!o.webhookUrl) todo.push('Webhook: paste the enquiry link from the app’s Receptionist → Connect tab into the agent’s webhook URL, with only the call_analyzed event, so every call lands in the inbox.');
   if (!s.calls.recording) todo.push('Recording is off for this client: check the data storage setting in the dashboard matches.');

@@ -1,5 +1,6 @@
 - The clinic emergency line isn’t a real dialable number yet, so calls are not transferred: the caller is given the number instead.
 - Model: pick Retell’s recommended fast model for phone calls in the dashboard (the API value changes as Retell adds models).
+- Sounding real: in the dashboard, turn on the Colloquial model, and Expressive mode with only the empathetic, happy and pause tags (Expressive mode works with Retell platform voices only, so audition 2–3 British female platform voices). Then one test call per change, keeping only what sounds better.
 - Voice: a British woman’s voice. Audition the British female voices in the dashboard (the expressive, conversational ones, not the newsreader ones) with the test calls, and pick the one that sounds most like a friendly receptionist. Keep the speed at 1, or just under if she sounds rushed.
 - Webhook: paste the enquiry link from the app’s Receptionist → Connect tab into the agent’s webhook URL, with only the call_analyzed event, so every call lands in the inbox.
 - Phone number: buy or connect a UK number in Retell and attach this agent to it for inbound calls.

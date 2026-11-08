@@ -8,14 +8,17 @@
   "language": "en-GB",
   "voice_temperature": 1.1,
   "voice_speed": 1,
-  "responsiveness": 0.9,
-  "interruption_sensitivity": 0.8,
+  "enable_dynamic_voice_speed": true,
+  "responsiveness": 0.85,
+  "enable_dynamic_responsiveness": true,
+  "interruption_sensitivity": 0.7,
+  "begin_message_delay_ms": 600,
   "enable_backchannel": true,
-  "backchannel_frequency": 0.6,
+  "backchannel_frequency": 0.5,
   "backchannel_words": [
     "mm-hmm",
-    "yes",
-    "of course",
+    "yeah",
+    "right",
     "okay"
   ],
   "boosted_keywords": [
