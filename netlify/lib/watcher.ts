@@ -1,4 +1,5 @@
 // The Watcher: website health, Google reviews, Google's speed test, competitor changes and prices.
+import { linksTo, socialLabel, socialUrl } from '../../shared/social';
 import { connect } from 'node:tls';
 import { addActions, addAlert, addNote, addValue, db, enc, insert, learnedFor, upsert } from './core';
 import { ai, HOUSE_STYLE, extractJson, hasBanned, profileContext } from './ai';
@@ -66,6 +67,28 @@ export interface SiteCheck {
   up: boolean; responseMs: number; sslDaysLeft: number | null; pagesChecked: number;
   brokenLinks: { url: string; foundOn: string; status: number }[];
   contactProblem: string | null;
+  /** Instagram and Facebook links found on the pages checked. */
+  socialLinks: string[];
+}
+
+const SOCIAL_HREF = /href\s*=\s*["']([^"']*(?:instagram\.com|instagr\.am|facebook\.com|fb\.com|fb\.me)[^"']*)["']/gi;
+/** Every Instagram or Facebook link in the pages' HTML. */
+export function socialLinksIn(htmls: string[]): string[] {
+  const out = new Set<string>();
+  for (const h of htmls) for (const m of (h || '').matchAll(SOCIAL_HREF)) out.add(m[1].replace(/&amp;/g, '&'));
+  return [...out].slice(0, 40);
+}
+
+/** Notices about the owner's social pages that a website check can prove: the site should link to them. */
+export function socialIssues(profile: any, site: string, check: Pick<SiteCheck, 'up' | 'socialLinks'>) {
+  const out: { id: string; title: string; detail: string; level: 'notice'; link?: string }[] = [];
+  if (!site || !check.up) return out;
+  for (const [kind, name] of [['instagram', 'Instagram'], ['facebook', 'Facebook page']] as const) {
+    const url = socialUrl(kind, profile?.business?.[kind]);
+    if (!url || linksTo(kind, url, check.socialLinks)) continue;
+    out.push({ id: `social-${kind}`, level: 'notice', title: `Your website doesn’t link to your ${name}`, detail: `We couldn’t find a link to ${socialLabel(kind, url)} on your website. Add one (usually in the footer or on the contact page) so visitors can find you there.`, link: url });
+  }
+  return out;
 }
 
 /** Crawls up to `maxPages` pages of the client's own site and checks every internal link on them. */
@@ -74,7 +97,7 @@ export async function checkSite(site: string, maxPages = 25, maxLinks = 150): Pr
   const host = (() => { try { return new URL(home.finalUrl || site).hostname; } catch { return ''; } })();
   const ssl = host && site.startsWith('https') ? await sslDaysLeft(host) : null;
   if (home.status === 0 || home.status >= 500) {
-    return { up: false, responseMs: home.ms, sslDaysLeft: ssl, pagesChecked: 1, brokenLinks: [], contactProblem: null };
+    return { up: false, responseMs: home.ms, sslDaysLeft: ssl, pagesChecked: 1, brokenLinks: [], contactProblem: null, socialLinks: [] };
   }
   const homeLinks = extractLinks(home.html, home.finalUrl);
   const pages = [home.finalUrl, ...homeLinks.filter((l) => !/\.(pdf|jpe?g|png|gif|webp|zip|mp4)(\?|$)/i.test(l))].slice(0, maxPages);
@@ -101,7 +124,7 @@ export async function checkSite(site: string, maxPages = 25, maxLinks = 150): Pr
     if (contact.status >= 400 || contact.status === 0) contactProblem = `Your contact page (${new URL(contact.url).pathname}) returned an error when we loaded it, so visitors may not be able to reach you.`;
     else if (!hasWay) contactProblem = 'Your contact page has no form, email link or phone link that we could find. Visitors need an obvious way to reach you.';
   }
-  return { up: true, responseMs: home.ms, sslDaysLeft: ssl, pagesChecked: all.length, brokenLinks, contactProblem };
+  return { up: true, responseMs: home.ms, sslDaysLeft: ssl, pagesChecked: all.length, brokenLinks, contactProblem, socialLinks: socialLinksIn(all.map((p) => p.html)) };
 }
 
 interface StoredSnap { page: PageSnapshot; links: string[] }
@@ -263,6 +286,7 @@ export async function buildPriceTable(userId: string, profile: any, now = new Da
 const FIXED_TITLE: Record<string, string> = {
   down: 'Fixed: website back online', contact: 'Fixed: contact page working again', ssl: 'Fixed: security certificate renewed',
   links: 'Fixed: broken links', slow: 'Fixed: home page speed',
+  'social-instagram': 'Fixed: website now links to your Instagram', 'social-facebook': 'Fixed: website now links to your Facebook page',
 };
 
 export const baseState = (site: string) => ({
@@ -287,8 +311,33 @@ export async function runWatcher(userId: string, profile: any, opts: { quiet?: b
     catch (e: any) { console.error('[gainora] reviews', e?.message); if (opts.only === 'reviews') throw e; }
   }
 
-  if (opts.only === 'reviews' || !site) {
-    const state = { ...baseState(site), ...(prev ?? {}), reviews };
+  const social = { instagram: socialUrl('instagram', profile?.business?.instagram), facebook: socialUrl('facebook', profile?.business?.facebook) };
+
+  // No website: the reviews and competitor checks still run every day.
+  if (!site && opts.only !== 'reviews') {
+    const learned = await learnedFor(userId);
+    const changes: any[] = await checkCompetitors(userId, profile, learned).catch((e) => { console.error('[gainora] competitors', e?.message); return []; });
+    const state = { ...baseState(''), ...(prev ?? {}), site: '', up: true, issues: [], brokenLinks: [], reviews, social, lastCheck: now.toISOString(), nextCheck: new Date(now.getTime() + DAY).toISOString() };
+    await upsert('watcher_state', { user_id: userId, state, updated_at: new Date().toISOString() }, 'user_id');
+    for (const c of changes.slice(0, 3)) await addAlert(userId, 'watcher', 'notice', c.summary, c.detail || `Spotted on ${c.competitor}’s website.`, c.url || undefined);
+    if (reviews) await reviewAlerts(userId, reviews, fresh, unseen);
+    const actions: string[] = [];
+    if (changes.length) actions.push(`Review what ${changes[0].competitor} changed and decide whether to respond`);
+    if (!prev && !row?.place_id && googleConfigured()) actions.push('Find your Google listing so the Watcher can track your reviews');
+    await addActions(userId, 'watcher', actions);
+    if (!opts.quiet) {
+      const newCount = fresh.length + unseen;
+      const parts = [
+        newCount ? `You have ${newCount} new Google review${newCount > 1 ? 's' : ''}${fresh.some((r) => r.rating <= 3) ? ', including one that needs a reply' : ''}.` : '',
+        changes.length ? `On the competitor side: ${changes[0].summary}` : 'No competitor changes since the last check.',
+      ];
+      await addNote(userId, 'watcher', parts.filter(Boolean).join(' '));
+    }
+    return state;
+  }
+
+  if (opts.only === 'reviews') {
+    const state = { ...baseState(site), ...(prev ?? {}), reviews, social };
     // updated_at is left alone: it means "last full check" (used to limit manual checks).
     await upsert('watcher_state', { user_id: userId, state }, 'user_id');
     if (reviews) await reviewAlerts(userId, reviews, fresh, unseen);
@@ -335,6 +384,7 @@ export async function runWatcher(userId: string, profile: any, opts: { quiet?: b
   if (check.contactProblem) issues.push({ id: 'contact', level: 'urgent', title: 'Your contact page needs attention', detail: check.contactProblem });
   if (check.sslDaysLeft != null && check.sslDaysLeft < 30) issues.push({ id: 'ssl', level: check.sslDaysLeft < 10 ? 'urgent' : 'notice', title: `Your security certificate expires in ${check.sslDaysLeft} days`, detail: 'If it isn’t renewed, browsers will warn visitors that your site is not secure. Most hosts renew automatically; check yours is set to.' });
   if (check.brokenLinks.length) issues.push({ id: 'links', level: check.brokenLinks.length > 10 ? 'urgent' : 'notice', title: `${check.brokenLinks.length} link${check.brokenLinks.length > 1 ? 's lead' : ' leads'} to a missing page`, detail: 'Visitors who click these see an error. Update or remove them; the list is below.' });
+  issues.push(...socialIssues(profile, site, check));
   if (check.up && avg > 2500) issues.push({ id: 'slow', level: 'notice', title: 'Your home page is slow to load', detail: `It took about ${(avg / 1000).toFixed(1)} seconds on average this month. Under 2 seconds is a good target; large images are the usual cause.` });
 
   // Keep any "done" ticks the owner made while this run was working.
@@ -345,7 +395,7 @@ export async function runWatcher(userId: string, profile: any, opts: { quiet?: b
     site, lastCheck: now.toISOString(), nextCheck: new Date(now.getTime() + DAY).toISOString(),
     up: check.up, responseMs: check.responseMs, uptime30d: Math.round((upCount / history.length) * 1000) / 10,
     sslDaysLeft: check.sslDaysLeft, pagesChecked: check.pagesChecked, brokenLinks: check.brokenLinks, issues, history, changes: [],
-    reviews, speed, prices,
+    reviews, speed, prices, social,
   };
   await upsert('watcher_state', { user_id: userId, state, updated_at: new Date().toISOString() }, 'user_id');
 

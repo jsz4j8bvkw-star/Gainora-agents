@@ -6,6 +6,7 @@ import { Feedback } from '../components/feedback';
 import { hostOf, relative, shortDate } from '../lib/format';
 import { queryParam } from '../lib/router';
 import { priceValue } from '../../shared/prices';
+import { socialLabel } from '../../shared/social';
 import { scoreLabel } from '../../shared/speed';
 import type { CompetitorChange, PlaceSummary, ReviewItem, WatcherState } from '../lib/types';
 
@@ -51,10 +52,10 @@ function WatcherPage() {
       <div className="page-head">
         <div>
           <h1 className="title">The Watcher</h1>
-          <p className="lede">Keeps an eye on {hostOf(data.site || profile.business.website)}, your Google reviews and {profile.competitors.list.length} competitor{profile.competitors.list.length === 1 ? '' : 's'}, and tells you what to do about what it finds.</p>
+          <p className="lede">Keeps an eye on {(data.site || profile.business.website) ? `${hostOf(data.site || profile.business.website)}, ` : ''}your Google reviews and {profile.competitors.list.length} competitor{profile.competitors.list.length === 1 ? '' : 's'}, and tells you what to do about what it finds.</p>
         </div>
         <div className="stack gap-4" style={{ alignItems: 'flex-end' }}>
-          <Button kind="secondary" icon="refresh" busy={running} onClick={run}>{running ? 'Checking your site' : 'Check now'}</Button>
+          <Button kind="secondary" icon="refresh" busy={running} onClick={run}>{running ? (data.site ? 'Checking your site' : 'Checking') : 'Check now'}</Button>
           {data.lastCheck && <span className="xsmall faint">Last checked {relative(data.lastCheck)}</span>}
         </div>
       </div>
@@ -76,9 +77,43 @@ function WatcherPage() {
   );
 }
 
+function SocialPages({ data }: { data: WatcherState }) {
+  const pages = [
+    data.social?.instagram ? { name: 'Instagram', url: data.social.instagram, label: socialLabel('instagram', data.social.instagram) } : null,
+    data.social?.facebook ? { name: 'Facebook', url: data.social.facebook, label: socialLabel('facebook', data.social.facebook) } : null,
+  ].filter(Boolean) as { name: string; url: string; label: string }[];
+  if (!pages.length) return null;
+  return (
+    <section className="section" aria-labelledby="social-h">
+      <div className="section-head"><h2 className="heading" id="social-h">Your social pages</h2></div>
+      <div className="panel rows">
+        {pages.map((p) => (
+          <div className="issue" key={p.name}>
+            <span className="issue-mark notice"><Icon name="info" title={p.name} /></span>
+            <div className="stack gap-4">
+              <h3 className="subhead">{p.name}: {p.label}</h3>
+              <p className="muted" style={{ maxWidth: '68ch' }}>{data.site ? 'The Watcher checks that your website links here.' : 'Saved with your business details, so the Brief and Ask can refer to it.'} Reading posts and followers needs your page connected, which is coming soon.</p>
+              <a className="small mt-8" href={p.url} target="_blank" rel="noreferrer">Open the page<span className="sr-only"> (opens in a new tab)</span></a>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function Overview({ data }: { data: WatcherState }) {
   const ms = data.history.filter((h) => h.up).map((h) => h.ms);
   const avg = ms.length ? Math.round(ms.reduce((a, b) => a + b, 0) / ms.length) : null;
+  if (!data.site) return (
+    <>
+      <section className="panel empty" aria-label="Website">
+        <h3 className="heading">No website added</h3>
+        <p className="muted">That’s fine: the Watcher still tracks your Google reviews and your competitors every day. If you add a website later in Your business, it will check it every morning too.</p>
+      </section>
+      <SocialPages data={data} />
+    </>
+  );
   return (
     <>
       <section className="panel" aria-label="Website health">
@@ -139,6 +174,7 @@ function Overview({ data }: { data: WatcherState }) {
           )}
         </div>
       </section>
+      <SocialPages data={data} />
     </>
   );
 }

@@ -17,7 +17,7 @@ export interface Competitor { name: string; url: string }
 
 export interface BusinessProfile {
   business: {
-    name: string; website: string; oneLiner: string; industry: string; location: string;
+    name: string; website: string; instagram?: string; facebook?: string; oneLiner: string; industry: string; location: string;
     tradingSince: string; teamSize: string; legalForm: string; ownerName: string;
   };
   offer: { products: string; typicalPrice: string; salesChannels: string[]; bestSeller: string };
@@ -50,6 +50,7 @@ export interface HealthPoint { at: string; ms: number; up: boolean }
 
 export interface WatcherState {
   site: string;
+  social?: { instagram: string; facebook: string };
   lastCheck?: string;
   nextCheck?: string;
   up: boolean;

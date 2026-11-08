@@ -1,3 +1,4 @@
+import { socialUrl } from '../../shared/social';
 import type { BusinessProfile } from './types';
 
 export type FieldKind = 'text' | 'url' | 'email' | 'textarea' | 'select' | 'chips' | 'multi' | 'number' | 'money' | 'competitors';
@@ -38,7 +39,9 @@ export const SECTIONS: Section[] = [
     fields: [
       { path: 'business.ownerName', label: 'Your first name', kind: 'text', required: true },
       { path: 'business.name', label: 'Business name', kind: 'text', required: true },
-      { path: 'business.website', label: 'Website', kind: 'url', placeholder: 'https://', help: 'The Watcher checks this site for you.', required: true },
+      { path: 'business.website', label: 'Website', kind: 'url', placeholder: 'https://', help: 'If you have one, the Watcher checks it every morning.', optional: true },
+      { path: 'business.instagram', label: 'Instagram', kind: 'text', placeholder: '@yourbusiness', help: 'Your handle or a link to your page.', optional: true },
+      { path: 'business.facebook', label: 'Facebook page', kind: 'text', placeholder: 'facebook.com/yourbusiness', help: 'A link to your business page.', optional: true },
       { path: 'business.oneLiner', label: 'What you do, in one sentence', kind: 'textarea', placeholder: 'For example: we sell handmade homeware from Cornish makers, online and in our Falmouth shop.', required: true, wide: true },
       { path: 'business.industry', label: 'Industry', kind: 'select', options: INDUSTRIES, required: true },
       { path: 'business.location', label: 'Where you’re based', kind: 'text', placeholder: 'For example: Falmouth, Cornwall', required: true },
@@ -120,7 +123,7 @@ export const SECTIONS: Section[] = [
 
 export function emptyProfile(): BusinessProfile {
   return {
-    business: { name: '', website: '', oneLiner: '', industry: '', location: '', tradingSince: '', teamSize: '', legalForm: '', ownerName: '' },
+    business: { name: '', website: '', instagram: '', facebook: '', oneLiner: '', industry: '', location: '', tradingSince: '', teamSize: '', legalForm: '', ownerName: '' },
     offer: { products: '', typicalPrice: '', salesChannels: [], bestSeller: '' },
     customers: { ideal: '', sources: [], areas: [], repeat: '' },
     competitors: { list: [{ name: '', url: '' }], ourEdge: '', theirEdge: '' },
@@ -164,7 +167,8 @@ export function validateSection(section: Section, p: BusinessProfile): Record<st
     if (f.kind === 'competitors') {
       const list = (v as BusinessProfile['competitors']['list']).filter((c) => c.name.trim() || c.url.trim());
       if (list.length === 0) errors[f.path] = 'Add at least one competitor so The Watcher has someone to watch.';
-      else if (list.some((c) => !isValidUrl(c.url))) errors[f.path] = 'Check the competitor websites. Each one needs a full web address.';
+      else if (list.some((c) => !c.name.trim())) errors[f.path] = 'Add a name for each competitor.';
+      else if (list.some((c) => c.url.trim() && !isValidUrl(c.url))) errors[f.path] = 'Check the competitor websites: use a full web address, or leave it empty if they don’t have one.';
       continue;
     }
     const empty = Array.isArray(v) ? v.length === 0 : !String(v ?? '').trim();
@@ -173,6 +177,8 @@ export function validateSection(section: Section, p: BusinessProfile): Record<st
       continue;
     }
     if (!empty && f.kind === 'url' && !isValidUrl(String(v))) errors[f.path] = 'Enter a full web address, like yourbusiness.co.uk.';
+    if (!empty && f.path === 'business.instagram' && !socialUrl('instagram', String(v))) errors[f.path] = 'Enter your Instagram handle, like @yourbusiness, or a link to your page.';
+    if (!empty && f.path === 'business.facebook' && !socialUrl('facebook', String(v))) errors[f.path] = 'Enter a link to your Facebook page, like facebook.com/yourbusiness.';
     if (!empty && f.kind === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v))) errors[f.path] = 'Enter a valid email address.';
     if (!empty && (f.kind === 'number' || f.kind === 'money') && !/^\d+(\.\d+)?$/.test(String(v).replace(/[£,\s]/g, ''))) errors[f.path] = 'Enter a number.';
   }

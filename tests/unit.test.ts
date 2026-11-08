@@ -106,7 +106,8 @@ test('writeBrief ties its priorities to the goal and to what the other agents fo
 test('questionnaire validation catches missing and malformed answers', () => {
   const p = emptyProfile();
   const errs = validateSection(SECTIONS[0], p);
-  assert.ok(errs['business.name'] && errs['business.website'] && errs['business.teamSize']);
+  assert.ok(errs['business.name'] && errs['business.teamSize']);
+  assert.ok(!errs['business.website'], 'the website is optional');
   const ok = validateSection(SECTIONS[0], SAMPLE_PROFILE);
   assert.deepEqual(ok, {});
   const bad = validateSection(SECTIONS[0], setPath(SAMPLE_PROFILE, 'business.website', 'not a site'));

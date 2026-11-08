@@ -1,4 +1,5 @@
 // One small adapter for the AI provider, with cost tracking and a monthly cap per client.
+import { socialUrl } from '../../shared/social';
 import { db, env, HttpError, insert } from './core';
 
 /**
@@ -141,11 +142,11 @@ export function hasBanned(text: string): boolean { return BANNED.some((r) => r.t
 
 /** The business context every agent prompt starts with. */
 export function profileContext(p: any): string {
-  const comp = (p?.competitors?.list || []).map((c: any) => `${c.name} (${c.url})`).join('; ');
+  const comp = (p?.competitors?.list || []).map((c: any) => (c.url ? `${c.name} (${c.url})` : `${c.name} (no website)`)).join('; ');
   return [
     `Business: ${p.business?.name} — ${p.business?.oneLiner}`,
     `Owner: ${p.business?.ownerName}. Based in ${p.business?.location}. Industry: ${p.business?.industry}. Team: ${p.business?.teamSize}. Type: ${p.business?.legalForm}.`,
-    `Website: ${p.business?.website}`,
+    `Website: ${p.business?.website || 'none'}. Instagram: ${socialUrl('instagram', p.business?.instagram) || 'none given'}. Facebook: ${socialUrl('facebook', p.business?.facebook) || 'none given'}.`,
     `Sells: ${p.offer?.products}. Typical price: ${p.offer?.typicalPrice}. Best seller: ${p.offer?.bestSeller || 'n/a'}. Sells via: ${(p.offer?.salesChannels || []).join(', ')}.`,
     `Ideal customer: ${p.customers?.ideal}. Customers come from: ${(p.customers?.sources || []).join(', ')}. Areas: ${(p.customers?.areas || []).join(', ')}.`,
     `Competitors: ${comp || 'none given'}. Their edge: ${p.competitors?.ourEdge}. Competitors' edge: ${p.competitors?.theirEdge || 'n/a'}.`,

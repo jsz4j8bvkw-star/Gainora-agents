@@ -1,3 +1,4 @@
+import { socialUrl } from '../../shared/social';
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../lib/api';
 import type { BusinessProfile } from '../lib/types';
@@ -22,7 +23,7 @@ export function FieldInput({ f, profile, onChange, error }: { f: Q; profile: Bus
             {list.map((c, i) => (
               <div className="comp-row" key={i}>
                 <input className="input" aria-label={`Competitor ${i + 1} name`} placeholder="Name" value={c.name} onChange={(e: any) => set(i, 'name', e.target.value)} />
-                <input className="input" aria-label={`Competitor ${i + 1} website`} placeholder="Website" inputMode="url" value={c.url}
+                <input className="input" aria-label={`Competitor ${i + 1} website (optional)`} placeholder="Website (optional)" inputMode="url" value={c.url}
                   onChange={(e: any) => set(i, 'url', e.target.value)} onBlur={() => c.url && set(i, 'url', normaliseUrl(c.url))} aria-invalid={!!error} />
                 <button type="button" className="icon-btn" aria-label={`Remove competitor ${i + 1}`} disabled={list.length === 1}
                   onClick={() => onChange(f.path, list.filter((_, k) => k !== i))}><Icon name="x" /></button>
@@ -72,7 +73,7 @@ export function FieldInput({ f, profile, onChange, error }: { f: Q; profile: Bus
 }
 
 function display(v: any): string {
-  if (Array.isArray(v)) return v.length ? (typeof v[0] === 'string' ? v.join(', ') : v.filter((c: any) => c.name || c.url).map((c: any) => `${c.name} (${c.url.replace(/^https?:\/\//, '')})`).join(', ')) : '–';
+  if (Array.isArray(v)) return v.length ? (typeof v[0] === 'string' ? v.join(', ') : v.filter((c: any) => c.name || c.url).map((c: any) => (c.url ? `${c.name} (${c.url.replace(/^https?:\/\//, '')})` : c.name)).join(', ')) : '–';
   return String(v ?? '').trim() || '–';
 }
 
@@ -120,7 +121,7 @@ export function Onboarding({ initial, onDone }: { initial: BusinessProfile | nul
     const bad = SECTIONS.findIndex((s) => !sectionComplete(s, profile));
     if (bad !== -1) { setStep(bad + 1); setErrors(validateSection(SECTIONS[bad], profile)); return; }
     setFinishing(true); setFinishError(null);
-    const done = { ...profile, competitors: { ...profile.competitors, list: profile.competitors.list.filter((c) => c.name.trim() || c.url.trim()) }, completedAt: new Date().toISOString() };
+    const done = { ...profile, business: { ...profile.business, instagram: socialUrl('instagram', profile.business.instagram), facebook: socialUrl('facebook', profile.business.facebook) }, competitors: { ...profile.competitors, list: profile.competitors.list.filter((c) => c.name.trim() || c.url.trim()) }, completedAt: new Date().toISOString() };
     try { await api.saveProfile(done); onDone(done); }
     catch (e: any) { setFinishError(e?.message || 'We couldn’t save your answers. Check your connection and try again.'); setFinishing(false); }
   };
