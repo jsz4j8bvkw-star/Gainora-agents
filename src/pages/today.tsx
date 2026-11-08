@@ -64,7 +64,7 @@ export function Today() {
     : `Everything’s answered. ${data.week.afterHours ? `Your receptionist caught ${data.week.afterHours} ${data.week.afterHours === 1 ? 'enquiry' : 'enquiries'} while you were closed this week.` : 'Nice work.'}`;
   const reply = (e: EnquiryRecord) => { setIntent('reply'); navigate(`/enquiries/${e.id}`); };
   const caughtNote = data.week.afterHoursValue > 0
-    ? `${data.week.bookedValueFrom ? 'At least ' : ''}${money(data.week.afterHoursValue)} booked, by your prices`
+    ? `${data.week.bookedValueFrom ? 'At least ' : ''}${money(data.week.afterHoursValue)} booked, by your own figures`
     : data.week.afterHoursBooked ? `${data.week.afterHoursBooked} booked` : 'Calls you’d have missed';
 
   return (
@@ -130,7 +130,7 @@ export function Today() {
           <div className="stat"><span className="stat-label">Enquiries, last 7 days</span><span className="stat-value">{data.week.caught}</span><span className="stat-note">{data.week.byChannel.call} by phone{data.week.spam ? `, ${data.week.spam} spam kept out` : ''}</span></div>
           <div className="stat"><span className="stat-label">Caught while you were closed</span><span className="stat-value">{data.week.afterHours}</span><span className="stat-note">{caughtNote}</span></div>
           <div className="stat"><span className="stat-label">Waiting for a reply</span><span className="stat-value" style={{ color: data.ranked.length ? 'var(--brass)' : undefined }}>{data.ranked.filter((x) => x.e.status === 'new' || data.unread.has(x.e.id)).length}</span><span className="stat-note">{data.week.medianReplyMins != null ? `Typical reply in ${data.week.medianReplyMins < 60 ? `${data.week.medianReplyMins} min` : `${Math.round(data.week.medianReplyMins / 60)} h`}` : appts ? 'A quick text holds the booking' : 'Reply fast to win the job'}</span></div>
-          <div className="stat"><span className="stat-label">{appts ? 'Booked this month' : 'Won this month'}</span><span className="stat-value">{money(appts ? data.month.bookedValue : data.month.wonValue)}</span><span className="stat-note">{appts ? `${data.month.booked} ${data.month.booked === 1 ? 'appointment' : 'appointments'}${data.month.bookedValueFrom ? ', at least' : ''}, by your prices` : `${data.month.won} ${data.month.won === 1 ? W.job : W.jobs}`}</span></div>
+          <div className="stat"><span className="stat-label">{appts ? 'Booked this month' : 'Won this month'}</span><span className="stat-value">{money(appts ? data.month.bookedValue : data.month.wonValue)}</span><span className="stat-note">{appts ? `${data.month.booked} ${data.month.booked === 1 ? 'appointment' : 'appointments'}${data.month.bookedValueFrom ? ', at least' : ''}, by your own figures` : `${data.month.won} ${data.month.won === 1 ? W.job : W.jobs}`}</span></div>
         </div>
       </section>
 
@@ -156,7 +156,7 @@ export function Today() {
             <span className="label">Due back</span>
             <span className="goal-figure tabular">{data.back.length}<small>{data.back.length === 1 ? 'client to invite back' : 'clients to invite back'}</small></span>
             <span className="due-list">
-              {data.back.slice(0, 3).map((b) => <span key={b.enquiry.id}>{who(b.enquiry)}: {b.type}, {b.overdueDays > 0 ? `due ${b.overdueDays === 1 ? 'yesterday' : `${b.overdueDays} days ago`}` : b.overdueDays === 0 ? 'due today' : `due in ${-b.overdueDays} days`}</span>)}
+              {data.back.slice(0, 3).map((b) => <span key={b.enquiry.id}>{who(b.enquiry)}: {b.type || 'next appointment'}, {b.overdueDays > 0 ? `due ${b.overdueDays === 1 ? 'yesterday' : `${b.overdueDays} days ago`}` : b.overdueDays === 0 ? 'due today' : `due in ${-b.overdueDays} days`}</span>)}
               {data.back.length === 0 && <span>{beauty ? 'Nobody’s due yet. Set how many weeks each treatment lasts in Settings → Bookings, and clients appear here when it’s time.' : 'Nobody’s due yet. Set how many weeks between appointments in Settings → Bookings, and clients appear here when it’s time.'}</span>}
               {data.due.length > 0 && <span>{data.due.length} other {data.due.length === 1 ? 'follow-up' : 'follow-ups'} due</span>}
             </span>

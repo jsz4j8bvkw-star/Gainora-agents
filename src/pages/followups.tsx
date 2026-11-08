@@ -106,7 +106,7 @@ export function FollowUps() {
       <section className="panel" aria-label="Follow-ups at a glance">
         <div className="stats stats-3">
           {appts ? <>
-            <div className="stat"><span className="stat-label">Due back</span><span className="stat-value" style={{ color: dueBack.length ? 'var(--brass)' : undefined }}>{dueBack.length}</span><span className="stat-note">{dueBack.length ? `Worth ${backFrom ? 'at least ' : ''}${money(backValue)} by your prices` : 'Nobody due yet'}</span></div>
+            <div className="stat"><span className="stat-label">Due back</span><span className="stat-value" style={{ color: dueBack.length ? 'var(--brass)' : undefined }}>{dueBack.length}</span><span className="stat-note">{dueBack.length && backValue ? `Worth ${backFrom ? 'at least ' : ''}${money(backValue)} by your own figures` : dueBack.length ? 'Texts drafted' : 'Nobody due yet'}</span></div>
             <div className="stat"><span className="stat-label">Went quiet</span><span className="stat-value">{wentQuiet.length}</span><span className="stat-note">Asked, then nothing booked</span></div>
             <div className="stat"><span className="stat-label">Other follow-ups due</span><span className="stat-value">{due.length}</span><span className="stat-note">{owed ? `${money(owed)} waiting to be paid` : due.length ? 'Drafted and ready' : 'You’re up to date'}</span></div>
           </> : <>
@@ -127,7 +127,7 @@ export function FollowUps() {
                 <article className="follow-row" key={b.enquiry.id}>
                   <div className="stack gap-4" style={{ minWidth: 0 }}>
                     <div className="row gap-8 wrap"><Link to={`/enquiries/${b.enquiry.id}`} className="lead-name">{who(b.enquiry)}</Link><span className={`tag ${b.overdueDays > 0 ? 'tag-brass' : 'tag-plain'}`}>{b.overdueDays > 0 ? `Due ${b.overdueDays === 1 ? 'yesterday' : `${b.overdueDays} days ago`}` : b.overdueDays === 0 ? 'Due today' : `Due in ${-b.overdueDays} days`}</span>{sent && <span className="tag tag-forest"><Icon name="bolt" className="tag-ico" />Invited {relative(sent.createdAt)}</span>}</div>
-                    <span className="small">{b.type}{b.enquiry.bookedWith ? ` with ${b.enquiry.bookedWith}` : ''}, usually every {b.weeks} weeks</span>
+                    <span className="small">{b.type ? `${b.type[0].toUpperCase()}${b.type.slice(1)}` : 'Appointment'}{b.enquiry.bookedWith ? ` with ${b.enquiry.bookedWith}` : ''}, usually every {b.weeks} weeks</span>
                     <span className="small muted">Last visit {shortDate(b.enquiry.bookedFor ?? b.enquiry.receivedAt)}{b.value ? ` · ${b.value.from ? 'from ' : ''}${money(b.value.amount)}` : ''}</span>
                   </div>
                   <div className="lead-actions">

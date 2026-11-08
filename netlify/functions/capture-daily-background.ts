@@ -37,7 +37,7 @@ export default async (req: Request) => {
         const back = rebookDue(list, s, now, 0).filter((b) => b.overdueDays === 0);
         const parts = [
           unreplied.length && plural(unreplied.length, 'enquiry is waiting for a reply', 'enquiries are waiting for a reply'),
-          back.length && `${plural(back.length, 'client is', 'clients are')} due back for their next treatment (${back.slice(0, 3).map((b) => `${b.enquiry.name.split(' ')[0] || 'a client'}: ${b.type}`).join(', ')}${back.length > 3 ? '…' : ''})`,
+          back.length && `${plural(back.length, 'client is', 'clients are')} due back for their next treatment (${back.slice(0, 3).map((b) => `${b.enquiry.name.split(' ')[0] || 'a client'}${b.type ? `: ${b.type}` : ''}`).join(', ')}${back.length > 3 ? '…' : ''})`,
           quotes && plural(quotes, 'quote is ready to chase', 'quotes are ready to chase'),
           pays.length && `${plural(pays.length, 'payment reminder is', 'payment reminders are')} due (${money(pays.reduce((a, f) => a + (f.enquiry.jobValue ?? 0), 0))} outstanding)`,
           reviews && plural(reviews, `happy ${W.customer} could leave a review`, `happy ${W.customer}s could leave a review`),

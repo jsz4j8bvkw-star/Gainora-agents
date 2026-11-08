@@ -190,6 +190,7 @@ export function suggestReply(e: EnquiryRecord, s: CaptureSettings, ctx: Context 
 
 /* ---------- Clients due back ---------- */
 
+/** type: the treatment in the owner's words, or '' when the enquiry never had one recorded. */
 export interface RebookItem { enquiry: EnquiryRecord; type: string; weeks: number; dueAt: string; overdueDays: number; value: ReturnType<typeof enquiryValue> }
 
 /**
@@ -210,7 +211,7 @@ export function rebookDue(list: EnquiryRecord[], s: CaptureSettings, now = new D
     const me = normPhone(e.phone);
     const cameBack = list.some((o) => o.id !== e.id && !o.isTest && o.status !== 'spam' && ((me && normPhone(o.phone) === me) || (e.email && o.email === e.email)) && new Date(o.receivedAt) > new Date(attendedAt));
     if (cameBack) continue;
-    out.push({ enquiry: e, type: e.bookedType || topicOf(e, s) || 'their last treatment', weeks, dueAt: dueAt.toISOString(), overdueDays, value: enquiryValue(e, s) });
+    out.push({ enquiry: e, type: e.bookedType || topicOf(e, s), weeks, dueAt: dueAt.toISOString(), overdueDays, value: enquiryValue(e, s) });
   }
   return out.sort((a, b) => b.overdueDays - a.overdueDays);
 }
@@ -220,7 +221,7 @@ export function rebookText(item: RebookItem, s: CaptureSettings): string {
   const e = item.enquiry;
   const owner = clean(s.business.ownerName, 40);
   const who = e.bookedWith ? ` with ${e.bookedWith}` : '';
-  return `Hi ${first(e) || 'there'}, it's been about ${item.weeks} weeks since your ${item.type} at ${clean(s.business.name, 80)}, so you may be due your next one. Would you like me to book you in${who}? Just reply here${s.business.phone ? ` or call ${clean(s.business.phone, 30)}` : ''}. ${owner}\n\nReply STOP to stop these messages.`;
+  return `Hi ${first(e) || 'there'}, it's been about ${item.weeks} weeks since your ${item.type || 'last appointment'} at ${clean(s.business.name, 80)}, so you may be due your next one. Would you like me to book you in${who}? Just reply here${s.business.phone ? ` or call ${clean(s.business.phone, 30)}` : ''}. ${owner}\n\nReply STOP to stop these messages.`;
 }
 
 /* ---------- What the month suggests changing ---------- */

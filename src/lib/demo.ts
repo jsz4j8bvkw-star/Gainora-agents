@@ -215,6 +215,7 @@ function beautySeeds(step: Step, now: number): Seed[] {
     { name: 'Mia Lewis', phone: '07700 900427', channel: 'call', days: 31, hour: 10, summary: 'Gel nails. Booked.', then: attended(35, 'Gel nails', 'Jess') },
     { name: 'Ruby Adams', phone: '07700 900428', channel: 'call', days: 34, hour: 17, min: 30, summary: 'Laser hair removal course, booked the first session.', then: attended(90, 'Laser hair removal', 'Leah') },
     { name: 'Holly Fraser', phone: '07700 900431', channel: 'call', days: 40, hour: 11, min: 10, summary: 'HydraFacial, returning client. Booked with Leah.', then: attended(120, 'HydraFacial', 'Leah') },
+    { name: 'Hannah Price', phone: '07700 900414', channel: 'call', days: 37, hour: 12, min: 30, summary: 'HydraFacial with Leah. Booked.', then: attended(120, 'HydraFacial', 'Leah') },
   ];
 }
 

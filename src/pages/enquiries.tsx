@@ -8,7 +8,7 @@ import { Thread } from '../components/thread';
 import { CHANNEL_ICON, EnquiryRow, StatusTag, UrgencyTag, who } from '../components/enquiry';
 import { csv, money, phone, relative, shortDate } from '../lib/format';
 import {
-  CHANNEL_LABEL, enquiryValue, isBeauty, KIND_LABEL, LOST_LABEL, paymentReminder, quoteChaser, QUOTE_CHASE_DAYS, reviewRequest, statusLabel, words, type LostReason,
+  CHANNEL_LABEL, enquiryValue, isBeauty, isNoShow, KIND_LABEL, LOST_LABEL, normPhone, paymentReminder, quoteChaser, QUOTE_CHASE_DAYS, reviewRequest, statusLabel, words, type LostReason,
 } from '../../shared/capture';
 import { nextStep, priority } from '../../shared/insight';
 import type { EnquiryPatch, EnquiryRecord, NewEnquiry } from '../lib/types';
@@ -192,6 +192,12 @@ export function EnquiryDetail({ id }: { id: string }) {
   const unread = lastIn && !lastIn.read ? { body: lastIn.body, at: lastIn.createdAt } : null;
   const step = nextStep(e, settings, { unreadReply: unread, awaitingOk: messages.filter((m) => m.enquiryId === e.id && m.status === 'awaiting_approval').length });
   const value = enquiryValue(e, settings);
+  // The same person before: matched on phone or email, so the owner sees a regular as a regular.
+  const me = normPhone(e.phone);
+  const earlier = enquiries.filter((o) => o.id !== e.id && !o.isTest && o.status !== 'spam' && ((me && normPhone(o.phone) === me) || (e.email && o.email.toLowerCase() === e.email.toLowerCase()))).sort((a, b) => b.receivedAt.localeCompare(a.receivedAt));
+  const visits = earlier.filter((o) => o.status === 'won');
+  const noShows = earlier.filter((o) => o.history.some(isNoShow)).length;
+  const spent = visits.reduce((a, o) => a + (enquiryValue(o, settings)?.amount ?? 0), 0);
 
   const openReply = () => setDraft({ title: `Reply to ${who(e)}`, load: () => api.draftReply(e.id), onSent: () => update({ replied: true }, 'Marked as replied.'), sentLabel: 'I’ve replied', note: unread ? `Written from ${e.name.split(' ')[0] || 'their'}’s last message and your own details. Edit anything, then send it from your phone. Gainora never sends it for you.` : undefined });
   const openChaser = () => {
@@ -307,6 +313,23 @@ export function EnquiryDetail({ id }: { id: string }) {
               </div>
             )}
           </section>
+
+          {earlier.length > 0 && (
+            <section className="panel" aria-labelledby="hist2-h">
+              <div className="panel-head"><h2 className="subhead" id="hist2-h">{appts ? (visits.length ? `${W.customer[0].toUpperCase()}${W.customer.slice(1)} since ${new Date(earlier[earlier.length - 1].receivedAt).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}` : 'Been in touch before') : 'Been in touch before'}</h2><span className="xsmall faint">{visits.length ? `${visits.length} ${visits.length === 1 ? (appts ? 'visit' : 'job') : (appts ? 'visits' : 'jobs')}${spent ? ` · ${money(spent)}` : ''}${noShows ? ` · ${noShows} no-show${noShows === 1 ? '' : 's'}` : ''}` : `${earlier.length} earlier ${earlier.length === 1 ? 'enquiry' : 'enquiries'}`}</span></div>
+              <div className="rows">
+                {earlier.slice(0, 4).map((o) => (
+                  <Link key={o.id} to={`/enquiries/${o.id}`} className="mini-row">
+                    <span className="date-chip"><strong>{new Date(o.bookedFor ?? o.receivedAt).toLocaleDateString('en-GB', { day: 'numeric' })}</strong>{new Date(o.bookedFor ?? o.receivedAt).toLocaleDateString('en-GB', { month: 'short' })}</span>
+                    <span className="stack" style={{ minWidth: 0 }}>
+                      <span className="small" style={{ fontWeight: 600 }}>{o.bookedType || KIND_LABEL[o.kind]}{o.bookedWith ? ` with ${o.bookedWith}` : ''}</span>
+                      <span className="xsmall faint">{statusLabel(o.status, settings.business.kind)}{o.history.some(isNoShow) ? ' (no-show)' : ''}{o.jobValue ? ` · ${money(o.jobValue)}` : ''}</span>
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            </section>
+          )}
 
           {(value || e.quoteAmount != null) && (
             <section className="panel money-panel">

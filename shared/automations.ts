@@ -180,7 +180,8 @@ export function fieldsFor(e: EnquiryRecord, s: CaptureSettings, now = new Date()
     date: at ? london(at, { day: 'numeric', month: 'long' }) : '',
     time: at ? london(at, { hour: 'numeric', minute: '2-digit', hour12: true }).replace(':00', '').replace(' ', '') : '',
     when: at ? (dayKey(at) === dayKey(now.toISOString()) ? 'today' : dayKey(at) === dayKey(tomorrow) ? 'tomorrow' : `on ${london(at, { weekday: 'long', day: 'numeric', month: 'long' })}`) : '',
-    appointment: (e.bookedType || '').toLowerCase(),
+    // "initial consultation" reads naturally in a sentence; a brand name like HydraFacial keeps its capitals.
+    appointment: /[a-z][A-Z]/.test(e.bookedType || '') ? (e.bookedType || '') : (e.bookedType || '').toLowerCase(),
     who: e.bookedWith || '',
     address: s.bookings.address || '',
     arrival: s.bookings.arrival || '',
