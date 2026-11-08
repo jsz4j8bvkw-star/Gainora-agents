@@ -239,7 +239,7 @@ p { margin: 0; }
 .panel-pad { padding: 28px; }
 .panel-head { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 20px 24px; border-bottom: 1px solid var(--line); }
 .section { margin-top: 44px; }
-.section-head { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; margin-bottom: 14px; }
+.section-head { display: flex; justify-content: space-between; align-items: baseline; gap: 6px 16px; margin-bottom: 14px; flex-wrap: wrap; }
 .rows > * + * { border-top: 1px solid var(--line); }
 .empty { padding: 36px 28px; text-align: left; }
 .empty .heading { margin-bottom: 6px; }
@@ -381,11 +381,14 @@ tr:last-child td { border-bottom: 0; }
 
 /* ---------- Ask ---------- */
 .chat { display: flex; flex-direction: column; min-height: calc(100vh - 220px); }
-.chat-log { flex: 1; display: flex; flex-direction: column; gap: 22px; padding-bottom: 24px; }
+.chat-log { flex: 1; display: flex; flex-direction: column; gap: 22px; }
+.chat-end { height: 8px; }
+.msg-sources a { color: var(--gold); }
 .msg-user { align-self: flex-end; max-width: 72%; background: var(--forest); color: #fff; padding: 12px 16px; border-radius: 16px 16px 4px 16px; white-space: pre-wrap; }
 .msg-agent { max-width: 68ch; white-space: pre-wrap; }
 .msg-agent .who { font-size: var(--t-sm); font-weight: 600; color: var(--gold); margin-bottom: 4px; }
 .chat-box { position: sticky; bottom: 0; padding: 14px 0 20px; background: linear-gradient(to bottom, rgba(244,244,242,0), var(--canvas) 30%); }
+@media (max-width: 900px) { .chat-box { padding-bottom: 12px; } }
 .chat-input { display: flex; gap: 10px; align-items: flex-end; background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--r-md); padding: 8px 8px 8px 16px; box-shadow: var(--shadow-pop); }
 .chat-input textarea { flex: 1; border: 0; resize: none; min-height: 28px; max-height: 160px; padding: 8px 0; background: transparent; line-height: 1.45; }
 .chat-input textarea:focus { outline: none; }
@@ -543,7 +546,16 @@ tr:last-child td { border-bottom: 0; }
 .modal-back { position: fixed; inset: 0; background: rgba(17, 18, 20, .5); z-index: 70; display: grid; place-items: center; padding: 18px; }
 .modal { background: var(--surface); border-radius: var(--r-lg); width: 100%; max-width: 620px; max-height: 88vh; overflow: auto; box-shadow: var(--shadow-pop); }
 .modal pre { white-space: pre-wrap; font-family: var(--serif); font-size: 1.25rem; line-height: 1.5; font-weight: 500; margin: 0; padding: 24px 28px; }
-.loading { padding: 80px 0; display: grid; place-items: center; color: var(--ink-faint); }
+.modal-foot { flex-wrap: wrap; }
+@media (max-width: 640px) {
+  .modal pre { font-size: 1.125rem; padding: 20px 20px; }
+  .modal .panel-head { padding: 16px 20px; }
+  .modal-foot { justify-content: stretch !important; }
+  .modal-foot .btn { flex: 1 1 calc(50% - 8px); min-width: 0; padding: 0 12px; }
+  .modal-foot .btn-secondary:first-child:nth-last-child(n+3) { flex-basis: 100%; }
+}
+.loading { padding: 80px 0; display: grid; place-items: center; gap: 12px; color: var(--ink-faint); font-size: var(--t-sm); }
+.loading .spinner { width: 20px; height: 20px; }
 .skeleton { background: linear-gradient(90deg, #ECEBE7, #F5F4F1, #ECEBE7); background-size: 200% 100%; animation: shimmer 1.4s infinite; border-radius: var(--r-md); }
 @keyframes shimmer { to { background-position: -200% 0; } }
 .err { background: var(--danger-tint); color: var(--danger); padding: 12px 16px; border-radius: var(--r-sm); font-size: var(--t-sm); font-weight: 600; }
@@ -557,6 +569,8 @@ tr:last-child td { border-bottom: 0; }
    Version 2: tabs, feedback, value tracker, reviews, speed, prices, leads, contracts
    ========================================================================== */
 .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 28px; overflow-x: auto; scrollbar-width: none; }
+/* On narrow screens the tab row scrolls; fade the right edge so it is obvious there is more. */
+@media (max-width: 640px) { .tabs:not(.page-head .tabs) { mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent); -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent); padding-right: 36px; } }
 .tabs::-webkit-scrollbar { display: none; }
 .tab { position: relative; display: inline-flex; align-items: center; gap: 8px; min-height: 46px; padding: 0 14px; border: 0; background: none; cursor: pointer; font-weight: 600; font-size: var(--t-sm); color: var(--ink-faint); white-space: nowrap; }
 .tab:hover { color: var(--ink); }

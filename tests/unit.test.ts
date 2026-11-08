@@ -87,7 +87,7 @@ test('writeBrief ties its priorities to the goal and to what the other agents fo
   // The goal line uses the pipeline, since the goal is wholesale stockists.
   assert.ok(b.paragraphs.some((p) => /Against your goal of 6 new wholesale stockists by the end of February \(13 weeks left\), you have 1 stockist won and 2 in conversation\./.test(p)), b.paragraphs.join(' | '));
   assert.equal(b.actions.length, 3);
-  assert.match(b.actions[0], /^Your contact page needs attention: fix it first/);
+  assert.match(b.actions[0], /^Your contact page needs attention, so fix that before anything else/);
   assert.match(b.actions[1], /Follow up with The Driftwood Room/);
   assert.match(b.actions[2], /Send your introduction to The Quay Pantry and Kittiwake & Co and 1 more/);
   // Without findings, the numbers still drive sensible priorities and the contract is offered when there is one.

@@ -303,7 +303,7 @@ export async function answer(userId: string, profile: any, question: string) {
     nums.length ? block('numbers', `Recent weekly numbers: ${nums.map((n) => `${n.week_of}: ${JSON.stringify(n.values)}`).join(' | ')}`) : '',
     learned.rules.length ? block('learned', `The owner's stated preferences:\n- ${learned.rules.join('\n- ')}`) : '',
   ].filter(Boolean).join('\n\n');
-  const catalogue = sourceCatalogue({ site: day(w?.lastCheck), speed: day(w?.speed?.checkedAt), reviews: day(rv?.checkedAt), prices: day(w?.prices?.checkedAt), brief: briefs[0] ? `week of ${briefs[0].week_of}` : '' });
+  const catalogue = sourceCatalogue({ site: day(w?.lastCheck), speed: day(w?.speed?.checkedAt), reviews: day(rv?.checkedAt), prices: day(w?.prices?.checkedAt), brief: briefs[0] ? `week of ${new Date(briefs[0].week_of).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}` : '' });
 
   await insert('chat_messages', { user_id: userId, role: 'user', text: question.slice(0, 2000) });
   const msgs = history.reverse().map((m) => ({ role: m.role === 'agent' ? 'assistant' as const : 'user' as const, content: m.text }));

@@ -274,7 +274,7 @@ function Reviews({ data, setData }: { data: WatcherState; setData: (w: WatcherSt
             <a className="btn btn-secondary" href={rv.mapsUrl} target="_blank" rel="noreferrer">Open Google listing</a>
             <Button icon="copy" onClick={async () => toast((await copyText(reply.text!)) ? 'Copied. Paste it as your reply on Google.' : 'Select the text and copy it manually.')}>Copy reply</Button>
           </>}>
-          {reply.text ? <pre>{reply.text}</pre> : <Loading label="Writing your reply" />}
+          {reply.text ? <pre>{reply.text}</pre> : <Loading label={`Writing a reply to ${reply.review.author.split(' ')[0]}`} />}
           {reply.text && <p className="xsmall faint" style={{ padding: '0 28px 20px' }}>Read it through and make it sound like you. Never offer discounts in exchange for changing a review; Google doesn’t allow it.</p>}
         </Modal>
       )}

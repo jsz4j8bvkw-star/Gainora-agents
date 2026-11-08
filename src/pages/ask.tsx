@@ -15,7 +15,8 @@ export function Ask() {
   const endRef = useRef<HTMLDivElement | null>(null);
   const boxRef = useRef<HTMLTextAreaElement | null>(null);
 
-  useEffect(() => { endRef.current?.scrollIntoView({ block: 'end' }); }, [data?.length, thinking]);
+  // Scroll to the foot of the page, so the last answer sits above the input box rather than behind it.
+  useEffect(() => { if (endRef.current) window.scrollTo({ top: document.documentElement.scrollHeight }); }, [data?.length, thinking]);
   // A question typed in the search palette is sent as soon as the history has loaded.
   useEffect(() => { if (data && pending.ask) { const q = pending.ask; pending.ask = null; send(q); } }, [data !== undefined]);
 
@@ -74,7 +75,7 @@ export function Ask() {
             ))}
           {thinking && <div className="msg-agent" role="status"><div className="who">Gainora</div><div className="typing" aria-label="Writing an answer"><span /><span /><span /></div></div>}
           {sendError && <ErrorNote message={sendError} />}
-          <div ref={endRef} />
+          <div ref={endRef} className="chat-end" aria-hidden="true" />
         </div>
         <form className="chat-box" onSubmit={(e: any) => { e.preventDefault(); send(); }}>
           <div className="chat-input">

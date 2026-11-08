@@ -358,7 +358,7 @@ function demoReply(text: string, s: DemoState): ChatMessage {
     keys = ['site', 'reviews', 'leads', 'tenders'];
     reply = `Here’s where ${p.business.name} stands: one urgent website issue (the contact page), a 2-star review waiting for a reply, a follow-up due today and a public contract worth £18,000 that fits you well.\n\nAsk me about any of those, your competitors, your numbers or who to contact next.`;
   }
-  const cat = sourceCatalogue({ site: 'today', reviews: 'today', brief: `week of ${s.briefs[0]?.weekOf ?? ''}` });
+  const cat = sourceCatalogue({ site: 'today', reviews: 'today', brief: s.briefs[0] ? `week of ${new Date(s.briefs[0].weekOf).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}` : '' });
   const sources = keys.map((k) => cat.find((c) => c.key === k)!).filter(Boolean).map(({ title, url }) => ({ title, url }));
   return { id: uid('m_'), role: 'agent', text: reply, at: new Date().toISOString(), sources };
 }

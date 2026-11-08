@@ -231,7 +231,8 @@ function Research({ onLeadAdded }: { onLeadAdded: () => void }) {
 
       {intro && (
         <DraftModal title={`Introduction to ${intro.result.name}`} text={intro.text} onClose={() => setIntro(null)}
-          note="Read it through and make it sound like you before sending. Gainora never sends emails for you." />
+          note="Read it through and make it sound like you before sending. Gainora never sends emails for you. Add it to your leads and the Scout reminds you to follow up on day 4 and day 9."
+          extra={!isLocal && !intro.result.saved && <Button kind="secondary" icon="plus" busy={adding === intro.result.id} onClick={async () => { await addLead(intro.result); setIntro((x) => (x ? { ...x, result: { ...x.result, saved: true } } : x)); }}>Add to leads</Button>} />
       )}
     </>
   );

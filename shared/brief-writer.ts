@@ -105,7 +105,7 @@ export function writeBrief(changes: MetricChange[], profile: BusinessProfile, ct
   const actions: string[] = [];
   const push = (a: string) => { if (actions.length < 3 && !actions.includes(a)) actions.push(a); };
 
-  if (ctx.urgentIssue) push(`${ctx.urgentIssue.replace(/\.$/, '')}: fix it first, because enquiries and orders depend on it`);
+  if (ctx.urgentIssue) push(`${ctx.urgentIssue.replace(/\.$/, '')}, so fix that before anything else (enquiries and orders depend on it)`);
   if (ctx.dueFollowUps?.length) push(`Follow up with ${ctx.dueFollowUps.slice(0, 2).join(' and ')}${ctx.dueFollowUps.length > 2 ? ` and ${ctx.dueFollowUps.length - 2} more` : ''} (the notes are written for you in The Scout)`);
   if (wholesale) {
     if (ctx.leadsToContact?.length) push(`Send your introduction to ${ctx.leadsToContact.slice(0, 2).join(' and ')}${ctx.leadsToContact.length > 2 ? ` and ${ctx.leadsToContact.length - 2} more` : ''} this week`);

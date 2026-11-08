@@ -144,7 +144,9 @@ export function useLoad<T>(fn: () => Promise<T>, deps: any[] = []) {
 }
 
 export function Loading({ label = 'Loading' }: { label?: string }) {
-  return <div className="loading" role="status"><span className="spinner" aria-hidden="true" /><span className="sr-only">{label}</span></div>;
+  // The label is shown for anything slower than a page load (writing a draft, running a check), so people know what is happening.
+  const show = label !== 'Loading';
+  return <div className="loading" role="status"><span className="spinner" aria-hidden="true" /><span className={show ? undefined : 'sr-only'}>{show ? `${label}…` : label}</span></div>;
 }
 
 export function ErrorNote({ message, retry }: { message: string; retry?: () => void }) {
@@ -189,7 +191,7 @@ export function Modal({ title, onClose, children, footer }: { title: string; onC
       <div className="modal" role="dialog" aria-modal="true" aria-label={title} tabIndex={-1} ref={ref}>
         <div className="panel-head"><h2 className="heading">{title}</h2><button className="icon-btn" onClick={onClose} aria-label="Close"><Icon name="x" /></button></div>
         {children}
-        {footer && <div className="panel-head" style={{ borderTop: '1px solid var(--line)', borderBottom: 0, justifyContent: 'flex-end' }}>{footer}</div>}
+        {footer && <div className="panel-head modal-foot" style={{ borderTop: '1px solid var(--line)', borderBottom: 0, justifyContent: 'flex-end' }}>{footer}</div>}
       </div>
     </div>
   );
