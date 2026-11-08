@@ -188,10 +188,10 @@ function BookingCard() {
             {b.types.length > 0 && <><dt>What people can book</dt><dd>{b.types.filter((t) => t.name).map((t) => `${t.name} (${t.minutes} min${t.price ? `, ${t.price}` : ''})`).join(' · ')}</dd></>}
           </dl>
         )}
-        {paper && <p className="small muted">With a paper diary your receptionist takes the details and suggests times, and you confirm. Moving to a free online calendar such as Google Calendar lets it book people straight in.</p>}
+        {paper && <p className="small muted">With a paper diary your receptionist can’t see free times, so it takes the details and you call back to arrange it. Moving to a free online calendar such as Google Calendar lets it book people straight in.</p>}
         {status === 'connected' && <p className="small muted">Your receptionist {b.mode === 'book' ? 'books straight into' : b.mode === 'offer' ? 'offers free times from' : 'checks'} {system}. To change how it books, edit <Link to="/settings">Settings → Bookings</Link>.</p>}
-        {!paper && b.system && !direct && status !== 'connected' && <p className="small muted">We connect {system} with you on your setup call. If it can’t take bookings from outside, your receptionist offers times from your diary and you confirm with one tap.</p>}
-        {!paper && b.system && direct && status !== 'connected' && <p className="small muted">Your receptionist can book straight into {system}. You’ll sign in to {system} with us on your setup call to give permission. We never see your password.</p>}
+        {!paper && b.system && !direct && status !== 'connected' && <p className="small muted">We connect {system} with you on your setup call. Until it’s connected, your receptionist takes the details and says you’ll call back, so it never offers a time it can’t see.{b.mode !== 'callback' ? ' Your choice above takes effect the moment we mark it connected.' : ''}</p>}
+        {!paper && b.system && direct && status !== 'connected' && <p className="small muted">Your receptionist can book straight into {system}. You’ll sign in to {system} with us on your setup call to give permission. We never see your password. Until then it takes details for a call back.</p>}
         {status === 'not_connected' && b.system && <div><Button small busy={busy} onClick={request}>Ask Gainora to connect it</Button></div>}
       </div>
     </section>

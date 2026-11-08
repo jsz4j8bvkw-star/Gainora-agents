@@ -59,7 +59,7 @@ export const SETUP: SetupSection[] = [
       { path: 'bookings.systemOther', label: 'Which one?', kind: 'text', required: true, showIf: (s) => s.bookings.system === 'Something else' },
       { path: 'bookings.account', label: 'The account or calendar to book into', kind: 'text', wide: true, placeholder: 'bookings@lemonstreetphysio.co.uk', help: 'Optional. For example the Google account’s email, or your business name in Fresha, Phorest or Cliniko.', showIf: (s) => !!s.bookings.system && !/paper/i.test(s.bookings.system) },
       { path: 'bookings.mode', label: 'When someone wants to book, your receptionist should', kind: 'choice', required: true, wide: true, options: [{ value: 'book', label: 'Book them straight in' }, { value: 'offer', label: 'Offer times, I confirm' }, { value: 'callback', label: 'Take details, I call back' }] },
-      { path: 'bookings.types', label: 'What people can book', kind: 'types', wide: true, help: 'Name, length, price and who does it. Leave the price blank to keep it private.' },
+      { path: 'bookings.types', label: 'What people can book', kind: 'types', wide: true, help: 'Name, length, price and who does it. Leave the price blank to keep it private. “Due back” is how many weeks until a client usually needs this again: it times the rebook reminder and your “due back” list.' },
       { path: 'bookings.staff', label: 'Who takes bookings', kind: 'textarea', wide: true, help: 'Optional. One name per line.', placeholder: 'Sarah Bennett\nJames Hooper' },
       { path: 'bookings.address', label: 'Where appointments happen', kind: 'text', required: true, wide: true, placeholder: '12 Lemon Street, Truro TR1 2LS', showIf: isAppts },
       { path: 'bookings.arrival', label: 'What to tell people when they book', kind: 'textarea', wide: true, placeholder: 'Please wear loose clothing and arrive 5 minutes early. Free parking behind the clinic.', showIf: isAppts },
@@ -233,7 +233,7 @@ const optsOf = (f: Q, s: CaptureSettings) => (f.optionsFor ? f.optionsFor(s) : f
 
 export function display(f: Q, s: CaptureSettings): string {
   if (f.showIf && !f.showIf(s)) return '';
-  if (f.kind === 'types') return s.bookings.types.filter((t) => t.name.trim()).map((t) => `${t.name} (${t.minutes} min${t.price ? `, ${t.price}` : ''})`).join(' · ') || '–';
+  if (f.kind === 'types') return s.bookings.types.filter((t) => t.name.trim()).map((t) => `${t.name} (${t.minutes} min${t.price ? `, ${t.price}` : ''}${t.rebookWeeks ? `, due back ${t.rebookWeeks} wks` : ''})`).join(' · ') || '–';
   if (f.kind === 'greeting') return `“${greetingFor(s)}”`;
   if (f.kind === 'days' || f.kind === 'hours') return f.kind === 'hours' ? hoursText(s.calls) : s.calls.days.map((d) => DAYS[d - 1]).join(', ');
   const v = getPath(s, f.path);
@@ -249,7 +249,7 @@ function TypesField({ f, s, onChange, error }: { f: Q; s: CaptureSettings; onCha
     <Field label={f.label} help={f.help} error={error} as="group" className="wide">
       {() => (
         <div className="types">
-          {rows.length > 0 && <div className="types-head xsmall faint" aria-hidden="true"><span>What</span><span>Length</span><span>Price</span><span>Who</span><span /></div>}
+          {rows.length > 0 && <div className="types-head xsmall faint" aria-hidden="true"><span>What</span><span>Length</span><span>Price</span><span>Who</span><span>Due back</span><span /></div>}
           {rows.map((r, i) => (
             <div className="types-row" key={i}>
               <input className="input" aria-label={`Name of booking type ${i + 1}`} value={r.name} placeholder="Initial consultation" onChange={(e: any) => set(i, 'name', e.target.value)} />
@@ -258,6 +258,10 @@ function TypesField({ f, s, onChange, error }: { f: Q; s: CaptureSettings; onCha
               </select>
               <input className="input" aria-label={`Price of ${r.name || 'this booking'}`} value={r.price} placeholder="£65" onChange={(e: any) => set(i, 'price', e.target.value)} />
               <input className="input" aria-label={`Who does ${r.name || 'this booking'}`} value={r.who} placeholder="Any physio" onChange={(e: any) => set(i, 'who', e.target.value)} />
+              <select className="select" aria-label={`Weeks until ${r.name || 'this booking'} is due again`} value={r.rebookWeeks ?? 0} onChange={(e: any) => onChange('bookings.types', rows.map((x, j) => (j === i ? { ...x, rebookWeeks: Number(e.target.value) || undefined } : x)))}>
+                <option value={0}>Not set</option>
+                {[2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 26, 52].map((w) => <option key={w} value={w}>{w} wks</option>)}
+              </select>
               <button type="button" className="icon-btn" aria-label={`Remove ${r.name || 'this row'}`} onClick={() => onChange('bookings.types', rows.filter((_, j) => j !== i))}><Icon name="x" /></button>
             </div>
           ))}

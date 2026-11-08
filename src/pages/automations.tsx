@@ -70,7 +70,7 @@ function Messages() {
           <div className="stack gap-4">
             <strong>{texting.status === 'on' ? `Texts send from ${fmtPhone(texting.number)}` : 'Texting isn’t switched on yet'}</strong>
             <span className="small muted">{texting.status === 'on'
-              ? 'Customers can reply to any text. Replies land on their enquiry and pause any chasers.'
+              ? `${settings.business.kind === 'appointments' ? 'Clients' : 'Customers'} can reply to any text. Replies land on their enquiry and pause any chasers.`
               : 'Gainora sets up your texting number on your setup call. Until then, messages go by email where the customer gave one.'}</span>
           </div>
         </div>
@@ -78,10 +78,10 @@ function Messages() {
           <summary className="small">Rules that always apply</summary>
           <ul className="small muted">
             <li>Nothing between 8pm and 8am, except an instant reply to something the customer has just done.</li>
-            <li>Chasers, payment reminders and review requests stop as soon as the customer replies.</li>
+            <li>Chasers, payment reminders, review requests and rebook reminders stop as soon as the {settings.business.kind === 'appointments' ? 'client' : 'customer'} replies.</li>
             <li>Anyone who replies STOP gets no more texts.</li>
-            <li>No more than {WEEKLY_CAP} automatic messages to one customer in a week, not counting booking confirmations and reminders.</li>
-            <li>Review requests always end with an opt-out line.</li>
+            <li>No more than {WEEKLY_CAP} automatic messages to one {settings.business.kind === 'appointments' ? 'client' : 'customer'} in a week, not counting booking confirmations and reminders.</li>
+            <li>Review requests and rebook reminders always end with an opt-out line.</li>
             <li>Turning a message on doesn’t send it to people from before: it starts from now.</li>
           </ul>
         </details>

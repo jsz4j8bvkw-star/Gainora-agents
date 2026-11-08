@@ -125,7 +125,7 @@ export const WORKFLOWS: WorkflowDef[] = [
   },
   {
     id: 'rebook', title: () => 'Inviting them back', only: 'appointments',
-    blurb: () => 'A friendly nudge when it’s time for their next appointment. Never sent if they’ve already booked again, and it stops if they reply.',
+    blurb: () => 'A friendly nudge when it’s time for their next appointment: at the “due back” interval set for each treatment, or the timing below if none is set. Never sent if they’ve already booked again, and it stops if they reply.',
     defaultOn: () => true,
     steps: [{
       id: 'rebook', title: 'Time to rebook', waits: weeks(4, 6, 8, 12, 16), defaultWait: 42, marketing: true,
