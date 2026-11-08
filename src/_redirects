@@ -1,1 +1,9 @@
-/products/  /shop/  301
+# Honoured by Netlify drag-and-drop deploys of dist/. Mirrors netlify.toml.
+/diagnosis/          /audit/               301
+/contact/            /book/                301
+/solutions/*         /packages/            301
+/custom-solutions/   /packages/#partner    301
+/shop/*              /packages/            301
+/products/*          /packages/            301
+/ai-training/        /packages/            301
+/download/*          /packages/            301

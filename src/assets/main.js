@@ -30,36 +30,15 @@
     });
   }
 
-  /* ---------- Pre-select problem type from ?type= ---------- */
-  var params = new URLSearchParams(window.location.search);
-  var preset = params.get("type");
-  var typeSelect = document.getElementById("enq-type");
-  if (preset && typeSelect) {
-    for (var i = 0; i < typeSelect.options.length; i++) {
-      if (typeSelect.options[i].value === preset) { typeSelect.selectedIndex = i; break; }
-    }
-  }
-
-  /* ---------- Shop: pre-select the item from ?item= and from sign-up buttons ---------- */
-  var joinSelect = document.getElementById("join-item");
-  function selectItem(id) {
-    if (!joinSelect || !id) return;
-    for (var j = 0; j < joinSelect.options.length; j++) {
-      if (joinSelect.options[j].value === id) { joinSelect.selectedIndex = j; break; }
-    }
-  }
-  selectItem(params.get("item"));
-  if (joinSelect) {
-    Array.prototype.forEach.call(document.querySelectorAll("a[data-item]"), function (a) {
-      a.addEventListener("click", function (e) {
-        e.preventDefault();
-        selectItem(a.getAttribute("data-item"));
-        var target = document.getElementById("join");
-        if (target) target.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
-        var name = document.getElementById("join-name");
-        if (name) setTimeout(function () { name.focus({ preventScroll: true }); }, 400);
-      });
-    });
+  /* ---------- Reveal on scroll (headings' accent lines, counted figures) ---------- */
+  var reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var revealables = document.querySelectorAll(".pkg-card, .stage, .principles-numbered li, .calc-card");
+  if (revealables.length && "IntersectionObserver" in window && !reduceMotion) {
+    document.documentElement.classList.add("has-reveal");
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) { if (en.isIntersecting) { en.target.classList.add("is-in"); io.unobserve(en.target); } });
+    }, { rootMargin: "0px 0px -10% 0px" });
+    Array.prototype.forEach.call(revealables, function (el) { io.observe(el); });
   }
 
   /* ---------- Forms ---------- */
@@ -142,14 +121,10 @@
     box.className = "form-success";
     box.setAttribute("role", "status");
     box.setAttribute("tabindex", "-1");
-    var isEnquiry = form.getAttribute("name") === "enquiry";
-    var chosen = form.querySelector("#join-item");
-    var chosenName = chosen && chosen.selectedIndex > 0 ? chosen.options[chosen.selectedIndex].text.replace(/\s*\([^)]*\)$/, "") : "";
     box.innerHTML =
-      "<h2>" + (isEnquiry ? "Thank you. Your enquiry has been sent." : "Thank you. You're on the list" + (chosenName ? " for " + escapeText(chosenName) : "") + ".") + "</h2>" +
-      "<p>" + (isEnquiry
-        ? "We'll reply " + escapeText(responseTime || "as soon as we can") + "."
-        : "We'll email you the details and the price before asking you to pay anything. You can ask us to remove your details at any time.") + "</p>";
+      "<h2>Thank you. We've got your details.</h2>" +
+      "<p>If you've booked a time, your calendar invitation is on its way and we'll have read this before the call. If you haven't picked a time yet, we'll reply " + escapeText(responseTime || "as soon as we can") + " with a few to choose from.</p>" +
+      '<p><a class="text-link" href="/calculator/">Try the business improvement calculator while you wait</a></p>';
     form.replaceWith(box);
     box.focus();
   }

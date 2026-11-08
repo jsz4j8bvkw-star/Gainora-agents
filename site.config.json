@@ -1,8 +1,8 @@
 {
- "_readme": "Edit this file to change the brand name, prices, contact details and form handling. Then run: node build.js",
+ "_readme": "Edit this file to change the brand, prices, contact details, booking link and form handling. Then run: node build.js && node tests/check.js. Prices here are the only place prices live: every page reads them from here.",
  "brand": {
   "name": "Gainora",
-  "tagline": "Find what's not working. Know what to do next.",
+  "tagline": "More enquiries. None of them lost. A business that runs without you doing everything.",
   "legalName": "",
   "address": "",
   "companyNumber": ""
@@ -15,16 +15,56 @@
  "contact": {
   "email": "hello@gainora.co.uk",
   "phone": "",
-  "responseTime": "within two working days",
-  "bookingUrl": ""
+  "responseTime": "within one working day",
+  "bookingUrl": "https://calendar.app.google/2nHffNt7oNxPXnB29",
+  "bookingEmbedUrl": "https://calendar.google.com/calendar/appointments/schedules/AcZssZ15t20S0p9NbY7CQoTA_A_6jKbi8opDX_1TwSL5hXfIm2JyW8mytuR1top1YQ-Tm6sgnwfDNEyc?gv=true"
+ },
+ "demo": {
+  "_readme": "The 'Ring our receptionist' block stays hidden until both a phone number and a recording are set.",
+  "phone": "",
+  "phoneHref": "",
+  "recordingUrl": ""
+ },
+ "founding": {
+  "_readme": "Set show to true to display the founding offers on the site. Off by default: mention them on calls.",
+  "show": false
  },
  "prices": {
-  "diagnosis": "£495",
-  "website": "£1,500",
-  "automation": "£950",
-  "support": "£750"
+  "_readme": "All prices ex-VAT. Keep them in step with the Gainora Offer Brief.",
+  "audit": "£495",
+  "auditCreditDays": "30",
+  "commandCentre": "£299",
+  "launchGrow": {
+   "setup": "£1,995",
+   "monthly": "£595",
+   "foundingSetup": "£1,495",
+   "minimumMonths": "3"
+  },
+  "bundle": {
+   "setup": "£2,295",
+   "monthly": "£795",
+   "separateSetup": "£2,590",
+   "separateMonthly": "£844"
+  },
+  "cc": {
+   "never": { "name": "Never Miss a Call", "setup": "£595", "monthly": "£249", "minutes": "300" },
+   "booking": { "name": "Call to Booking", "setup": "£995", "monthly": "£399", "minutes": "600" },
+   "desk": { "name": "Full Front Desk", "setup": "£1,995", "monthly": "£599", "minutes": "1,200" },
+   "extraMinutes": "£25 per 100 extra minutes",
+   "minimumMonths": "3",
+   "founding": { "setup": "£495", "monthly": "£299", "months": "12", "clients": "3" }
+  },
+  "partner": {
+   "audit": "£495",
+   "focused": "£4,950",
+   "core": "£7,500",
+   "whole": "£12,500",
+   "monthly": "£950",
+   "minimumMonths": "3"
+  }
  },
  "forms": {
+  "_readme": "netlify: forms post to Netlify Forms and arrive by email. Later, the owner can also forward each submission to the Capture & Convert inbox from the Netlify dashboard (Forms → notifications → outgoing webhook).",
   "provider": "netlify",
   "endpoint": ""
  },
@@ -35,163 +75,5 @@
  },
  "legal": {
   "lastUpdated": ""
- },
- "shop": {
-  "_readme": "Each item has a status. 'available' or 'preorder' shows a payment button and needs checkoutUrl (your Stripe payment link). 'pilot', 'early-access' and 'waitlist' show a free sign-up button and charge nothing. Set 'featured': true to show an item on the homepage.",
-  "preorderPolicy": "Delivered by the date shown. Full refund if we don't deliver.",
-  "items": [
-   {
-    "id": "ai-course",
-    "category": "course",
-    "featured": true,
-    "name": "AI for Business: put AI to work",
-    "tagline": "A practical course for owners and teams who want to use AI productively and safely.",
-    "price": "£49",
-    "billing": "pilot price",
-    "priceNote": "£99 when the full course launches",
-    "features": [
-     "10 practical modules, about 7 hours",
-     "21 ready-to-use templates and prompts",
-     "Safe use of business information",
-     "Your own 90-day AI improvement plan"
-    ],
-    "status": "available",
-    "buttonLabel": "Buy the course",
-    "checkoutUrl": "https://buy.stripe.com/14A5kD2vO6M5aaZ60s8ww09",
-    "deliveryNote": "",
-    "detailUrl": "/ai-training/"
-   },
-   {
-    "id": "agent-brief",
-    "category": "agents",
-    "featured": true,
-    "name": "The Brief",
-    "tagline": "A plain-English weekly summary of what changed in your business and what's worth a look.",
-    "price": "£99",
-    "billing": "/month",
-    "priceNote": "Founding price. Cancel any time.",
-    "features": [
-     "Weekly summary by email",
-     "What changed, and why it might matter",
-     "Flags anything unusual to check",
-     "Works with the tools you already use"
-    ],
-    "status": "available",
-    "buttonLabel": "Subscribe",
-    "checkoutUrl": "https://buy.stripe.com/00w14n4DW2vPerf2Og8ww04",
-    "deliveryNote": "",
-    "detailUrl": ""
-   },
-   {
-    "id": "agent-watcher",
-    "category": "agents",
-    "featured": false,
-    "name": "The Watcher",
-    "tagline": "Keeps an eye on your competitors' prices, offers and launches so you don't have to.",
-    "price": "£99",
-    "billing": "/month",
-    "priceNote": "Founding price. Cancel any time.",
-    "features": [
-     "Track the competitors you choose",
-     "Alerts when prices or offers change",
-     "Monthly competitor summary",
-     "Links to every change it reports"
-    ],
-    "status": "available",
-    "buttonLabel": "Subscribe",
-    "checkoutUrl": "https://buy.stripe.com/aFadR98Uc5I10Ap3Sk8ww05",
-    "deliveryNote": "",
-    "detailUrl": ""
-   },
-   {
-    "id": "agent-scout",
-    "category": "agents",
-    "featured": true,
-    "name": "The Scout",
-    "tagline": "Business research on demand, with every finding linked to a source you can check.",
-    "price": "£199",
-    "billing": "/month",
-    "priceNote": "Founding price. Cancel any time.",
-    "features": [
-     "Market and competitor research",
-     "Every claim linked to its source",
-     "Opportunity briefs you can act on",
-     "Research briefs delivered to your inbox"
-    ],
-    "status": "available",
-    "buttonLabel": "Subscribe",
-    "checkoutUrl": "https://buy.stripe.com/6oUeVddasc6p3MB4Wo8ww08",
-    "deliveryNote": "",
-    "detailUrl": ""
-   },
-   {
-    "id": "lead-follow-up",
-    "category": "products",
-    "featured": true,
-    "name": "Lead follow-up system",
-    "tagline": "Stop losing enquiries: track every lead and know who needs a reply today.",
-    "price": "£49",
-    "billing": "one-off",
-    "priceNote": "",
-    "features": [
-     "Lead tracker with enquiry status",
-     "Follow-up schedule and reminders",
-     "Message templates",
-     "Setup guide"
-    ],
-    "status": "available",
-    "buttonLabel": "",
-    "checkoutUrl": "https://buy.stripe.com/dRm9ATc6o6M5fvj0G88ww00",
-    "deliveryNote": "",
-    "detailUrl": ""
-   },
-   {
-    "id": "performance-dashboard",
-    "category": "products",
-    "featured": false,
-    "name": "Business performance dashboard",
-    "tagline": "A clear monthly view of revenue, costs, leads and the numbers that matter.",
-    "price": "£39",
-    "billing": "one-off",
-    "priceNote": "",
-    "features": [
-     "Revenue and expense tracking",
-     "Key performance indicators",
-     "Month-on-month comparison",
-     "Simple visual reporting"
-    ],
-    "status": "available",
-    "buttonLabel": "",
-    "checkoutUrl": "https://buy.stripe.com/aFa5kDgmE0nHgznfB28ww01",
-    "deliveryNote": "",
-    "detailUrl": ""
-   },
-   {
-    "id": "website-toolkit",
-    "category": "products",
-    "featured": false,
-    "name": "Website improvement toolkit",
-    "tagline": "Review your own website like a professional and plan the fixes that matter.",
-    "price": "£29",
-    "billing": "one-off",
-    "priceNote": "",
-    "features": [
-     "Website review checklist",
-     "Usability and customer journey checks",
-     "Priority scoring",
-     "Fix planning worksheets"
-    ],
-    "status": "available",
-    "buttonLabel": "",
-    "checkoutUrl": "https://buy.stripe.com/9B69AT0nG5I1erfgF68ww02",
-    "deliveryNote": "",
-    "detailUrl": ""
-   }
-  ]
- },
- "payments": {
-  "diagnosis": "https://buy.stripe.com/3cIbJ17Q8eex2Ix74w8ww03",
-  "support": "https://buy.stripe.com/4gMeVdfiA4DX5UJewY8ww07",
-  "course": "https://buy.stripe.com/14A5kD2vO6M5aaZ60s8ww09"
  }
 }
