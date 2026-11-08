@@ -3,13 +3,14 @@ import { useApp } from '../app';
 import { api } from '../lib/api';
 import { Button, ErrorNote, Loading } from '../components/ui';
 import { money } from '../lib/format';
-import { CHANNEL_LABEL, replyTime, report } from '../../shared/capture';
+import { CHANNEL_LABEL, replyTime, report, words } from '../../shared/capture';
 import type { Channel } from '../lib/types';
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 export function ReportPage() {
   const { enquiries, enquiriesError, reloadEnquiries, settings } = useApp();
+  const W = words(settings.business.kind);
   // Early in the month, open on last month: that's the one worth reading.
   const [back, setBack] = useState(() => (new Date().getDate() <= 10 ? 1 : 0));   // 0 = this month, 1 = last month…
   const range = useMemo(() => {
@@ -30,7 +31,7 @@ export function ReportPage() {
     { label: 'Enquiries caught', n: r.caught },
     { label: 'Replied to', n: r.replied },
     { label: 'Quoted or booked', n: (enquiries ?? []).filter((e) => !e.isTest && e.status !== 'spam' && new Date(e.receivedAt) >= range.from && new Date(e.receivedAt) < range.to && (e.quotedAt || e.bookedFor || e.status === 'won')).length },
-    { label: 'Jobs won', n: r.won },
+    { label: settings.business.kind === 'appointments' ? 'Attended' : 'Jobs won', n: r.won },
   ];
   const channels = (Object.keys(r.byChannel) as Channel[]).filter((c) => r.byChannel[c] > 0);
 
@@ -53,7 +54,7 @@ export function ReportPage() {
       <section className="panel letter report-letter">
         <p className="voice">{r.caught === 0
           ? `No enquiries ${back === 0 ? 'yet this month' : `in ${range.name}`}. Once your line is live, every call, form and email is counted here.`
-          : `${back === 0 ? 'So far this month' : `In ${range.name}`} your receptionist and inbox caught ${plural(r.caught, 'enquiry', 'enquiries')}${r.afterHours ? `, ${r.afterHours} of them while you were closed` : ''}. ${r.won ? `You won ${plural(r.won, 'job', 'jobs')}${r.wonValue ? ` worth ${money(r.wonValue)}` : ''}${outOfHoursWins.length ? `, including ${plural(outOfHoursWins.length, 'job', 'jobs')}${ohValue ? ` (${money(ohValue)})` : ''} that came in out of hours` : ''}.` : 'No jobs marked as won yet.'}`}</p>
+          : `${back === 0 ? 'So far this month' : `In ${range.name}`} your receptionist and inbox caught ${plural(r.caught, 'enquiry', 'enquiries')}${r.afterHours ? `, ${r.afterHours} of them while you were closed` : ''}. ${r.won ? `${settings.business.kind === 'appointments' ? `${plural(r.won, 'appointment was', 'appointments were')} attended` : `You won ${plural(r.won, 'job', 'jobs')}`}${r.wonValue ? ` worth ${money(r.wonValue)}` : ''}${outOfHoursWins.length ? `, including ${plural(outOfHoursWins.length, W.job, W.jobs)}${ohValue ? ` (${money(ohValue)})` : ''} that came in out of hours` : ''}.` : `No ${W.jobs} marked as ${settings.business.kind === 'appointments' ? 'attended' : 'won'} yet.`}`}</p>
       </section>
 
       <section className="panel section" aria-label="Enquiries">
@@ -65,7 +66,7 @@ export function ReportPage() {
         </div>
         <div className="stats" style={{ borderTop: '1px solid var(--line)' }}>
           <div className="stat"><span className="stat-label">Quotes sent</span><span className="stat-value">{r.quotes}</span><span className="stat-note">{r.quotedValue ? `Worth ${money(r.quotedValue)}` : '–'}</span></div>
-          <div className="stat"><span className="stat-label">Jobs won</span><span className="stat-value">{money(r.wonValue)}</span><span className="stat-note">{plural(r.won, 'job', 'jobs')}{r.caught ? `, ${Math.round((r.won / r.caught) * 100)}% of enquiries` : ''}</span></div>
+          <div className="stat"><span className="stat-label">{settings.business.kind === 'appointments' ? 'Appointments attended' : 'Jobs won'}</span><span className="stat-value">{money(r.wonValue)}</span><span className="stat-note">{plural(r.won, W.job, W.jobs)}{r.caught ? `, ${Math.round((r.won / r.caught) * 100)}% of enquiries` : ''}</span></div>
           <div className="stat"><span className="stat-label">Paid</span><span className="stat-value">{money(r.paidValue)}</span><span className="stat-note">From jobs won this month</span></div>
           <div className="stat"><span className="stat-label">Still owed</span><span className="stat-value" style={{ color: r.outstanding ? 'var(--brass)' : undefined }}>{money(r.outstanding)}</span><span className="stat-note">Reminders drafted in Follow-ups</span></div>
         </div>
@@ -107,7 +108,7 @@ export function ReportPage() {
         </section>
       </div>
 
-      <p className="xsmall faint section">Counts come from your inbox. Job values and payments are the figures you entered. Test enquiries and spam are left out.</p>
+      <p className="xsmall faint section">Counts come from your inbox. Values and payments are the figures you entered. Test enquiries and spam are left out.</p>
     </div>
   );
 }

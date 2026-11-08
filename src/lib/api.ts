@@ -7,7 +7,8 @@ declare const __DEMO__: boolean;
 export interface Api {
   mode: 'demo' | 'live';
   getUser(): Promise<User | null>;
-  requestSignIn(email: string): Promise<void>;
+  /** In the demo, which sample business to open: a plumber or a physio clinic. */
+  requestSignIn(email: string, sample?: 'trade' | 'clinic'): Promise<void>;
   signOut(): Promise<void>;
 
   getPlan(): Promise<Plan>;

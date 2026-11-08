@@ -7,7 +7,7 @@ import { Compose } from '../components/compose';
 import { CHANNEL_ICON, EnquiryRow, StatusTag, UrgencyTag, who } from '../components/enquiry';
 import { csv, money, phone, relative, shortDate } from '../lib/format';
 import {
-  CHANNEL_LABEL, KIND_LABEL, paymentReminder, quoteChaser, QUOTE_CHASE_DAYS, reviewRequest, STATUS_LABEL,
+  CHANNEL_LABEL, KIND_LABEL, paymentReminder, quoteChaser, QUOTE_CHASE_DAYS, reviewRequest, statusLabel, words,
 } from '../../shared/capture';
 import type { EnquiryPatch, EnquiryRecord, NewEnquiry } from '../lib/types';
 
@@ -31,7 +31,8 @@ const dayLabel = (iso: string) => {
 /* ---------- The inbox ---------- */
 
 export function Enquiries({ adding = false }: { adding?: boolean }) {
-  const { enquiries, enquiriesError, reloadEnquiries } = useApp();
+  const { enquiries, enquiriesError, reloadEnquiries, settings } = useApp();
+  const W = words(settings.business.kind);
   const [filter, setFilter] = useState<Filter>(() => (enquiries ?? []).some((e) => e.status === 'new') ? 'new' : 'all');
   const [q, setQ] = useState('');
   const [add, setAdd] = useState(adding);
@@ -54,7 +55,7 @@ export function Enquiries({ adding = false }: { adding?: boolean }) {
   const exportCsv = () => {
     if (api.mode === 'demo') { toast('In your app this downloads a file. Downloads are switched off in the demo.'); return; }
     const rows: (string | number)[][] = [['Received', 'Channel', 'Name', 'Phone', 'Email', 'Postcode', 'Type', 'Urgency', 'Out of hours', 'Status', 'Quote', 'Job value', 'Paid', 'Summary']];
-    for (const e of enquiries) rows.push([new Date(e.receivedAt).toLocaleString('en-GB'), CHANNEL_LABEL[e.channel], e.name, e.phone, e.email, e.postcode, KIND_LABEL[e.kind], e.urgency, e.afterHours ? 'Yes' : 'No', STATUS_LABEL[e.status], e.quoteAmount ?? '', e.jobValue ?? '', e.paidAt ? 'Yes' : '', e.summary]);
+    for (const e of enquiries) rows.push([new Date(e.receivedAt).toLocaleString('en-GB'), CHANNEL_LABEL[e.channel], e.name, e.phone, e.email, e.postcode, KIND_LABEL[e.kind], e.urgency, e.afterHours ? 'Yes' : 'No', statusLabel(e.status, settings.business.kind), e.quoteAmount ?? '', e.jobValue ?? '', e.paidAt ? 'Yes' : '', e.summary]);
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([csv(rows)], { type: 'text/csv' })); a.download = 'enquiries.csv'; a.click(); URL.revokeObjectURL(a.href);
   };
@@ -76,7 +77,7 @@ export function Enquiries({ adding = false }: { adding?: boolean }) {
         <Tabs label="Show" value={filter} onChange={setFilter} tabs={[
           { id: 'new', label: 'Needs a reply', badge: counts.new || null },
           { id: 'progress', label: 'In progress', badge: counts.progress || null },
-          { id: 'won', label: 'Won' },
+          { id: 'won', label: W.wonTab },
           { id: 'closed', label: 'Didn’t go ahead' },
           { id: 'spam', label: 'Spam', badge: counts.spam || null },
           { id: 'all', label: 'All' },
@@ -144,6 +145,8 @@ type Draft = null | { title: string; load: () => Promise<string> | string; onSen
 
 export function EnquiryDetail({ id }: { id: string }) {
   const { enquiries, settings, putEnquiry, dropEnquiry } = useApp();
+  const W = words(settings.business.kind);
+  const appts = settings.business.kind === 'appointments';
   const [ask, setAsk] = useState<Ask>(null);
   const [draft, setDraft] = useState<Draft>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -232,7 +235,7 @@ export function EnquiryDetail({ id }: { id: string }) {
             <div className="panel-head"><h2 className="subhead" id="notes-h">Your notes</h2>{notes != null && notes !== e.notes && <Button small busy={busy === 'notes'} onClick={() => update({ notes }, 'Notes saved.', 'notes').then(() => setNotes(null)).catch(() => {})}>Save notes</Button>}</div>
             <div style={{ padding: '16px 22px 20px' }}>
               <label className="sr-only" htmlFor="notes">Notes</label>
-              <textarea id="notes" className="textarea" placeholder="Access, parking, what you found, parts to order…" value={notes ?? e.notes} onChange={(ev: any) => setNotes(ev.target.value)} />
+              <textarea id="notes" className="textarea" placeholder={appts ? 'Anything the team should know before the appointment…' : 'Access, parking, what you found, parts to order…'} value={notes ?? e.notes} onChange={(ev: any) => setNotes(ev.target.value)} />
             </div>
           </section>
 
@@ -262,7 +265,7 @@ export function EnquiryDetail({ id }: { id: string }) {
             </>}
             {e.status === 'booked' && <p className="next-line">{e.bookedFor ? `Booked for ${new Date(e.bookedFor).toLocaleString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', hour: 'numeric', minute: '2-digit' })}.` : 'Booked in.'}</p>}
             {e.status === 'won' && <>
-              <p className="next-line">Job done{e.jobValue ? `, ${money(e.jobValue)}` : ''}. {e.paidAt ? `Paid ${relative(e.paidAt)}.` : e.invoiceDue ? `Payment ${overdue ? 'was due' : 'due'} ${shortDate(e.invoiceDue)}.` : ''}</p>
+              <p className="next-line">{W.won}{e.jobValue ? `, ${money(e.jobValue)}` : ''}. {e.paidAt ? `Paid ${relative(e.paidAt)}.` : e.invoiceDue ? `Payment ${overdue ? 'was due' : 'due'} ${shortDate(e.invoiceDue)}.` : ''}</p>
               <div className="next-actions">
                 {!e.paidAt && <Button icon="check" busy={busy === 'paid'} onClick={() => update({ paid: true }, 'Marked as paid.', 'paid').catch(() => {})}>Mark as paid</Button>}
                 {!e.paidAt && e.invoiceDue && e.paymentRemindersSent < 3 && <Button kind={overdue ? 'primary' : 'secondary'} icon="send" onClick={openPayment}>Draft a payment reminder</Button>}
@@ -277,10 +280,10 @@ export function EnquiryDetail({ id }: { id: string }) {
             </>}
             {!['won', 'lost', 'spam'].includes(e.status) && (
               <div className="stage-grid">
-                {e.status !== 'quoted' && <button className="stage-btn" onClick={() => setAsk({ kind: 'quote' })}><Icon name="pound" />Quote sent</button>}
+                {e.status !== 'quoted' && !appts && <button className="stage-btn" onClick={() => setAsk({ kind: 'quote' })}><Icon name="pound" />Quote sent</button>}
                 {e.status !== 'booked' && <button className="stage-btn" onClick={() => setAsk({ kind: 'booked' })}><Icon name="calendar" />Booked in</button>}
                 {e.status === 'booked' && <button className="stage-btn" onClick={() => setAsk({ kind: 'booked' })}><Icon name="calendar" />Change date</button>}
-                <button className="stage-btn" onClick={() => setAsk({ kind: 'won' })}><Icon name="check" />Job done</button>
+                <button className="stage-btn" onClick={() => setAsk({ kind: 'won' })}><Icon name="check" />{W.won}</button>
                 <button className="stage-btn quiet" onClick={() => update({ status: 'lost' }, 'Marked as didn’t go ahead.').catch(() => {})}><Icon name="x" />Didn’t go ahead</button>
                 {e.status === 'new' && <button className="stage-btn quiet" onClick={() => update({ status: 'spam' }, 'Filed as spam.').catch(() => {})}><Icon name="trash" />Spam</button>}
               </div>
@@ -290,7 +293,7 @@ export function EnquiryDetail({ id }: { id: string }) {
           {(e.quoteAmount || e.jobValue) && (
             <section className="panel money-panel">
               {e.quoteAmount != null && <div><span className="small faint">Quoted</span><strong className="tabular">{money(e.quoteAmount)}</strong></div>}
-              {e.jobValue != null && <div><span className="small faint">Job value</span><strong className="tabular">{money(e.jobValue)}</strong></div>}
+              {e.jobValue != null && <div><span className="small faint">{W.value}</span><strong className="tabular">{money(e.jobValue)}</strong></div>}
               {e.status === 'won' && <div><span className="small faint">Paid</span><strong>{e.paidAt ? 'Yes' : 'Not yet'}</strong></div>}
             </section>
           )}
@@ -299,7 +302,7 @@ export function EnquiryDetail({ id }: { id: string }) {
       </div>
 
       {draft && <Compose title={draft.title} load={draft.load} {...contact} onSent={draft.onSent} sentLabel={draft.sentLabel} note={draft.note} onClose={() => setDraft(null)} />}
-      {ask && <StageModal e={e} kind={ask.kind} paymentDays={settings.followUps.paymentDays} onClose={() => setAsk(null)} onSave={(p, msg) => update(p, msg).then(() => setAsk(null))} />}
+      {ask && <StageModal e={e} kind={ask.kind} words={W} paymentDays={settings.followUps.paymentDays} onClose={() => setAsk(null)} onSave={(p, msg) => update(p, msg).then(() => setAsk(null))} />}
       {confirmDelete && (
         <Modal title="Delete this enquiry?" onClose={() => setConfirmDelete(false)} footer={<><Button kind="secondary" onClick={() => setConfirmDelete(false)}>Keep it</Button><Button onClick={async () => { await api.deleteEnquiry(e.id); dropEnquiry(e.id); toast('Deleted.'); navigate('/enquiries'); }}>Delete for good</Button></>}>
           <p className="panel-pad muted">This removes {who(e)}’s details, the transcript and your notes. It can’t be undone. Use this when a customer asks you to delete their information.</p>
@@ -309,7 +312,7 @@ export function EnquiryDetail({ id }: { id: string }) {
   );
 }
 
-function StageModal({ e, kind, paymentDays, onClose, onSave }: { e: EnquiryRecord; kind: 'quote' | 'booked' | 'won' | 'invoice'; paymentDays: number; onClose: () => void; onSave: (p: EnquiryPatch, msg: string) => Promise<void> }) {
+function StageModal({ e, kind, words: W, paymentDays, onClose, onSave }: { e: EnquiryRecord; kind: 'quote' | 'booked' | 'won' | 'invoice'; words: ReturnType<typeof words>; paymentDays: number; onClose: () => void; onSave: (p: EnquiryPatch, msg: string) => Promise<void> }) {
   const tomorrow = new Date(Date.now() + 86_400_000); tomorrow.setHours(9, 0, 0, 0);
   const local = (d: Date) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
   const [amount, setAmount] = useState(String((kind === 'quote' ? e.quoteAmount : e.jobValue ?? e.quoteAmount) ?? ''));
@@ -325,18 +328,18 @@ function StageModal({ e, kind, paymentDays, onClose, onSave }: { e: EnquiryRecor
     try {
       if (kind === 'quote') await onSave({ status: 'quoted', quoteAmount: n() }, 'Quote logged. Chasers are set for day 3 and day 8.');
       if (kind === 'booked') await onSave({ status: 'booked', bookedFor: new Date(when).toISOString() }, 'Booked in.');
-      if (kind === 'won') await onSave({ status: 'won', jobValue: n(), invoiceDue: n() ? due : null }, n() ? 'Job done. Payment reminders are set.' : 'Job done.');
+      if (kind === 'won') await onSave({ status: 'won', jobValue: n(), invoiceDue: n() ? due : null }, n() ? `${W.won}. Payment reminders are set.` : `${W.won}.`);
       if (kind === 'invoice') await onSave({ jobValue: n(), invoiceDue: due }, 'Updated.');
     } catch { setBusy(false); }
   };
-  const title = { quote: 'Quote sent', booked: 'Booked in', won: 'Job done', invoice: 'Job value and payment' }[kind];
+  const title = { quote: 'Quote sent', booked: 'Booked in', won: W.won, invoice: `${W.value} and payment` }[kind];
   return (
     <Modal title={title} onClose={onClose} footer={<><Button kind="secondary" onClick={onClose}>Cancel</Button><Button busy={busy} onClick={save}>Save</Button></>}>
       <div className="panel-pad stack gap-16">
         {kind === 'quote' && <p className="muted small">Gainora reminds you to chase on day 3 and day 8, with the message written for you.</p>}
         {kind === 'won' && <p className="muted small">Add the value and Gainora tracks the payment, drafts reminders if it’s late, and reminds you to ask for a review. Only you see these figures.</p>}
         {kind !== 'booked' && (
-          <Field label={kind === 'quote' ? 'Quote amount' : 'Job value'} optional error={err ?? undefined}>
+          <Field label={kind === 'quote' ? 'Quote amount' : W.value} optional error={err ?? undefined}>
             {(id, d) => <div className="prefix-input"><span aria-hidden="true">£</span><input id={id} className="input tabular" inputMode="decimal" value={amount} aria-describedby={d} onChange={(ev: any) => setAmount(ev.target.value)} placeholder="640" /></div>}
           </Field>
         )}

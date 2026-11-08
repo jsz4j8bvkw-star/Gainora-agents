@@ -1,6 +1,6 @@
 import type { Api } from './api';
 import type { EnquiryRecord, Plan, Source, User } from './types';
-import { emptySettings } from '../../shared/capture';
+import { withDefaults } from '../../shared/capture';
 
 declare const __SUPABASE_URL__: string;
 declare const __SUPABASE_ANON_KEY__: string;
@@ -134,12 +134,7 @@ export function createLiveApi(): Api {
     async getSettings() {
       const rows = await rest<any[]>('capture_settings?select=data,completed_at');
       if (!rows[0]) return null;
-      const d = emptySettings();
-      const x = rows[0].data || {};
-      return {
-        business: { ...d.business, ...x.business }, work: { ...d.work, ...x.work }, calls: { ...d.calls, ...x.calls },
-        followUps: { ...d.followUps, ...x.followUps }, provider: { ...d.provider, ...x.provider }, completedAt: rows[0].completed_at ?? x.completedAt ?? undefined,
-      };
+      return { ...withDefaults(rows[0].data), completedAt: rows[0].completed_at ?? rows[0].data?.completedAt ?? undefined };
     },
     async saveSettings(s) {
       const ses = await session();

@@ -153,7 +153,7 @@ function Shell() {
         </header>
         {api.mode === 'demo' && (
           <div className="demo-flag" role="note">
-            You’re viewing a demo with sample data for a plumbing business.
+            You’re viewing a demo with sample data for {settings.business.kind === 'appointments' ? 'a physio clinic' : 'a plumbing business'}.
             <button onClick={() => { api.resetDemo?.(); location.reload(); }}>Start over</button>
           </div>
         )}

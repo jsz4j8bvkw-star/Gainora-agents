@@ -2,12 +2,13 @@ import { useEffect, useRef, useState } from 'react';
 import { api } from '../lib/api';
 import { BASE } from '../app';
 import { Button, Choices, Field, Icon, useToast } from '../components/ui';
-import { DAYS, emptySettings, hoursText, lines, packFromSettings, TRADES } from '../../shared/capture';
+import { BOOKING_SYSTEMS, CLINICS, DAYS, DEFAULT_SAFETY, emptySettings, greetingFor, hoursText, lines, packFromSettings, TRADES } from '../../shared/capture';
 import type { CaptureSettings, User } from '../lib/types';
+import type { AppointmentType } from '../../shared/capture';
 
 /* ---------- The questions, shared by setup and Settings ---------- */
 
-type Kind = 'text' | 'email' | 'url' | 'tel' | 'textarea' | 'select' | 'days' | 'hours' | 'choice' | 'number';
+type Kind = 'text' | 'email' | 'url' | 'tel' | 'textarea' | 'select' | 'days' | 'hours' | 'choice' | 'number' | 'types' | 'greeting';
 export interface Q {
   path: string; label: string; help?: string; kind: Kind; required?: boolean; wide?: boolean; placeholder?: string;
   options?: { value: any; label: string }[];
@@ -16,57 +17,92 @@ export interface Q {
 export interface SetupSection { id: string; title: string; question: string; intro: string; fields: Q[] }
 
 const YES_NO = [{ value: true, label: 'Yes' }, { value: false, label: 'No' }];
+const isAppts = (s: CaptureSettings) => s.business.kind === 'appointments';
+const isTrade = (s: CaptureSettings) => !isAppts(s);
 
 export const SETUP: SetupSection[] = [
   {
     id: 'business', title: 'Your business', question: 'Tell us about your business.',
-    intro: 'Your receptionist answers in your business name, and these details go on every message Gainora drafts for you.',
+    intro: 'Your receptionist answers in your business name, and these details go on every message sent for you.',
     fields: [
-      { path: 'business.name', label: 'Business name', kind: 'text', required: true, placeholder: 'Smith Plumbing & Heating' },
+      { path: 'business.kind', label: 'What kind of business is it?', kind: 'choice', required: true, wide: true, options: [{ value: 'trade', label: 'A trade or home service: we quote and visit' }, { value: 'appointments', label: 'Appointments: a clinic, salon or studio' }] },
+      { path: 'business.name', label: 'Business name', kind: 'text', required: true, placeholder: 'Lemon Street Physio' },
       { path: 'business.ownerName', label: 'Your first name', kind: 'text', required: true, help: 'Messages are signed with it.' },
-      { path: 'business.trade', label: 'Your trade', kind: 'select', required: true, options: TRADES.map((t) => ({ value: t, label: t })) },
-      { path: 'business.location', label: 'Where you’re based', kind: 'text', required: true, placeholder: 'Truro, Cornwall' },
-      { path: 'business.phone', label: 'Your business phone number', kind: 'tel', required: true, help: 'The number customers ring now. You keep it: calls forward to the receptionist only when you can’t answer.' },
+      { path: 'business.trade', label: 'Your trade', kind: 'select', required: true, options: TRADES.map((t) => ({ value: t, label: t })), showIf: isTrade },
+      { path: 'business.trade', label: 'Your type of practice', kind: 'select', required: true, options: CLINICS.map((t) => ({ value: t, label: t })), showIf: isAppts },
+      { path: 'business.location', label: 'Town or area', kind: 'text', required: true, placeholder: 'Truro, Cornwall' },
+      { path: 'business.phone', label: 'Your business phone number', kind: 'tel', required: true, help: 'The number customers ring now. You keep it.' },
       { path: 'business.website', label: 'Website', kind: 'url', placeholder: 'https://', help: 'Optional.' },
-      { path: 'business.alertEmail', label: 'Email for alerts', kind: 'email', required: true, help: 'Emergencies and your morning list of follow-ups go here.' },
-      { path: 'business.alertMobile', label: 'Mobile for urgent calls', kind: 'tel', help: 'Optional. Your receptionist can pass emergencies to it.' },
+      { path: 'business.alertEmail', label: 'Email for alerts', kind: 'email', required: true, help: 'Urgent calls and your morning list go here.' },
+      { path: 'business.alertMobile', label: 'Mobile for urgent calls', kind: 'tel', help: 'Optional. Urgent calls can be passed to it.' },
     ],
   },
   {
-    id: 'work', title: 'Your work', question: 'What do you do, and where?',
-    intro: 'Your receptionist uses this to answer questions and to say no politely to work you don’t take on.',
+    id: 'work', title: 'Your work', question: 'What do you offer?',
+    intro: 'Your receptionist uses this to answer questions, and to say no politely to things you don’t do.',
     fields: [
-      { path: 'work.services', label: 'Work you do', kind: 'textarea', required: true, wide: true, help: 'One per line.', placeholder: 'Boiler servicing and repairs\nBathroom fitting\nLeaks, taps and toilets' },
-      { path: 'work.notDone', label: 'Work you don’t do', kind: 'textarea', wide: true, help: 'Optional. One per line.', placeholder: 'Drain unblocking' },
-      { path: 'work.areas', label: 'Areas you cover', kind: 'text', required: true, wide: true, placeholder: 'Truro and 20 miles around' },
+      { path: 'work.services', label: 'What you do', kind: 'textarea', required: true, wide: true, help: 'One per line.', placeholder: 'Back and neck pain\nSports injuries\nSports massage' },
+      { path: 'work.notDone', label: 'What you don’t do', kind: 'textarea', wide: true, help: 'Optional. One per line.', placeholder: 'Home visits' },
+      { path: 'work.areas', label: 'Areas you cover', kind: 'text', required: true, wide: true, placeholder: 'Truro and 20 miles around', showIf: isTrade },
     ],
   },
   {
-    id: 'calls', title: 'Your calls', question: 'How should calls be handled?',
-    intro: 'Outside your hours, and whenever you can’t pick up, your receptionist takes the details. These answers shape what it says.',
+    id: 'bookings', title: 'Bookings', question: 'How do you take bookings?',
+    intro: 'Tell us where your diary lives and what people can book. We connect it with you on your setup call, so your receptionist books into the same diary you already use.',
     fields: [
-      { path: 'calls.days', label: 'Days you work', kind: 'days', required: true, wide: true },
-      { path: 'calls.hours', label: 'Your hours', kind: 'hours', wide: true, help: 'Enquiries outside these hours are marked “out of hours” so you can see what you’d otherwise have missed.' },
-      { path: 'calls.emergencies', label: 'What counts as an emergency for you', kind: 'textarea', wide: true, help: 'One per line. Gas smells, floods and no heating for someone vulnerable are always flagged.', placeholder: 'Water leaking or a burst pipe\nNo heating or hot water for someone vulnerable' },
-      { path: 'calls.transferTo', label: 'What to do with an emergency', kind: 'text', wide: true, placeholder: 'Text Dave on 07700 900111 and say it’s urgent' },
-      { path: 'calls.quotePolicy', label: 'Can it talk about prices?', kind: 'choice', required: true, wide: true, options: [{ value: 'never', label: 'No, I quote every job myself' }, { value: 'ranges', label: 'Guide prices only' }, { value: 'fixed', label: 'Yes, I have fixed prices' }] },
-      { path: 'calls.priceNotes', label: 'The prices it may give', kind: 'textarea', wide: true, required: true, placeholder: 'Boiler service from £85. Call-out and first hour £75.', showIf: (s) => s.calls.quotePolicy !== 'never' },
-      { path: 'calls.booking', label: 'Booking', kind: 'choice', wide: true, options: [{ value: 'callback', label: 'Take details, I’ll call back to arrange' }, { value: 'calendar', label: 'Book straight into my calendar' }] },
-      { path: 'calls.gasWork', label: 'Do you work on gas appliances?', kind: 'choice', options: YES_NO, help: 'If yes, gas smells get the National Gas Emergency script.' },
-      { path: 'calls.recording', label: 'Record calls?', kind: 'choice', options: YES_NO, help: 'Callers are told at the start.' },
-      { path: 'calls.notify', label: 'Email me about', kind: 'choice', wide: true, options: [{ value: 'urgent', label: 'Emergencies and urgent enquiries' }, { value: 'all', label: 'Every enquiry' }] },
+      { path: 'bookings.system', label: 'Your booking system or calendar', kind: 'select', required: true, wide: true, options: BOOKING_SYSTEMS.map((x) => ({ value: x, label: x })) },
+      { path: 'bookings.systemOther', label: 'Which one?', kind: 'text', required: true, showIf: (s) => s.bookings.system === 'Something else' },
+      { path: 'bookings.account', label: 'The account or calendar to book into', kind: 'text', wide: true, placeholder: 'bookings@lemonstreetphysio.co.uk', help: 'Optional. For example the Google account’s email, or your practice name in Cliniko.', showIf: (s) => !!s.bookings.system && !/paper/i.test(s.bookings.system) },
+      { path: 'bookings.mode', label: 'When someone wants to book, your receptionist should', kind: 'choice', required: true, wide: true, options: [{ value: 'book', label: 'Book them straight in' }, { value: 'offer', label: 'Offer times, I confirm' }, { value: 'callback', label: 'Take details, I call back' }] },
+      { path: 'bookings.types', label: 'What people can book', kind: 'types', wide: true, help: 'Name, length, price and who does it. Leave the price blank to keep it private.' },
+      { path: 'bookings.staff', label: 'Who takes bookings', kind: 'textarea', wide: true, help: 'Optional. One name per line.', placeholder: 'Sarah Bennett\nJames Hooper' },
+      { path: 'bookings.address', label: 'Where appointments happen', kind: 'text', required: true, wide: true, placeholder: '12 Lemon Street, Truro TR1 2LS', showIf: isAppts },
+      { path: 'bookings.arrival', label: 'What to tell people when they book', kind: 'textarea', wide: true, placeholder: 'Please wear loose clothing and arrive 5 minutes early. Free parking behind the clinic.', showIf: isAppts },
+      { path: 'bookings.noticeHours', label: 'Shortest notice for a booking', kind: 'select', options: [0, 1, 2, 4, 24, 48].map((h) => ({ value: h, label: h === 0 ? 'Any time' : h < 24 ? `${h} ${h === 1 ? 'hour' : 'hours'}` : `${h / 24} ${h === 24 ? 'day' : 'days'}` })), showIf: (s) => s.bookings.mode !== 'callback' },
+      { path: 'bookings.aheadWeeks', label: 'How far ahead people can book', kind: 'select', options: [1, 2, 4, 6, 8, 12].map((w) => ({ value: w, label: `${w} ${w === 1 ? 'week' : 'weeks'}` })), showIf: (s) => s.bookings.mode !== 'callback' },
+      { path: 'bookings.cancellation', label: 'Cancellation policy', kind: 'text', wide: true, placeholder: 'Please give 24 hours’ notice to cancel or move an appointment.', help: 'Optional. Mentioned when booking and in the confirmation text.' },
+    ],
+  },
+  {
+    id: 'calls', title: 'Your calls', question: 'How should calls be answered?',
+    intro: 'Your receptionist sounds like an experienced member of your team. These answers shape what it says.',
+    fields: [
+      { path: 'calls.greeting', label: 'How it answers the phone', kind: 'greeting', wide: true, help: '{greeting} becomes good morning, afternoon or evening. {business} is your business name.' },
+      { path: 'calls.announceAi', label: 'Say it’s an AI assistant in the greeting?', kind: 'choice', options: [{ value: false, label: 'No' }, { value: true, label: 'Yes' }], help: 'Either way it never claims to be a person, and tells the truth if someone asks.' },
+      { path: 'calls.recording', label: 'Record calls?', kind: 'choice', options: YES_NO, help: 'If yes, the greeting says so.' },
+      { path: 'calls.days', label: 'Days you’re open', kind: 'days', required: true, wide: true },
+      { path: 'calls.hours', label: 'Your hours', kind: 'hours', wide: true, help: 'Enquiries outside these hours are marked “out of hours”, so you can see what you’d otherwise have missed.' },
+      { path: 'calls.safety', label: 'When it must not book, and should send people for urgent help', kind: 'textarea', wide: true, help: 'One per line. Agree this with your lead clinician. Callers are told to call 999, go to A&E or call NHS 111.', showIf: isAppts },
+      { path: 'calls.emergencies', label: 'What counts as an emergency for you', kind: 'textarea', wide: true, help: 'One per line. Gas smells, floods and no heating for someone vulnerable are always flagged.', placeholder: 'Water leaking or a burst pipe\nNo heating or hot water for someone vulnerable', showIf: isTrade },
+      { path: 'calls.transferTo', label: 'What to do with something urgent', kind: 'text', wide: true, placeholder: 'Text Sarah on 07700 900111 and say it’s urgent' },
+      { path: 'calls.quotePolicy', label: 'Can it talk about prices?', kind: 'choice', required: true, wide: true, options: [{ value: 'never', label: 'No, I quote every job myself' }, { value: 'ranges', label: 'Guide prices only' }, { value: 'fixed', label: 'Yes, I have fixed prices' }], showIf: isTrade },
+      { path: 'calls.quotePolicy', label: 'Can it tell callers your prices?', kind: 'choice', required: true, wide: true, options: [{ value: 'fixed', label: 'Yes, the prices of each appointment' }, { value: 'never', label: 'No' }], showIf: isAppts },
+      { path: 'calls.priceNotes', label: 'The prices it may give', kind: 'textarea', wide: true, required: true, placeholder: 'Boiler service from £85. Call-out and first hour £75.', showIf: (s) => isTrade(s) && s.calls.quotePolicy !== 'never' },
+      { path: 'calls.gasWork', label: 'Do you work on gas appliances?', kind: 'choice', options: YES_NO, help: 'If yes, gas smells get the National Gas Emergency script.', showIf: isTrade },
+      { path: 'calls.notify', label: 'Email me about', kind: 'choice', wide: true, options: [{ value: 'urgent', label: 'Urgent calls only' }, { value: 'all', label: 'Every enquiry and booking' }] },
     ],
   },
   {
     id: 'followUps', title: 'Follow-ups', question: 'How do you get paid and reviewed?',
-    intro: 'Gainora drafts quote chasers, payment reminders and review requests. You read each one and send it yourself.',
+    intro: 'Confirmations, reminders and review requests use these details.',
     fields: [
-      { path: 'followUps.paymentDays', label: 'Payment terms', kind: 'select', required: true, options: [{ value: 0, label: 'Due on completion' }, { value: 7, label: '7 days' }, { value: 14, label: '14 days' }, { value: 30, label: '30 days' }] },
-      { path: 'followUps.payLink', label: 'Payment link', kind: 'url', placeholder: 'https://', help: 'Optional. From Stripe, SumUp, your accounts software or similar. Added to payment reminders.' },
+      { path: 'followUps.paymentDays', label: 'Payment terms', kind: 'select', required: true, options: [{ value: 0, label: 'Paid on the day' }, { value: 7, label: '7 days' }, { value: 14, label: '14 days' }, { value: 30, label: '30 days' }] },
+      { path: 'followUps.payLink', label: 'Payment link', kind: 'url', placeholder: 'https://', help: 'Optional. From Stripe, SumUp, your booking system or similar.' },
       { path: 'followUps.reviewLink', label: 'Google review link', kind: 'url', wide: true, placeholder: 'https://g.page/r/…/review', help: 'Optional. In your Google Business Profile: “Ask for reviews”, then copy the link.' },
     ],
   },
 ];
+
+/** Sensible starting answers when the business type changes. */
+export function withKindDefaults(s: CaptureSettings): CaptureSettings {
+  if (s.business.kind !== 'appointments') return s;
+  return {
+    ...s,
+    calls: { ...s.calls, safety: s.calls.safety || DEFAULT_SAFETY, quotePolicy: s.calls.quotePolicy === 'ranges' ? 'fixed' : s.calls.quotePolicy, gasWork: false },
+    bookings: { ...s.bookings, mode: s.bookings.mode === 'callback' && !s.bookings.types.length ? 'book' : s.bookings.mode, types: s.bookings.types.length ? s.bookings.types : [{ name: 'Initial consultation', minutes: 45, price: '', who: '' }, { name: 'Follow-up', minutes: 30, price: '', who: '' }] },
+    followUps: { ...s.followUps, paymentDays: s.followUps.paymentDays === 14 ? 0 : s.followUps.paymentDays },
+  };
+}
 
 export const getPath = (o: any, p: string) => p.split('.').reduce((a, k) => a?.[k], o);
 export function setPath<T>(o: T, p: string, v: any): T {
@@ -84,6 +120,8 @@ export function sectionErrors(sec: SetupSection, s: CaptureSettings): Record<str
     const v = getPath(s, f.path);
     if (f.kind === 'days') { if (!s.calls.days.length) e[f.path] = 'Pick at least one day.'; continue; }
     if (f.kind === 'hours') { if (s.calls.open >= s.calls.close) e[f.path] = 'Closing time must be after opening time.'; continue; }
+    if (f.kind === 'types') { if (s.business.kind === 'appointments' && !s.bookings.types.some((t) => t.name.trim())) e[f.path] = 'Add at least one thing people can book.'; continue; }
+    if (f.kind === 'greeting') continue;
     const str = typeof v === 'string' ? v.trim() : v;
     if (f.required && (str === '' || str == null)) { e[f.path] = 'This is needed.'; continue; }
     if (str && f.kind === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(str)) e[f.path] = 'Enter a full email address.';
@@ -121,6 +159,19 @@ export function QField({ f, s, onChange, error }: { f: Q; s: CaptureSettings; on
       </Field>
     );
   }
+  if (f.kind === 'types') return <TypesField f={f} s={s} onChange={onChange} error={error} />;
+  if (f.kind === 'greeting') {
+    return (
+      <Field label={f.label} help={f.help} error={error} className={cls}>
+        {(id, d) => (
+          <div className="stack gap-8">
+            <input id={id} className="input" value={s.calls.greeting} aria-describedby={d} onChange={(e: any) => onChange('calls.greeting', e.target.value)} />
+            <p className="greeting-preview"><Icon name="phone" />“{greetingFor(s)}”</p>
+          </div>
+        )}
+      </Field>
+    );
+  }
   if (f.kind === 'choice') {
     const opts = f.options!;
     const cur = opts.find((o) => o.value === v)?.label ?? '';
@@ -147,11 +198,39 @@ export function QField({ f, s, onChange, error }: { f: Q; s: CaptureSettings; on
 
 export function display(f: Q, s: CaptureSettings): string {
   if (f.showIf && !f.showIf(s)) return '';
+  if (f.kind === 'types') return s.bookings.types.filter((t) => t.name.trim()).map((t) => `${t.name} (${t.minutes} min${t.price ? `, ${t.price}` : ''})`).join(' · ') || '–';
+  if (f.kind === 'greeting') return `“${greetingFor(s)}”`;
   if (f.kind === 'days' || f.kind === 'hours') return f.kind === 'hours' ? hoursText(s.calls) : s.calls.days.map((d) => DAYS[d - 1]).join(', ');
   const v = getPath(s, f.path);
   if (f.options) return f.options.find((o) => o.value === v)?.label ?? '–';
   if (f.kind === 'textarea') return lines(v).join(' · ') || '–';
   return String(v ?? '').trim() || '–';
+}
+
+function TypesField({ f, s, onChange, error }: { f: Q; s: CaptureSettings; onChange: (path: string, v: any) => void; error?: string }) {
+  const rows = s.bookings.types;
+  const set = (i: number, k: keyof AppointmentType, v: any) => onChange('bookings.types', rows.map((r, j) => (j === i ? { ...r, [k]: k === 'minutes' ? Number(v) : v } : r)));
+  return (
+    <Field label={f.label} help={f.help} error={error} as="group" className="wide">
+      {() => (
+        <div className="types">
+          {rows.length > 0 && <div className="types-head xsmall faint" aria-hidden="true"><span>What</span><span>Length</span><span>Price</span><span>Who</span><span /></div>}
+          {rows.map((r, i) => (
+            <div className="types-row" key={i}>
+              <input className="input" aria-label={`Name of booking type ${i + 1}`} value={r.name} placeholder="Initial consultation" onChange={(e: any) => set(i, 'name', e.target.value)} />
+              <select className="select" aria-label={`Length of ${r.name || 'this booking'}`} value={r.minutes} onChange={(e: any) => set(i, 'minutes', e.target.value)}>
+                {[15, 20, 30, 45, 60, 75, 90, 120].map((m) => <option key={m} value={m}>{m} min</option>)}
+              </select>
+              <input className="input" aria-label={`Price of ${r.name || 'this booking'}`} value={r.price} placeholder="£65" onChange={(e: any) => set(i, 'price', e.target.value)} />
+              <input className="input" aria-label={`Who does ${r.name || 'this booking'}`} value={r.who} placeholder="Any physio" onChange={(e: any) => set(i, 'who', e.target.value)} />
+              <button type="button" className="icon-btn" aria-label={`Remove ${r.name || 'this row'}`} onClick={() => onChange('bookings.types', rows.filter((_, j) => j !== i))}><Icon name="x" /></button>
+            </div>
+          ))}
+          <Button kind="secondary" small icon="plus" onClick={() => onChange('bookings.types', [...rows, { name: '', minutes: 30, price: '', who: '' }])}>Add {rows.length ? 'another' : 'something people can book'}</Button>
+        </div>
+      )}
+    </Field>
+  );
 }
 
 /* ---------- The first-run setup ---------- */
@@ -169,7 +248,7 @@ export function Setup({ user, initial, onDone }: { user: User; initial: CaptureS
 
   useEffect(() => { head.current?.focus(); window.scrollTo({ top: 0 }); }, [step]);
   const change = (path: string, v: any) => {
-    const next = setPath(s, path, v);
+    const next = path === 'business.kind' ? withKindDefaults(setPath(s, path, v)) : setPath(s, path, v);
     setS(next); setSaved('saving');
     if (errors[path]) setErrors((e) => { const x = { ...e }; delete x[path]; return x; });
     clearTimeout(timer.current);
@@ -200,7 +279,7 @@ export function Setup({ user, initial, onDone }: { user: User; initial: CaptureS
         <main className="welcome-main step-in">
           <div className="welcome-copy">
             <h1 className="display" tabIndex={-1} ref={head}>Let’s set up your receptionist.</h1>
-            <p className="welcome-lede">Four short sections, about ten minutes. From your answers Gainora writes the script your AI receptionist follows, and sets up your enquiries inbox and follow-ups.</p>
+            <p className="welcome-lede">Five short sections, about ten minutes. From your answers Gainora writes the script your AI receptionist follows, and sets up your enquiries inbox and follow-ups.</p>
             <ol className="welcome-steps">
               {SETUP.map((x, i) => <li key={x.id}><span className="num">{i + 1}</span><span><strong>{x.title}</strong><span className="small muted">{x.intro}</span></span></li>)}
             </ol>
@@ -274,7 +353,7 @@ export function Setup({ user, initial, onDone }: { user: User; initial: CaptureS
 /** The opening line and the first few rules, as the caller would hear them. */
 export function ScriptPreview({ s, full = false }: { s: CaptureSettings; full?: boolean }) {
   const pack = packFromSettings(s);
-  const sections = full ? pack.sections : pack.sections.filter((x) => ['What we do', 'Emergencies', 'Prices'].includes(x.title));
+  const sections = full ? pack.sections : pack.sections.filter((x) => ['What we do', 'What we offer', 'Booking', 'Emergencies', 'Safety'].includes(x.title));
   return (
     <div className="script mt-24">
       <div className="script-greeting">

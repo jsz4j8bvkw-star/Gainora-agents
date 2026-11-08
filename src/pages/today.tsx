@@ -5,7 +5,7 @@ import { Link, navigate } from '../lib/router';
 import { Button, ErrorNote, Icon, Loading, useLoad, useToast } from '../components/ui';
 import { EnquiryRow, who } from '../components/enquiry';
 import { greeting, money, relative } from '../lib/format';
-import { followUps, report } from '../../shared/capture';
+import { followUps, report, words } from '../../shared/capture';
 
 export function Today() {
   const { settings, enquiries, enquiriesError, reloadEnquiries, putEnquiry } = useApp();
@@ -95,7 +95,7 @@ export function Today() {
           <div className="stat"><span className="stat-label">Enquiries, last 7 days</span><span className="stat-value">{data.week.caught}</span><span className="stat-note">{data.week.byChannel.call} by phone</span></div>
           <div className="stat"><span className="stat-label">Caught out of hours</span><span className="stat-value">{data.week.afterHours}</span><span className="stat-note">Calls you’d have missed</span></div>
           <div className="stat"><span className="stat-label">Waiting for a reply</span><span className="stat-value" style={{ color: data.waiting.length + data.now.length ? 'var(--brass)' : undefined }}>{data.waiting.length + data.now.length}</span><span className="stat-note">{data.week.medianReplyMins != null ? `Typical reply in ${data.week.medianReplyMins < 60 ? `${data.week.medianReplyMins} min` : `${Math.round(data.week.medianReplyMins / 60)} h`}` : 'Reply fast to win the job'}</span></div>
-          <div className="stat"><span className="stat-label">Won this month</span><span className="stat-value">{money(data.month.wonValue)}</span><span className="stat-note">{data.month.won} {data.month.won === 1 ? 'job' : 'jobs'}</span></div>
+          <div className="stat"><span className="stat-label">{settings.business.kind === 'appointments' ? 'Attended this month' : 'Won this month'}</span><span className="stat-value">{money(data.month.wonValue)}</span><span className="stat-note">{data.month.won} {data.month.won === 1 ? words(settings.business.kind).job : words(settings.business.kind).jobs}</span></div>
         </div>
       </section>
 

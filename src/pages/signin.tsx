@@ -1,20 +1,21 @@
 import { useState } from 'react';
 import { api } from '../lib/api';
 import { BASE } from '../app';
-import { Button, Field } from '../components/ui';
+import { Button, Choices, Field } from '../components/ui';
 
 export function SignIn({ onSignedIn }: { onSignedIn: () => void }) {
   const [email, setEmail] = useState('');
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sample, setSample] = useState<'trade' | 'clinic'>('trade');
 
   const submit = async (e: any) => {
     e.preventDefault();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setError('Enter the email address you subscribed with.'); return; }
     setBusy(true); setError(null);
     try {
-      await api.requestSignIn(email.trim());
+      await api.requestSignIn(email.trim(), sample);
       if (api.mode === 'demo') onSignedIn(); else setSent(true);
     } catch (err: any) {
       setError(err?.status === 422 || err?.status === 400
@@ -52,12 +53,17 @@ export function SignIn({ onSignedIn }: { onSignedIn: () => void }) {
             <div className="stack gap-8">
               <h1 className="title">Sign in</h1>
               <p className="muted">{api.mode === 'demo'
-                ? 'This is a demo with a sample plumbing business. Enter any email address to look around.'
+                ? 'This is a demo with sample data. Enter any email address and pick a business to look around.'
                 : 'Enter the email you subscribed with. We’ll send you a secure sign-in link. Your Gainora login works here too.'}</p>
             </div>
             <Field label="Email address" error={error ?? undefined}>
               {(id, d) => <input id={id} className="input" type="email" autoComplete="email" inputMode="email" value={email} aria-describedby={d} aria-invalid={!!error} onChange={(e: any) => setEmail(e.target.value)} placeholder="you@yourbusiness.co.uk" />}
             </Field>
+            {api.mode === 'demo' && (
+              <Field label="Sample business" as="group">
+                {(_, d) => <Choices name="sample" options={['A plumber', 'A physio clinic']} value={sample === 'trade' ? 'A plumber' : 'A physio clinic'} describedBy={d} onChange={(v: string) => setSample(v === 'A plumber' ? 'trade' : 'clinic')} />}
+              </Field>
+            )}
             <Button type="submit" block busy={busy}>{api.mode === 'demo' ? 'Open the demo' : 'Send sign-in link'}</Button>
             <p className="signin-foot">Not a client yet? <a href="https://gainora.co.uk/">Book a free call</a></p>
           </form>

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { api } from '../lib/api';
 import { useApp } from '../app';
 import { Button, Icon, useToast } from '../components/ui';
-import { display, QField, SETUP, sectionErrors, setPath, type SetupSection } from './setup';
+import { display, QField, SETUP, sectionErrors, setPath, withKindDefaults, type SetupSection } from './setup';
 import { shortDate } from '../lib/format';
 import type { CaptureSettings } from '../lib/types';
 import { EXTRA_MINUTES, PACKAGES } from '../../shared/capture';
@@ -101,7 +101,7 @@ function SectionEditor({ sec }: { sec: SetupSection }) {
       )}
       {editing && (
         <>
-          <div className="ob-fields settings-fields">{sec.fields.map((f) => <QField key={f.path} f={f} s={draft} error={errors[f.path]} onChange={(p, v) => setDraft(setPath(draft, p, v))} />)}</div>
+          <div className="ob-fields settings-fields">{sec.fields.map((f) => <QField key={f.path} f={f} s={draft} error={errors[f.path]} onChange={(p, v) => setDraft(p === 'business.kind' ? withKindDefaults(setPath(draft, p, v)) : setPath(draft, p, v))} />)}</div>
           <div className="row gap-8 mt-24" style={{ justifyContent: 'flex-end' }}>
             <Button kind="secondary" onClick={() => setEditing(false)}>Cancel</Button>
             <Button busy={busy} onClick={save}>Save</Button>

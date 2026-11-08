@@ -4,7 +4,7 @@ import { db, env } from './core';
 import { ai, hasBanned, HOUSE_STYLE } from './ai';
 import { sendEmail } from './email';
 import {
-  emptySettings, firstReply, isAfterHours, lines, normaliseEnquiry, triage,
+  firstReply, isAfterHours, lines, normaliseEnquiry, triage, withDefaults,
   type CaptureSettings, type Channel, type EnquiryRecord,
 } from '../../shared/capture';
 
@@ -16,18 +16,7 @@ export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{1
 
 export const appUrl = () => env('APP_URL', 'https://capture.gainora.co.uk').replace(/\/$/, '');
 
-/** Settings with every field present, whatever was saved. */
-export function withDefaults(data: any): CaptureSettings {
-  const d = emptySettings();
-  return {
-    business: { ...d.business, ...(data?.business ?? {}) },
-    work: { ...d.work, ...(data?.work ?? {}) },
-    calls: { ...d.calls, ...(data?.calls ?? {}) },
-    followUps: { ...d.followUps, ...(data?.followUps ?? {}) },
-    provider: { ...d.provider, ...(data?.provider ?? {}) },
-    completedAt: data?.completedAt,
-  };
-}
+export { withDefaults };
 
 export const toRecord = (r: any): EnquiryRecord => ({
   id: r.id, channel: r.channel, name: r.name ?? '', phone: r.phone ?? '', email: r.email ?? '', postcode: r.postcode ?? '',

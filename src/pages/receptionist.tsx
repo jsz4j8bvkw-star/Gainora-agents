@@ -5,11 +5,11 @@ import { Link, navigate } from '../lib/router';
 import { Button, Choices, ErrorNote, Field, Icon, Loading, Modal, Tabs, copyText, useLoad, useToast } from '../components/ui';
 import { ScriptPreview } from './setup';
 import { relative, shortDate } from '../lib/format';
-import { CHANNEL_LABEL, packFromSettings } from '../../shared/capture';
+import { CHANNEL_LABEL, DIRECT_SYSTEMS, packFromSettings } from '../../shared/capture';
 import type { Source } from '../lib/types';
 
 type Tab = 'script' | 'connect' | 'test';
-const PROVIDERS = ['Trillet', 'My AI Front Desk', 'Other', 'Not set up yet'];
+const PROVIDERS = ['Retell', 'Trillet', 'My AI Front Desk', 'Other', 'Not set up yet'];
 
 export function Receptionist() {
   const [tab, setTab] = useState<Tab>('script');
@@ -92,7 +92,7 @@ function Connect() {
       <section className="panel connect-step">
         <span className="step-num">1</span>
         <div className="stack gap-16" style={{ minWidth: 0 }}>
-          <div><h2 className="subhead">Your receptionist platform</h2><p className="small muted">The service that answers your calls. We recommend Trillet for UK trades; Gainora runs it for you.</p></div>
+          <div><h2 className="subhead">Your receptionist platform</h2><p className="small muted">The service that answers your calls. Gainora sets this up and runs it for you. We use Retell for its natural British voices.</p></div>
           <div className="form-grid">
             <Field label="Platform" as="group" className="wide">{(_, d) => <Choices name="prov" options={PROVIDERS} value={provider} describedBy={d} onChange={setProvider} />}</Field>
             <Field label="Receptionist number" optional help="The number your calls forward to.">{(id, d) => <input id={id} className="input" type="tel" value={num} aria-describedby={d} onChange={(e: any) => setNum(e.target.value)} placeholder="01872 000001" />}</Field>
@@ -101,8 +101,10 @@ function Connect() {
         </div>
       </section>
 
+      <BookingCard />
+
       <section className="panel connect-step">
-        <span className="step-num">2</span>
+        <span className="step-num">3</span>
         <div className="stack gap-16" style={{ minWidth: 0 }}>
           <div><h2 className="subhead">Send each call to your inbox</h2><p className="small muted">Make a secret link and add it to your platform as a webhook for finished calls (“call analysed” or “call ended with summary”). Each call’s summary, number and transcript then arrive here within seconds.</p></div>
           <div className="row gap-8 wrap" style={{ alignItems: 'flex-end' }}>
@@ -114,7 +116,7 @@ function Connect() {
       </section>
 
       <section className="panel connect-step">
-        <span className="step-num">3</span>
+        <span className="step-num">4</span>
         <div className="stack gap-12" style={{ minWidth: 0 }}>
           <div><h2 className="subhead">Forward your calls when you can’t answer</h2><p className="small muted">You keep your number. Calls only go to your receptionist when you don’t pick up, you’re on another call, or your phone is off.</p></div>
           <div className="forward-grid">
@@ -148,6 +150,51 @@ function Connect() {
         </Modal>
       )}
     </div>
+  );
+}
+
+/** Where bookings go. Gainora connects the diary with the client on their setup call. */
+function BookingCard() {
+  const { settings, setSettings } = useApp();
+  const [busy, setBusy] = useState(false);
+  const toast = useToast();
+  const b = settings.bookings;
+  const system = b.system === 'Something else' ? b.systemOther || 'your booking system' : b.system;
+  const paper = /paper/i.test(b.system);
+  const direct = DIRECT_SYSTEMS.includes(b.system);
+  const status = paper ? null : b.status;
+  const request = async () => {
+    setBusy(true);
+    try { const next = { ...settings, bookings: { ...b, status: 'requested' as const } }; await api.saveSettings(next); setSettings(next); toast('Thanks. We’ll connect it with you on your setup call.'); }
+    catch (e: any) { toast(e?.message || 'That didn’t save.'); }
+    finally { setBusy(false); }
+  };
+  return (
+    <section className="panel connect-step">
+      <span className="step-num">2</span>
+      <div className="stack gap-12" style={{ minWidth: 0 }}>
+        <div className="split">
+          <div><h2 className="subhead">Your diary</h2><p className="small muted">Where your receptionist {b.mode === 'callback' ? 'checks for' : 'books'} appointments.</p></div>
+          {status === 'connected' && <span className="tag tag-forest"><Icon name="check" className="tag-ico" />Connected</span>}
+          {status === 'requested' && <span className="tag tag-brass">Being connected</span>}
+          {status === 'not_connected' && b.system && <span className="tag tag-plain">Not connected yet</span>}
+        </div>
+        {!b.system ? (
+          <p className="small">Tell us which diary you use in <Link to="/settings">Settings → Bookings</Link>.</p>
+        ) : (
+          <dl className="facts compact">
+            <dt>System</dt><dd>{system}{b.account ? ` · ${b.account}` : ''}</dd>
+            <dt>When someone wants to book</dt><dd>{b.mode === 'book' ? 'Book them straight in' : b.mode === 'offer' ? 'Offer times, you confirm' : 'Take details, you call back'}</dd>
+            {b.types.length > 0 && <><dt>What people can book</dt><dd>{b.types.filter((t) => t.name).map((t) => `${t.name} (${t.minutes} min${t.price ? `, ${t.price}` : ''})`).join(' · ')}</dd></>}
+          </dl>
+        )}
+        {paper && <p className="small muted">With a paper diary your receptionist takes the details and suggests times, and you confirm. Moving to a free online calendar such as Google Calendar lets it book people straight in.</p>}
+        {status === 'connected' && <p className="small muted">Your receptionist {b.mode === 'book' ? 'books straight into' : b.mode === 'offer' ? 'offers free times from' : 'checks'} {system}. To change how it books, edit <Link to="/settings">Settings → Bookings</Link>.</p>}
+        {!paper && b.system && !direct && status !== 'connected' && <p className="small muted">We connect {system} with you on your setup call. If it can’t take bookings from outside, your receptionist offers times from your diary and you confirm with one tap.</p>}
+        {!paper && b.system && direct && status !== 'connected' && <p className="small muted">Your receptionist can book straight into {system}. You’ll sign in to {system} with us on your setup call to give permission. We never see your password.</p>}
+        {status === 'not_connected' && b.system && <div><Button small busy={busy} onClick={request}>Ask Gainora to connect it</Button></div>}
+      </div>
+    </section>
   );
 }
 

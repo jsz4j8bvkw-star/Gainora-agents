@@ -1,7 +1,8 @@
 import { Link } from '../lib/router';
 import { Icon } from './ui';
 import { phone, relative } from '../lib/format';
-import { CHANNEL_LABEL, KIND_LABEL, STATUS_LABEL } from '../../shared/capture';
+import { CHANNEL_LABEL, KIND_LABEL, statusLabel } from '../../shared/capture';
+import { useApp } from '../app';
 import type { EnquiryRecord } from '../lib/types';
 
 export const CHANNEL_ICON: Record<EnquiryRecord['channel'], string> = { call: 'phone', form: 'form', email: 'mail', text: 'message' };
@@ -10,7 +11,8 @@ export const who = (e: EnquiryRecord) => e.name || phone(e.phone) || e.email || 
 
 export function StatusTag({ e }: { e: EnquiryRecord }) {
   const cls = e.status === 'new' ? 'tag-brass' : e.status === 'won' ? 'tag-forest' : e.status === 'spam' || e.status === 'lost' ? 'tag-plain' : 'tag-plain';
-  return <span className={`tag ${cls}`}>{STATUS_LABEL[e.status]}</span>;
+  const { settings } = useApp();
+  return <span className={`tag ${cls}`}>{statusLabel(e.status, settings.business.kind)}</span>;
 }
 
 export function UrgencyTag({ e }: { e: EnquiryRecord }) {
@@ -28,7 +30,7 @@ export function EnquiryRow({ e, compact = false }: { e: EnquiryRecord; compact?:
           <span className="enq-name">{who(e)}</span>
           <UrgencyTag e={e} />
           {e.afterHours && <span className="tag tag-plain"><Icon name="moon" className="tag-ico" />Out of hours</span>}
-          {!compact && e.kind !== 'other' && e.kind !== 'spam' && <span className="tag tag-plain">{KIND_LABEL[e.kind]}</span>}
+          {!compact && e.kind !== 'other' && e.kind !== 'spam' && <span className="tag tag-plain">{e.status === 'booked' ? 'Booked' : KIND_LABEL[e.kind]}</span>}
           {e.isTest && <span className="tag tag-plain">Test</span>}
         </span>
         <span className="enq-summary">{e.summary || 'No summary sent.'}</span>

@@ -4,9 +4,9 @@ import { createServer } from 'node:http';
 import {
   applyPatch, emptySettings, followUps, GAS_EMERGENCY, hoursText, isAfterHours, MARKETING_OPT_OUT, normaliseEnquiry, normPhone,
   packFromSettings, paymentReminder, paymentStageDue, quoteChaseDue, quoteChaser, report, reviewRequest, triage,
-  type CaptureSettings, type EnquiryRecord,
+  withDefaults, type CaptureSettings, type EnquiryRecord,
 } from '../shared/capture';
-import { DEMO_SETTINGS } from '../src/lib/demo';
+import { CLINIC_SETTINGS, DEMO_SETTINGS } from '../src/lib/demo';
 import { phone } from '../src/lib/format';
 
 const S: CaptureSettings = structuredClone(DEMO_SETTINGS);
@@ -18,20 +18,46 @@ const rec = (over: Partial<EnquiryRecord> = {}): EnquiryRecord => ({
   paymentRemindersSent: 0, reviewAskedAt: null, receivedAt: '2026-11-02T10:00:00Z', isTest: false, ...over,
 });
 
-test('script: AI and recording notice, gas line, prices only as the owner chose', () => {
+test('script: natural greeting, honest if asked, gas line, prices only as the owner chose', () => {
   const p = packFromSettings(S);
-  assert.match(p.greeting, /Smith Plumbing & Heating/);
-  assert.match(p.greeting, /AI assistant/);
-  assert.match(p.greeting, /recorded/);
+  assert.match(p.greeting, /^Good (morning|afternoon|evening), you’re through to Smith Plumbing & Heating\. Calls are recorded for quality and training\. How can I help\?$/);
+  assert.doesNotMatch(p.greeting, /\bAI\b/);                         // not announced, as the owner chose
+  assert.match(p.text, /Never claim to be a person/);
+  assert.match(p.text, /always answer honestly that you are the Smith Plumbing & Heating AI assistant/);
   assert.ok(p.text.includes(GAS_EMERGENCY));
   assert.match(p.text, /Boiler service from £85/);
   assert.match(p.text, /Never take card or bank details/);
   assert.match(p.text, /Mon–Fri 8am–5:30pm/);
+  const ai = packFromSettings({ ...S, calls: { ...S.calls, announceAi: true, recording: false, greeting: 'Hello, {business}, how can I help?' } });
+  assert.equal(ai.greeting, 'Hello, Smith Plumbing & Heating. I’m the AI assistant here. How can I help?');
   const never = packFromSettings({ ...S, calls: { ...S.calls, quotePolicy: 'never', gasWork: false, recording: false } });
   assert.match(never.text, /Don't give prices/);
   assert.ok(!never.text.includes(GAS_EMERGENCY));
-  assert.doesNotMatch(never.greeting, /recorded/);
+  assert.doesNotMatch(never.greeting, /record/i);
   assert.equal(hoursText({ ...S.calls, days: [1, 2, 3, 5, 6] }), 'Mon–Wed, Fri–Sat 8am–5:30pm');
+});
+
+test('clinic script: books into the diary, never diagnoses, sends red flags to urgent care', () => {
+  const p = packFromSettings(CLINIC_SETTINGS);
+  assert.match(p.greeting, /you’re through to Lemon Street Physio/);
+  assert.match(p.text, /Initial consultation \(45 min, £65, with Any physio\)/);
+  assert.match(p.text, /Offer two options, book the one they choose/);
+  assert.match(p.text, /12 Lemon Street, Truro TR1 2LS/);
+  assert.match(p.text, /Ask them to spell the surname/);
+  assert.match(p.text, /Never diagnose or give medical advice/);
+  assert.match(p.text, /call 999 or go to A&E now, or call NHS 111/);
+  assert.match(p.text, /bladder or bowels/);
+  assert.ok(!p.text.includes(GAS_EMERGENCY));
+  assert.equal(triage('Back pain and new numbness around the groin since this morning').urgency, 'emergency');
+  assert.equal(triage('He has lost control of his bladder').urgency, 'emergency');
+  assert.equal(triage('Lower back pain for two weeks, worse when sitting').urgency, 'normal');
+  // Older saved settings without the new sections still load.
+  const old = withDefaults({ business: { name: 'Old Co' }, calls: { days: [1] } });
+  assert.equal(old.bookings.mode, 'callback'); assert.deepEqual(old.bookings.types, []); assert.equal(old.business.kind, 'trade');
+  // Clinic wording in the history.
+  const e = applyPatch(rec(), { status: 'won', jobValue: 65 }, CLINIC_SETTINGS, new Date('2026-11-02T12:00:00Z'));
+  assert.equal(e.history.at(-1)!.text, 'Attended (£65)');
+  assert.equal(e.invoiceDue, '2026-11-02');   // paid on the day
 });
 
 test('out of hours is judged in UK time, including summer time', () => {
@@ -242,5 +268,5 @@ test('secret link, intake, alerts, owner actions and deletion', async () => {
 test('settings with nothing saved still work', () => {
   const s = emptySettings('a@b.co');
   assert.equal(s.business.alertEmail, 'a@b.co');
-  assert.equal(packFromSettings({ ...s, business: { ...s.business, name: 'X' } }).greeting.startsWith('Hi, you\'re through to X.'), true);
+  assert.match(packFromSettings({ ...s, business: { ...s.business, name: 'X' } }).greeting, /you’re through to X\. Calls are recorded/);
 });

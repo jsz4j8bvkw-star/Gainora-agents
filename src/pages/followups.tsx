@@ -6,7 +6,7 @@ import { Button, ErrorNote, Icon, Loading, useToast } from '../components/ui';
 import { Compose } from '../components/compose';
 import { who } from '../components/enquiry';
 import { money, relative, shortDate } from '../lib/format';
-import { followUps, paymentReminder, quoteChaser, reviewRequest, type FollowItem } from '../../shared/capture';
+import { followUps, paymentReminder, quoteChaser, reviewRequest, words, type FollowItem } from '../../shared/capture';
 import type { EnquiryPatch } from '../lib/types';
 
 const GROUPS: { kind: FollowItem['kind']; title: string; hint: string; icon: string }[] = [
@@ -50,7 +50,7 @@ export function FollowUps() {
     const e = f.enquiry;
     if (f.kind === 'quote') return `Quoted ${e.quoteAmount ? money(e.quoteAmount) : ''} ${e.quotedAt ? relative(e.quotedAt) : ''}${e.chasersSent ? `, ${e.chasersSent} chaser sent` : ''}`.replace(/\s+/g, ' ').trim();
     if (f.kind === 'payment') return `${e.jobValue ? money(e.jobValue) : 'Balance'} due ${e.invoiceDue ? shortDate(e.invoiceDue) : ''}${e.paymentRemindersSent ? `, ${e.paymentRemindersSent} ${e.paymentRemindersSent === 1 ? 'reminder' : 'reminders'} sent` : ''}`;
-    return `Job done${e.jobValue ? `, ${money(e.jobValue)}` : ''}${e.paidAt ? `, paid ${relative(e.paidAt)}` : ''}`;
+    return `${words(settings.business.kind).won}${e.jobValue ? `, ${money(e.jobValue)}` : ''}${e.paidAt ? `, paid ${relative(e.paidAt)}` : ''}`;
   };
 
   const Row = ({ f }: { f: FollowItem }) => (
@@ -89,7 +89,7 @@ export function FollowUps() {
       {items.length === 0 && (
         <div className="panel empty section">
           <h2 className="heading">Nothing to follow up</h2>
-          <p className="muted mt-8">When you mark an enquiry as “Quote sent” or “Job done”, its chasers, payment reminders and review request appear here on the right day.</p>
+          <p className="muted mt-8">When you mark an enquiry as “Quote sent” or “{words(settings.business.kind).won}”, its chasers, payment reminders and review request appear here on the right day.</p>
         </div>
       )}
 

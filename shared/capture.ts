@@ -1,6 +1,6 @@
 // Capture & Convert: the parts Gainora owns around a bought-in AI receptionist.
 // Everything here is pure (no network), so the phone platform can be swapped without touching it:
-//  - receptionistPack: the script and answers we paste into whichever platform the client is on
+//  - packFromSettings: the script and answers we paste into whichever platform the client is on
 //  - normaliseEnquiry: turns any platform's webhook (or a web form / forwarded email) into one shape
 //  - triage: flags emergencies and sorts enquiries so the owner sees what matters first
 //  - reminder templates: quote chasers, payment reminders and review requests the owner approves and sends
@@ -10,103 +10,126 @@ export const GAS_EMERGENCY = '0800 111 999';
 /* ---------- Receptionist setup pack ---------- */
 
 export type QuotePolicy = 'never' | 'ranges' | 'fixed';
-
-export interface ReceptionistSetup {
-  hours?: string;             // "Mon–Fri 8am–6pm, Sat 9am–1pm"
-  areas?: string;             // "Truro and 20 miles around"
-  services?: string[];        // what they do
-  notDone?: string[];         // what they don't do, so the agent can say no politely
-  emergencies?: string[];     // what counts as urgent for this business
-  quotePolicy?: QuotePolicy;  // whether the agent may talk about prices
-  priceNotes?: string;        // the ranges or fixed prices it may give
-  transferTo?: string;        // who gets urgent calls, e.g. "Dave on 07…" (kept as the owner wrote it)
-  booking?: 'calendar' | 'callback';
-  gasWork?: boolean;          // heating / gas engineers get the gas-escape script
-  recording?: boolean;        // calls are recorded (default true)
-}
-
+export type BusinessKind = 'trade' | 'appointments';
+export type BookingMode = 'book' | 'offer' | 'callback';
+export interface AppointmentType { name: string; minutes: number; price: string; who: string }
 export interface PackSection { title: string; lines: string[] }
 export interface ReceptionistPack { greeting: string; sections: PackSection[]; text: string }
 
-interface ProfileLike {
-  business: { name: string; ownerName?: string; location?: string; oneLiner?: string; industry?: string; website?: string };
-  offer?: { products?: string; typicalPrice?: string };
-  customers?: { areas?: string[] };
-}
-
 const clean = (s: unknown, max = 300) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
-const list = (xs: unknown, max = 12) => (Array.isArray(xs) ? xs : []).map((x) => clean(x, 120)).filter(Boolean).slice(0, max);
 
 const DEFAULT_EMERGENCIES = ['water leaking or flooding', 'no heating or hot water for someone vulnerable', 'no power', 'a security risk, such as a broken lock or window'];
+export const DEFAULT_GREETING = '{greeting}, you’re through to {business}. How can I help?';
+export const DEFAULT_SAFETY = 'New numbness or tingling around the bottom, groin or genitals\nNew problems controlling the bladder or bowels\nWeakness in both legs, or getting worse quickly\nChest pain or difficulty breathing\nA recent serious fall or accident';
 
-/** The greeting always says it's an AI and, when calls are recorded, says so. */
-export function greetingFor(businessName: string, recording = true): string {
-  const name = clean(businessName, 80) || 'the business';
-  return `Hi, you're through to ${name}. I'm their AI assistant${recording ? ', and calls are recorded so we can help you properly' : ''}. How can I help?`;
+function timeOfDay(d = new Date()): string {
+  const h = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', hour: 'numeric', hourCycle: 'h23' }).format(d));
+  return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
 }
 
 /**
- * The script and knowledge for the receptionist, written from the client's Gainora profile plus what the
- * onboarding call adds. It's plain text, so it pastes into any platform's prompt and knowledge fields.
+ * The opening line, from the owner's template. {business} and {greeting} are filled in
+ * ({greeting} becomes good morning, afternoon or evening). A recording notice is added when calls
+ * are recorded, and an AI notice only if the owner chose to announce it.
  */
-export function receptionistPack(profile: ProfileLike, setup: ReceptionistSetup = {}): ReceptionistPack {
-  const b = profile.business;
+export function greetingFor(s: Pick<CaptureSettings, 'business' | 'calls'>, now = new Date()): string {
+  const name = clean(s.business.name, 80) || 'the business';
+  let g = clean(s.calls.greeting || DEFAULT_GREETING, 300).replace(/\{business\}/gi, name).replace(/\{greeting\}/gi, timeOfDay(now));
+  g = g.charAt(0).toUpperCase() + g.slice(1);
+  const cap = (x: string) => x.charAt(0).toUpperCase() + x.slice(1);
+  const stop = (x: string) => { const t = x.trimEnd().replace(/[,;:–-]$/, '').trimEnd(); return /[.!?]$/.test(t) ? t : `${t}.`; };
+  const before = (extra: string) => { const m = g.match(/(How (can|may) I help( you)?( today)?\??)$/i); g = m ? `${stop(g.slice(0, m.index))} ${extra} ${cap(m[1])}` : `${stop(g)} ${extra}`; };
+  if (s.calls.announceAi && !/\bAI\b/.test(g)) before('I’m the AI assistant here.');
+  if (s.calls.recording && !/record/i.test(g)) before('Calls are recorded for quality and training.');
+  return g.replace(/\s+/g, ' ').trim();
+}
+
+/** The script and knowledge for the receptionist. Plain text, so it pastes into any platform. */
+export function packFromSettings(s: CaptureSettings): ReceptionistPack {
+  const b = s.business;
+  const appts = b.kind === 'appointments';
   const name = clean(b.name, 80) || 'the business';
   const owner = clean(b.ownerName, 40) || 'the owner';
-  const recording = setup.recording !== false;
-  const greeting = greetingFor(name, recording);
-  const services = list(setup.services).length ? list(setup.services) : [clean(profile.offer?.products) || clean(b.oneLiner)].filter(Boolean);
-  const areas = clean(setup.areas) || [clean(b.location), ...list(profile.customers?.areas)].filter(Boolean).join(', ');
-  const emergencies = list(setup.emergencies).length ? list(setup.emergencies) : DEFAULT_EMERGENCIES;
-  const policy: QuotePolicy = setup.quotePolicy ?? 'never';
-  const booking = setup.booking ?? 'callback';
+  const team = appts ? 'the team' : owner;
+  const greeting = greetingFor(s);
+  const services = lines(s.work.services);
+  const notDone = lines(s.work.notDone);
+  const hours = hoursText(s.calls);
+  const bk = s.bookings;
+  const types = (bk.types || []).filter((t) => clean(t.name));
+  const staff = lines(bk.staff);
+  const mode = bk.mode;
+  const who = appts ? 'patient or client' : 'customer';
 
   const sections: PackSection[] = [
     { title: 'Who you are', lines: [
-      `You answer the phone for ${name}${b.location ? `, based in ${clean(b.location, 80)}` : ''}. ${clean(b.oneLiner)}`.trim(),
-      'You are an AI assistant. Say so if asked, and never pretend to be a person.',
-      'Be warm, brief and plain-spoken. British English. One question at a time.',
+      `You answer the phone for ${name}${b.location ? `, ${appts ? 'at' : 'based in'} ${clean(b.location, 80)}` : ''}${b.trade ? ` (${clean(b.trade, 60).toLowerCase()})` : ''}.`,
+      'Sound like an experienced, friendly receptionist: warm, calm and professional. British English. Short, natural replies, one question at a time. Never rush the caller.',
+      s.calls.announceAi
+        ? 'You are an AI assistant, and you say so in your greeting.'
+        : 'You do not need to say you are an AI unless asked. Never claim to be a person. If anyone asks whether they are speaking to a real person, a robot or an AI, always answer honestly that you are the ' + name + ' AI assistant, and offer to pass a message to ' + team + '.',
     ] },
-    { title: 'Opening line', lines: [greeting] },
-    { title: 'What we do', lines: [...services, ...(list(setup.notDone).length ? [`We don't do: ${list(setup.notDone).join(', ')}. Say so kindly and don't recommend anyone else.`] : [])] },
+    { title: 'Opening line', lines: [greeting, 'Use good morning, good afternoon or good evening to match the time.'] },
+    { title: appts ? 'What we offer' : 'What we do', lines: [...services, ...(notDone.length ? [`We don't do: ${notDone.join(', ')}. Say so kindly and don't recommend anyone else.`] : [])] },
     { title: 'Where and when', lines: [
-      areas ? `Areas covered: ${areas}. If the job is outside this, take the details anyway and say ${owner} will confirm.` : `Take the address for every job; ${owner} confirms the area.`,
-      setup.hours ? `Opening hours: ${clean(setup.hours)}. Outside these hours, still take full details.` : 'Take full details at any time of day.',
+      ...(appts
+        ? [bk.address ? `Appointments are at ${clean(bk.address, 200)}.` : 'Confirm the address from the booking system.', ...(bk.arrival ? [`Tell people when they book: ${clean(bk.arrival, 300)}`] : [])]
+        : [s.work.areas ? `Areas covered: ${clean(s.work.areas)}. If the job is outside this, take the details anyway and say ${owner} will confirm.` : `Take the address for every job; ${owner} confirms the area.`]),
+      hours ? `Opening hours: ${hours}. Outside these hours, still help and take full details.` : 'Help callers at any time of day.',
     ] },
-    { title: 'Details to collect, every call', lines: [
-      'Name.', 'Best phone number (read it back to check).', 'Address with postcode (spell back the postcode).',
+    { title: 'Details to collect, every call', lines: appts ? [
+      'Full name. Ask them to spell the surname if you are not sure, and read it back.',
+      'Best phone number: confirm the number they are calling from, or read a new one back.',
+      `Whether they are a new or returning ${who}.`,
+      'In a few words, what they would like help with. Do not ask for medical details beyond that.',
+      'Which days and times suit them.',
+      'Email address only if they want a confirmation by email: spell it back.',
+    ] : [
+      'Name. Ask them to spell the surname if you are not sure.', 'Best phone number (read it back to check).', 'Address with postcode (spell back the postcode).',
       'What the problem or job is, in their words, and how long it has been going on.',
       'When suits them for a visit or a call back.', 'How they found us.',
     ] },
-    { title: 'Emergencies', lines: [
-      `Treat these as urgent: ${emergencies.join('; ')}.`,
-      setup.transferTo ? `For an urgent job, say you're passing it straight to the team and transfer or alert: ${clean(setup.transferTo, 120)}.` : `For an urgent job, say you're flagging it to ${owner} straight away and that they'll call back as soon as they can. Don't promise a time.`,
-      ...(setup.gasWork !== false ? [`If the caller can smell gas or thinks there's a gas leak: tell them to call the National Gas Emergency number, ${GAS_EMERGENCY}, now, and to leave the property if they feel unsafe. Don't give any other safety advice.`] : []),
+    { title: 'Booking', lines: [
+      ...(types.length ? [`Appointment types: ${types.map((t) => `${clean(t.name, 60)} (${t.minutes} min${t.price ? `, ${clean(t.price, 20)}` : ''}${t.who ? `, with ${clean(t.who, 60)}` : ''})`).join('; ')}.`] : []),
+      ...(staff.length ? [`Team: ${staff.join(', ')}. Offer whoever is free unless the caller asks for someone.`] : []),
+      mode === 'book' ? `Check the diary for free times${bk.noticeHours ? ` at least ${bk.noticeHours} hours ahead` : ''}${bk.aheadWeeks ? ` and no more than ${bk.aheadWeeks} weeks ahead` : ''}. Offer two options, book the one they choose, then read back the day, date, time${staff.length ? ', who it is with' : ''} and the address.`
+        : mode === 'offer' ? `Check the diary and offer two free times. Take their choice and say ${team} will confirm it by text shortly.`
+        : `Don't book a time. Take the details and say ${team} will call back to arrange it.`,
+      ...(bk.cancellation ? [`Cancellation policy, mention it when booking: ${clean(bk.cancellation, 200)}`] : []),
+      `Tell them they'll get a text confirming the details.`,
+      'At the end, sum up what happens next in one sentence and thank them for calling.',
+    ] },
+    { title: appts ? 'Safety' : 'Emergencies', lines: appts ? [
+      'Never diagnose or give medical advice. You can say it sounds like something the team can help with.',
+      `If the caller describes any of these, do not book. Tell them to call 999 or go to A&E now, or call NHS 111 if they are unsure, and say you will let ${team} know: ${lines(s.calls.safety || DEFAULT_SAFETY).join('; ')}.`,
+      'If anyone is in danger or seriously hurt, tell them to call 999.',
+      ...(s.calls.transferTo ? [`For anything urgent that isn't an emergency: ${clean(s.calls.transferTo, 160)}.`] : []),
+    ] : [
+      `Treat these as urgent: ${(lines(s.calls.emergencies).length ? lines(s.calls.emergencies) : DEFAULT_EMERGENCIES).join('; ')}.`,
+      s.calls.transferTo ? `For an urgent job, say you're passing it straight to the team and transfer or alert: ${clean(s.calls.transferTo, 160)}.` : `For an urgent job, say you're flagging it to ${owner} straight away and that they'll call back as soon as they can. Don't promise a time.`,
+      ...(s.calls.gasWork ? [`If the caller can smell gas or thinks there's a gas leak: tell them to call the National Gas Emergency number, ${GAS_EMERGENCY}, now, and to leave the property if they feel unsafe. Don't give any other safety advice.`] : []),
       'If anyone is in danger or hurt, tell them to call 999.',
     ] },
     { title: 'Prices', lines: [
-      policy === 'never' ? `Don't give prices. Say ${owner} gives every quote personally after a quick look, and offer a visit or call back.`
-        : policy === 'ranges' ? `You may give these guide prices only, and always say the final price is confirmed after a look: ${clean(setup.priceNotes) || clean(profile.offer?.typicalPrice) || 'ask the owner for ranges before going live'}.`
-        : `These are fixed prices you may quote: ${clean(setup.priceNotes) || 'ask the owner for the price list before going live'}. Anything not listed gets a call back.`,
+      appts
+        ? (s.calls.quotePolicy === 'never' ? `Don't give prices. Say ${team} will confirm the fee.` : `You may give the prices listed for each appointment type${s.calls.priceNotes ? `, and: ${clean(s.calls.priceNotes)}` : ''}.`)
+        : s.calls.quotePolicy === 'never' ? `Don't give prices. Say ${owner} gives every quote personally after a quick look, and offer a visit or call back.`
+        : s.calls.quotePolicy === 'ranges' ? `You may give these guide prices only, and always say the final price is confirmed after a look: ${clean(s.calls.priceNotes) || 'ask the owner for ranges before going live'}.`
+        : `These are fixed prices you may quote: ${clean(s.calls.priceNotes) || 'ask the owner for the price list before going live'}. Anything not listed gets a call back.`,
       'Never agree discounts, refunds or guarantees.',
-    ] },
-    { title: 'Booking', lines: [
-      booking === 'calendar' ? 'Offer the first free slots from the calendar that suit the caller, and confirm the day, time and address back to them.'
-        : `Don't book a time. Take the details and say ${owner} will call back to arrange it.`,
-      'At the end, sum up what happens next in one sentence.',
     ] },
     { title: 'Never', lines: [
       'Never take card or bank details over the phone.',
-      'Never give technical or safety advice beyond the emergency lines above.',
-      'Never criticise other businesses or previous tradespeople.',
-      'Never make up an answer: if unsure, say you will check and someone will call back.',
+      appts ? 'Never give medical advice or a diagnosis.' : 'Never give technical or safety advice beyond the emergency lines above.',
+      'Never criticise other businesses.',
+      'Never make up an answer: if unsure, say you will check and someone will get back to them.',
     ] },
-    { title: 'Your information', lines: [
-      `If asked, say the details are only used by ${name} to deal with the enquiry${recording ? ', and that recordings are kept for a limited time' : ''}. ${b.website ? `More is on ${clean(b.website, 120)}.` : ''}`.trim(),
+    { title: 'Their information', lines: [
+      `If asked, say the details are only used by ${name} to deal with their ${appts ? 'appointment' : 'enquiry'}${s.calls.recording ? ', and that recordings are kept for a limited time' : ''}.${b.website ? ` More is on ${clean(b.website, 120)}.` : ''}`,
     ] },
   ];
 
-  const text = [`# Receptionist for ${name}`, ...sections.map((s) => `## ${s.title}\n${s.lines.map((l) => `- ${l}`).join('\n')}`)].join('\n\n');
+  const text = [`# Receptionist for ${name}`, ...sections.map((x) => `## ${x.title}\n${x.lines.map((l) => `- ${l}`).join('\n')}`)].join('\n\n');
   return { greeting, sections, text };
 }
 
@@ -202,13 +225,13 @@ export type EnquiryKind = 'quote' | 'booking' | 'callback' | 'complaint' | 'spam
 export interface Triage { urgency: Urgency; kind: EnquiryKind; gas: boolean; reasons: string[] }
 
 const GAS = /\b(smell(s|ing)? (of )?gas|gas (leak|smell|escape)|leaking gas)\b/i;
-const EMERGENCY = /\b(flood(ed|ing)?|burst|water (pouring|everywhere|coming through)|no (heating|heat|hot water|power|electric(ity)?)|sparking|smoke|fire|carbon monoxide|co alarm|locked out|break[- ]?in|broken (lock|window|door)|ceiling (collaps|coming down)|sewage|overflowing)\b/i;
+const EMERGENCY = /\b(chest pain|can'?t breathe|difficulty breathing|(lost|losing|no) control of (my |his |her |their |the )?(bladder|bowels?)|numb(ness)? (around|in) (my |his |her |their |the )?(groin|bottom|genitals)|flood(ed|ing)?|burst|water (pouring|everywhere|coming through)|no (heating|heat|hot water|power|electric(ity)?)|sparking|smoke|fire|carbon monoxide|co alarm|locked out|break[- ]?in|broken (lock|window|door)|ceiling (collaps|coming down)|sewage|overflowing)\b/i;
 const URGENT = /\b(urgent(ly)?|asap|as soon as possible|today|tonight|emergency|right away|leak(ing)?|dripping|not working|broken down|stopped working)\b/i;
 const VULNERABLE = /\b(elderly|baby|newborn|disabled|pregnant|vulnerable|poorly|oxygen)\b/i;
 const COMPLAINT = /\b(complain|complaint|not happy|unhappy|disappointed|refund|still broken|came back|botched|shoddy)\b/i;
 const SPAM = /\b(seo|backlinks?|google ranking|marketing agency|business loan|merchant (services|account)|crypto|we can get you more (leads|customers))\b/i;
 const QUOTE = /\b(quote|price|how much|cost|estimate)\b/i;
-const BOOK = /\b(book|appointment|come out|visit|available|slot|service (my|the))\b/i;
+const BOOK = /\b(book(ed|ing)?|appointment|consultation|come out|visit|available|slot|service (my|the))\b/i;
 const CALLBACK = /\b(call (me )?back|ring (me )?back|callback)\b/i;
 
 export function triage(text: string): Triage {
@@ -317,8 +340,19 @@ export function reviewRequest(c: MessageContext): string {
    The app's own data: settings, enquiry records, follow-up queue, report
    ====================================================================== */
 
+export interface Bookings {
+  system: string; systemOther: string; account: string;
+  mode: BookingMode;
+  address: string; arrival: string;
+  types: AppointmentType[];
+  staff: string;
+  noticeHours: number; aheadWeeks: number;
+  cancellation: string;
+  status: 'not_connected' | 'requested' | 'connected';
+}
+
 export interface CaptureSettings {
-  business: { name: string; ownerName: string; trade: string; location: string; website: string; phone: string; alertEmail: string; alertMobile: string };
+  business: { kind: BusinessKind; name: string; ownerName: string; trade: string; location: string; website: string; phone: string; alertEmail: string; alertMobile: string };
   work: { services: string; notDone: string; areas: string };          // one per line
   calls: {
     days: number[]; open: string; close: string;                        // 1 = Monday … 7 = Sunday, "08:00"
@@ -326,26 +360,47 @@ export interface CaptureSettings {
     quotePolicy: QuotePolicy; priceNotes: string;
     booking: 'calendar' | 'callback'; gasWork: boolean; recording: boolean;
     notify: 'all' | 'urgent';
+    greeting: string; announceAi: boolean; safety: string;
   };
+  bookings: Bookings;
   followUps: { reviewLink: string; payLink: string; paymentDays: number };
   provider: { name: string; aiNumber: string };
   completedAt?: string;
 }
 
 export const TRADES = ['Plumbing and heating', 'Electrical', 'Building and renovation', 'Roofing', 'Locksmith', 'Cleaning', 'Landscaping and gardening', 'Pest control', 'Removals', 'Other trade or home service'];
+export const CLINICS = ['Physiotherapy', 'Chiropractic', 'Osteopathy', 'Sports massage and therapy', 'Podiatry', 'Hair and beauty', 'Dental', 'Other clinic or appointments'];
+export const BOOKING_SYSTEMS = ['Google Calendar', 'Microsoft Outlook or 365', 'Apple Calendar (iCloud)', 'Calendly', 'Cal.com', 'Cliniko', 'Jane', 'WriteUpp', 'Fresha', 'Setmore', 'Acuity Scheduling', 'Square Appointments', 'Jobber', 'Tradify', 'ServiceM8', 'A paper diary, or nothing yet', 'Something else'];
+/** Systems Gainora can book straight into today; the rest are connected client by client. */
+export const DIRECT_SYSTEMS = ['Google Calendar', 'Microsoft Outlook or 365', 'Cal.com', 'Calendly'];
 export const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 export function emptySettings(email = ''): CaptureSettings {
   return {
-    business: { name: '', ownerName: '', trade: '', location: '', website: '', phone: '', alertEmail: email, alertMobile: '' },
+    business: { kind: 'trade', name: '', ownerName: '', trade: '', location: '', website: '', phone: '', alertEmail: email, alertMobile: '' },
     work: { services: '', notDone: '', areas: '' },
-    calls: { days: [1, 2, 3, 4, 5], open: '08:00', close: '17:30', emergencies: '', transferTo: '', quotePolicy: 'never', priceNotes: '', booking: 'callback', gasWork: false, recording: true, notify: 'urgent' },
+    calls: { days: [1, 2, 3, 4, 5], open: '08:00', close: '17:30', emergencies: '', transferTo: '', quotePolicy: 'never', priceNotes: '', booking: 'callback', gasWork: false, recording: true, notify: 'urgent', greeting: DEFAULT_GREETING, announceAi: false, safety: '' },
+    bookings: { system: '', systemOther: '', account: '', mode: 'callback', address: '', arrival: '', types: [], staff: '', noticeHours: 2, aheadWeeks: 4, cancellation: '', status: 'not_connected' },
     followUps: { reviewLink: '', payLink: '', paymentDays: 14 },
     provider: { name: '', aiNumber: '' },
   };
 }
 
 /** One item per line (semicolons work too). Commas are kept: “Leaks, taps and toilets” is one item. */
+/** Saved settings with every field present, however old the saved copy is. */
+export function withDefaults(data: any): CaptureSettings {
+  const d = emptySettings();
+  return {
+    business: { ...d.business, ...(data?.business ?? {}) },
+    work: { ...d.work, ...(data?.work ?? {}) },
+    calls: { ...d.calls, ...(data?.calls ?? {}) },
+    bookings: { ...d.bookings, ...(data?.bookings ?? {}), types: Array.isArray(data?.bookings?.types) ? data.bookings.types : [] },
+    followUps: { ...d.followUps, ...(data?.followUps ?? {}) },
+    provider: { ...d.provider, ...(data?.provider ?? {}) },
+    completedAt: data?.completedAt,
+  };
+}
+
 export const lines = (s: string | undefined) => String(s ?? '').split(/\n|;/).map((x) => x.trim()).filter(Boolean);
 
 export function hoursText(c: CaptureSettings['calls']): string {
@@ -360,18 +415,6 @@ export function hoursText(c: CaptureSettings['calls']): string {
   }
   const t = (s: string) => { const [h, m] = s.split(':').map(Number); const ap = h >= 12 ? 'pm' : 'am'; const h12 = h % 12 || 12; return m ? `${h12}:${String(m).padStart(2, '0')}${ap}` : `${h12}${ap}`; };
   return `${runs.join(', ')} ${t(c.open)}–${t(c.close)}`;
-}
-
-/** The receptionist pack from the app's settings. */
-export function packFromSettings(s: CaptureSettings): ReceptionistPack {
-  return receptionistPack(
-    { business: { name: s.business.name, ownerName: s.business.ownerName, location: s.business.location, website: s.business.website, oneLiner: s.business.trade ? `A ${s.business.trade.toLowerCase()} business.` : '' } },
-    {
-      hours: hoursText(s.calls), areas: s.work.areas, services: lines(s.work.services), notDone: lines(s.work.notDone),
-      emergencies: lines(s.calls.emergencies), quotePolicy: s.calls.quotePolicy, priceNotes: s.calls.priceNotes,
-      transferTo: s.calls.transferTo, booking: s.calls.booking, gasWork: s.calls.gasWork, recording: s.calls.recording,
-    },
-  );
 }
 
 /** Day of week (1–7) and minutes past midnight, in UK time. */
@@ -425,6 +468,13 @@ export interface EnquiryPatch {
   name?: string; phone?: string; email?: string; postcode?: string;
 }
 
+/** The words that change between a trade and an appointment business. */
+export function words(kind?: BusinessKind) {
+  const a = kind === 'appointments';
+  return { won: a ? 'Attended' : 'Job done', wonTab: a ? 'Attended' : 'Won', job: a ? 'appointment' : 'job', jobs: a ? 'appointments' : 'jobs', value: a ? 'Fee' : 'Job value', customer: a ? 'client' : 'customer' };
+}
+export const statusLabel = (st: EnquiryStatus, kind?: BusinessKind) => (st === 'won' ? words(kind).won : STATUS_LABEL[st]);
+
 export const STATUS_LABEL: Record<EnquiryStatus, string> = Object.fromEntries(ENQUIRY_STATUSES.map((s) => [s.id, s.label])) as Record<EnquiryStatus, string>;
 export const KIND_LABEL: Record<EnquiryKind, string> = { quote: 'Quote', booking: 'Booking', callback: 'Call back', complaint: 'Complaint', spam: 'Spam', other: 'Enquiry' };
 export const CHANNEL_LABEL: Record<Channel, string> = { call: 'Phone call', form: 'Website form', email: 'Email', text: 'Text' };
@@ -433,7 +483,8 @@ const DAY_MS = 86_400_000;
 const addDays = (iso: string, d: number) => new Date(new Date(iso).getTime() + d * DAY_MS).toISOString();
 
 /** Works out the record after a change: dates stamped, counters moved, history written. Pure, so the server and the demo agree. */
-export function applyPatch(e: EnquiryRecord, p: EnquiryPatch, settings: Pick<CaptureSettings, 'followUps'> | null, now = new Date()): EnquiryRecord {
+export function applyPatch(e: EnquiryRecord, p: EnquiryPatch, settings: (Pick<CaptureSettings, 'followUps'> & { business?: { kind?: BusinessKind } }) | null, now = new Date()): EnquiryRecord {
+  const W = words(settings?.business?.kind);
   const at = now.toISOString();
   const next: EnquiryRecord = { ...e, history: [...e.history] };
   const log = (text: string) => next.history.push({ at, text });
@@ -455,12 +506,12 @@ export function applyPatch(e: EnquiryRecord, p: EnquiryPatch, settings: Pick<Cap
     else if (p.status === 'booked') log(next.bookedFor ? `Booked in for ${new Date(next.bookedFor).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}` : 'Booked in');
     else if (p.status === 'won') {
       if (!next.invoiceDue && next.jobValue) next.invoiceDue = addDays(at, settings?.followUps.paymentDays ?? 14).slice(0, 10);
-      log(`Job done${money(next.jobValue)}`);
+      log(`${W.won}${money(next.jobValue)}`);
     }
     else if (p.status === 'lost') log('Didn’t go ahead');
     else if (p.status === 'spam') log('Filed as spam');
     else log(`Moved to ${STATUS_LABEL[p.status].toLowerCase()}`);
-  } else if (p.status === 'won' && p.jobValue !== undefined) log(`Job value set${money(next.jobValue)}`);
+  } else if (p.status === 'won' && p.jobValue !== undefined) log(`${W.value} set${money(next.jobValue)}`);
 
   if (p.chaserSent) { next.chasersSent = e.chasersSent + 1; log(`Quote chaser ${next.chasersSent} sent`); }
   if (p.paymentReminderSent) { next.paymentRemindersSent = e.paymentRemindersSent + 1; log(`Payment reminder ${next.paymentRemindersSent} sent`); }
@@ -495,7 +546,7 @@ export function followUps(list: EnquiryRecord[], now = new Date()): FollowItem[]
       }
     }
     if (e.status === 'won' && !e.reviewAskedAt && (e.paidAt || !e.invoiceDue)) {
-      const from = e.paidAt ?? e.history.find((h) => h.text.startsWith('Job done'))?.at ?? e.receivedAt;
+      const from = e.paidAt ?? e.history.find((h) => /^(Job done|Attended)/.test(h.text))?.at ?? e.receivedAt;
       const dueAt = addDays(from, 1);
       out.push({ enquiry: e, kind: 'review', stage: 1, label: 'Ask for a review', due: new Date(dueAt) <= now, dueAt });
     }
