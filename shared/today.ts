@@ -83,7 +83,7 @@ export function planToday(input: TodayInput, limit = 3): TodayItem[] {
       items.push({
         id: `follow-${l.id}`, agent: 'scout', weight: 75 + (l.value ? 10 : 0),
         title: `Follow up with ${l.name}`,
-        why: `${days ? `You got in touch ${plural(days, 'day')} ago and haven’t heard back, which is normal. ` : ''}${l.followUps >= 1 ? 'A last, gracious note is written for you.' : 'A short, friendly nudge is written for you, and most replies come after one.'}${l.value ? ` You put this deal at ${money(l.value)}.` : ''}`,
+        why: `${days ? `You got in touch ${plural(days, 'day')} ago and haven’t heard back, which is normal. ` : ''}${l.followUps >= 1 ? 'A last, gracious note is written for you.' : 'A short, friendly nudge is written for you.'}${l.value ? ` You put this deal at ${money(l.value)}.` : ''}`,
         cta: 'Open the follow-up', link: `/scout?tab=leads&lead=${encodeURIComponent(l.id)}`,
       });
     }
