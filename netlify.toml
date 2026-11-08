@@ -1,0 +1,45 @@
+# Gainora Capture & Convert — capture.gainora.co.uk
+[build]
+  command = "node scripts/build.mjs"
+  publish = "dist"
+  functions = "netlify/functions"
+
+# The Supabase address and publishable key are public by design: they're built into the app
+# so the browser can sign in. Tell Netlify's secret scan not to treat them as leaked secrets.
+# The service role key, Claude key and internal secret are never in the app, only in functions.
+[build.environment]
+  SECRETS_SCAN_OMIT_KEYS = "SUPABASE_URL,SUPABASE_ANON_KEY,APP_URL,EMAIL_FROM"
+
+[functions]
+  node_bundler = "esbuild"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=()"
+    X-Robots-Tag = "noindex"
+
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+# Website forms post here from other sites, so this one path accepts cross-site form posts.
+[[headers]]
+  for = "/api/enquiry-in/*"
+  [headers.values]
+    Cache-Control = "no-store"
+
+# Single-page app: every route serves the app shell.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
