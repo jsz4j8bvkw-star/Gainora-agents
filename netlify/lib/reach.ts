@@ -8,7 +8,7 @@
 // Cost rules: Google Places calls are counted per client per month (PLACES_MONTHLY_CAP, default 60);
 // the nearby search runs monthly; ratings weekly with the smallest field mask. The AI runs on
 // the fast model and only when a page's text actually changed (hashes are kept per URL).
-import { ai, extractJson, hasBanned, HOUSE_STYLE, profileContext } from './ai';
+import { ai, aiConfigured, extractJson, hasBanned, HOUSE_STYLE, profileContext } from './ai';
 import { env } from './core';
 import { googleConfigured, placeLocation, placeRating, searchPlaces } from './google';
 import { discover, metaConfigured, refreshTokenIfDue } from './meta';
@@ -97,6 +97,7 @@ const changed = (prev: Record<string, string> | undefined, next: Record<string, 
 /* ---------- AI extraction: services, prices and offers from page text ---------- */
 async function extractServices(userId: string, who: string, pages: PageLines[], sources: Record<string, string>, seenAt: string): Promise<{ services: ServiceLine[]; offers: OfferLine[] } | null> {
   if (!pages.length) return { services: [], offers: [] };
+  if (!aiConfigured()) return null; // keep whatever was read before; nothing is invented
   const fmt = pages.map((p) => `Page: ${p.url}${p.booking ? ' (public booking page)' : ''}\n${p.lines.join('\n')}`).join('\n\n');
   try {
     const r = await ai({
@@ -112,6 +113,7 @@ async function extractServices(userId: string, who: string, pages: PageLines[], 
 async function extractCaptions(userId: string, who: string, posts: { id: string; caption: string; url: string }[], seenAt: string): Promise<OfferLine[] | null> {
   const withText = posts.filter((p) => p.caption.trim().length > 15);
   if (!withText.length) return [];
+  if (!aiConfigured()) return null;
   try {
     const r = await ai({
       userId, agent: 'watcher', maxTokens: 1200, fast: true,
@@ -158,7 +160,7 @@ async function instagramSnapshot(userId: string, who: string, pageUrl: string, p
 async function writeAdvice(userId: string, profile: any, list: TrackedCompetitor[], you: { rating: number | null; count: number | null; reviews30: number | null; services: ServiceLine[] }, events: ReachEvent[], now: Date): Promise<ReachAdvice[]> {
   const fallback = adviseReach(list, you, events, now);
   const recent = events.filter((e) => now.getTime() - new Date(e.at).getTime() < 8 * DAY).slice(0, 8);
-  if (!list.length) return fallback;
+  if (!list.length || !aiConfigured()) return fallback;
   const facts = [
     `YOU: Google ${you.rating ?? '–'} stars from ${you.count ?? '–'} reviews; ${you.reviews30 != null ? `${you.reviews30} new reviews in the last 30 days` : 'review pace not known yet'}. Your listed services: ${you.services.slice(0, 15).map((s) => `${s.name} ${s.price}`).join('; ') || 'none read yet'}.`,
     ...list.map((c) => `${c.name} (${c.source === 'typed' ? 'named by you' : 'found nearby'}${c.distanceKm != null ? `, ${c.distanceKm} km away` : ''}): Google ${c.rating ?? '–'} stars from ${c.count ?? '–'} reviews${reviewsSince(c.history, 30, now) != null ? `, ${reviewsSince(c.history, 30, now)} new in 30 days` : ''}. Services: ${c.services.slice(0, 12).map((s) => `${s.name} ${s.price}`).join('; ') || 'none found'}. Offers: ${c.offers.map((o) => o.text).join(' | ') || 'none'}.${c.social && !c.social.error ? ` Instagram: ${c.social.followers ?? '–'} followers, ${c.social.postsLast30 ?? '–'} posts in 30 days.` : ''}`),
@@ -196,8 +198,9 @@ export async function checkReach(input: ReachInput): Promise<ReachOutput> {
   const { userId, profile } = input;
   const now = input.now ?? new Date();
   const at = now.toISOString();
-  const state: CompetitorsState = { ...emptyCompetitors(now), ...(input.prev ?? {}), list: [...(input.prev?.list ?? [])], nearby: [...(input.prev?.nearby ?? [])], dismissed: [...(input.prev?.dismissed ?? [])], events: [...(input.prev?.events ?? [])] };
-  const prevList = input.prev?.list ?? [];
+  // Deep copies: today's list is changed in place below, and yesterday's must stay as it was for the comparison.
+  const state: CompetitorsState = structuredClone({ ...emptyCompetitors(now), ...(input.prev ?? {}), list: input.prev?.list ?? [], nearby: input.prev?.nearby ?? [], dismissed: input.prev?.dismissed ?? [], events: input.prev?.events ?? [] });
+  const prevList: TrackedCompetitor[] = structuredClone(input.prev?.list ?? []);
   const budget = new PlacesBudget(state, now);
   const gathered: Gathered = { sources: {}, mine: [], theirs: {}, homes: {} };
   const ownSite: string = profile?.business?.website || '';
@@ -254,8 +257,14 @@ export async function checkReach(input: ReachInput): Promise<ReachOutput> {
     typed.push({ name: t.name.trim(), url: t.url || '', placeId, ...extra });
   }
   const merged = mergeTracked(prevList, typed, found, state.dismissed, now);
-  state.list = merged.list;
-  for (const t of typed) { const c = state.list.find((x) => x.key === competitorKey(t)); if (c && (t as any).placeLookupAt) c.placeLookupAt = (t as any).placeLookupAt; }
+  state.list = structuredClone(merged.list); // never share objects with yesterday's list
+  for (const t of typed) {
+    const c = state.list.find((x) => x.key === competitorKey(t));
+    if (!c || !(t as any).placeLookupAt) continue;
+    c.placeLookupAt = (t as any).placeLookupAt;
+    // The lookup that matched the listing already returned today's rating: no second call needed.
+    if (t.placeId && t.rating !== undefined) { c.history = addSample(c.history, t.rating ?? null, t.count ?? null, now); c.ratingCheckedAt = at; }
+  }
   if (found.length) state.nearby = merged.nearby;
   else state.nearby = state.nearby.filter((n) => !state.list.some((c) => c.key === n.key) && !state.dismissed.some((d) => d.key === n.key));
 

@@ -50,6 +50,10 @@ export interface Api {
   selectPlace(placeId: string): Promise<WatcherState>;
   draftReviewReply(reviewId: string): Promise<string>;
   setFixDone(fixTitle: string, done: boolean): Promise<void>;
+  /** Shape the watched competitors: not a competitor / watch another nearby / restore / set an Instagram handle. */
+  updateCompetitor(op: 'dismiss' | 'watch' | 'restore' | 'instagram', key: string, handle?: string): Promise<WatcherState>;
+  /** Ask the Watcher to look for businesses nearby now (at most weekly). */
+  findCompetitors(): Promise<{ started: boolean; message?: string }>;
 
   // Lead pipeline (The Scout)
   listLeads(): Promise<Lead[]>;

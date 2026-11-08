@@ -107,7 +107,7 @@ export function sameBusiness(a: { name: string; url?: string; placeId?: string }
   const wa = nameWords(a.name); const wb = nameWords(b.name);
   if (!wa.size || !wb.size) return slug(a.name) === slug(b.name);
   const shared = [...wa].filter((w) => wb.has(w)).length;
-  return shared / Math.min(wa.size, wb.size) >= 0.75;
+  return shared / Math.max(wa.size, wb.size) >= 0.6;
 }
 
 /* ---------- Geography ---------- */
@@ -152,12 +152,14 @@ const BY_INDUSTRY: Record<string, string> = {
 
 /** One or two Google search phrases that describe businesses like this one, from what it sells. */
 export function searchTerms(profile: any): string[] {
-  const text = [profile?.business?.oneLiner, profile?.offer?.products, profile?.offer?.bestSeller].filter(Boolean).join(' ');
-  const out: string[] = [];
-  for (const [re, term] of TERMS) if (re.test(text) && !out.includes(term)) { out.push(term); if (out.length === 2) break; }
+  // What the owner says they do comes first; what they sell only when that gives nothing; then the industry.
+  for (const text of [profile?.business?.oneLiner, [profile?.offer?.bestSeller, profile?.offer?.products].filter(Boolean).join(' ')]) {
+    const out: string[] = [];
+    for (const [re, term] of TERMS) if (text && re.test(text) && !out.includes(term)) { out.push(term); if (out.length === 2) break; }
+    if (out.length) return out;
+  }
   const fallback = BY_INDUSTRY[String(profile?.business?.industry || '')];
-  if (!out.length && fallback) out.push(fallback);
-  return out.slice(0, 2);
+  return fallback ? [fallback] : [];
 }
 
 /* ---------- Review velocity: a sign of how busy a business looks ---------- */
@@ -352,7 +354,7 @@ export function mergeTracked(
     }
   }
   // Found businesses that were watched before but didn't come back this month stay watched.
-  for (const p of (prev ?? [])) if (p.source === 'found' && !list.some((c) => c.key === p.key) && !isDismissed(p) && list.length < MAX_TRACKED) list.push(p);
+  for (const p of (prev ?? [])) if (p.source === 'found' && !list.some((c) => c.key === p.key) && !isDismissed(p) && list.length < MAX_TRACKED) list.push({ ...p });
   return { list: list.slice(0, MAX_TRACKED), nearby: nearby.slice(0, 10) };
 }
 
@@ -384,8 +386,9 @@ export function diffCompetitor(prev: TrackedCompetitor | undefined, next: Tracke
   const theirs = reviewsSince(next.history, 30, now);
   const before = reviewsSince(prev.history, 30, new Date(now.getTime() - 7 * DAY));
   if (theirs != null && theirs >= 5 && (mine == null || theirs >= 2 * Math.max(1, mine)) && (before == null || theirs > before)) {
-    const weekly = prev.history.length && next.history.length ? Math.max(0, (next.count ?? 0) - (prev.count ?? 0)) : 0;
-    if (weekly > 0 || before == null) {
+    const lastPrev = prev.history[prev.history.length - 1]?.count; const lastNext = next.history[next.history.length - 1]?.count;
+    const sinceLast = lastPrev != null && lastNext != null ? lastNext - lastPrev : 0;
+    if (sinceLast > 0 || before == null) {
       out.push({ ...base, id: eid('reviews', next.key, at), kind: 'reviews', url: next.mapsUrl, summary: `${next.name} got ${theirs} new Google reviews in the last 30 days${mine != null ? `; you got ${mine}` : ''}.`, detail: 'New reviews are a sign of how busy a business looks, not a count of their bookings.' });
     }
   }

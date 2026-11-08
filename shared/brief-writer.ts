@@ -28,6 +28,8 @@ export interface BriefContext {
   lowReview?: { author: string; rating: number } | null;
   topFix?: { title: string; who: 'You' | 'Your web person' } | null;
   weeksLeft?: number | null;
+  /** The most important competitor event this week (The Watcher's reach), with its suggested action. */
+  competitor?: { summary: string; action: string } | null;
 }
 
 /** The goal line: where the 90-day target stands, using only figures the app has. */
@@ -112,6 +114,7 @@ export function writeBrief(changes: MetricChange[], profile: BusinessProfile, ct
     else if (ctx.strongLeads) push(`Add the ${plural(ctx.strongLeads, 'strong-fit shop')} the Scout found to your leads and send the first two introductions`);
   }
   if (ctx.lowReview) push(`Reply to ${ctx.lowReview.author}’s ${ctx.lowReview.rating}-star review today (the reply is drafted in The Watcher)`);
+  if (ctx.competitor) push(`${ctx.competitor.action.replace(/\.$/, '')} (${lower(ctx.competitor.summary).replace(/\.$/, '')})`);
   const t = ctx.tenders?.[0];
   if (t && (t.daysLeft == null || t.daysLeft > 3)) push(`Decide whether to bid for “${t.title.length > 70 ? t.title.slice(0, 70).replace(/\s+\S*$/, '') + '…' : t.title}”${t.value ? ` (published value ${money(t.value)})` : ''}${t.daysLeft != null ? `, which closes in ${plural(t.daysLeft, 'day')}` : ''}`);
 

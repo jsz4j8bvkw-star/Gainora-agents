@@ -3,6 +3,7 @@ import type { ReviewsState } from '../../shared/reviews';
 import type { PriceTable } from '../../shared/prices';
 import type { LeadStage } from '../../shared/leads';
 import type { TodayItem } from '../../shared/today';
+import type { CompetitorsState } from '../../shared/competitors';
 export type { ValueEvent, ValueKind, ValueSummary } from '../../shared/value';
 export type { FeedbackRecord, FeedbackKind, Learned } from '../../shared/learning';
 export type { SpeedState, Fix } from '../../shared/speed';
@@ -10,6 +11,7 @@ export type { ReviewsState, ReviewItem, PlaceSummary } from '../../shared/review
 export type { PriceTable, PriceRow, PriceCell } from '../../shared/prices';
 export type { LeadStage } from '../../shared/leads';
 export type { TodayItem } from '../../shared/today';
+export type { CompetitorsState, TrackedCompetitor, NearbyPlace, ReachEvent, ReachAdvice, ServiceLine, OfferLine, InstagramSnapshot, InstaPost } from '../../shared/competitors';
 
 export type AgentId = 'watcher' | 'scout' | 'brief';
 
@@ -65,6 +67,8 @@ export interface WatcherState {
   reviews?: ReviewsState | null;
   speed?: SpeedState | null;
   prices?: PriceTable | null;
+  /** The competition: who is nearby, what they offer and charge, how their reviews move. */
+  competitors?: CompetitorsState | null;
 }
 
 export interface CompetitorChange {

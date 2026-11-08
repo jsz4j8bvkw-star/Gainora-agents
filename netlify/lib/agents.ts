@@ -205,6 +205,8 @@ export async function briefContext(userId: string, profile: any, now = new Date(
   const urgent = (w?.issues || []).find((i: any) => i.level === 'urgent');
   const topFix = (w?.speed?.fixes || []).find((f: any) => !f.done && f.impact === 'High');
   const started = profile?.completedAt ? new Date(profile.completedAt).getTime() : null;
+  const reachEvent = (w?.competitors?.events || []).find((e: any) => now.getTime() - new Date(e.at).getTime() < 7 * DAY_MS && e.kind !== 'followers');
+  const reachAction = reachEvent ? (w?.competitors?.advice?.lines || []).find((l: any) => l.key === reachEvent.key)?.action : null;
   return {
     dueFollowUps: leads.filter((l) => l.stage === 'contacted' && isDue(l.next_follow_up_at, now)).map((l) => l.name),
     leadsToContact: leads.filter((l) => l.stage === 'to_contact').map((l) => l.name),
@@ -216,6 +218,7 @@ export async function briefContext(userId: string, profile: any, now = new Date(
     lowReview: low ? { author: low.author, rating: low.rating } : null,
     topFix: topFix ? { title: topFix.title, who: topFix.who } : null,
     weeksLeft: started ? Math.max(0, Math.ceil((started + 90 * DAY_MS - now.getTime()) / (7 * DAY_MS))) : null,
+    competitor: reachEvent && reachAction ? { summary: String(reachEvent.summary), action: String(reachAction) } : null,
   };
 }
 
@@ -225,6 +228,7 @@ export function briefContextLines(ctx: BriefContext): { text: string; numbers: n
   if (ctx.urgentIssue) lines.push(`Website (The Watcher): urgent issue: ${ctx.urgentIssue}.`);
   if (ctx.lowReview) { lines.push(`Google reviews (The Watcher): a new ${ctx.lowReview.rating}-star review from ${ctx.lowReview.author} is waiting for a reply; a reply is drafted.`); numbers.push(ctx.lowReview.rating); }
   if (ctx.topFix) lines.push(`Website speed (The Watcher): biggest fix is "${ctx.topFix.title}" (${ctx.topFix.who === 'You' ? 'the owner can do it' : 'needs their web person'}).`);
+  if (ctx.competitor) { lines.push(`Competitors (The Watcher): ${ctx.competitor.summary} Suggested: ${ctx.competitor.action}`); for (const m of `${ctx.competitor.summary} ${ctx.competitor.action}`.match(/\d[\d,]*(\.\d+)?/g) || []) numbers.push(Number(m.replace(/,/g, ''))); }
   if (ctx.dueFollowUps?.length) lines.push(`Leads (The Scout): follow-ups due now with ${ctx.dueFollowUps.join(', ')}; the notes are drafted.`);
   if (ctx.leadsToContact?.length) { lines.push(`Leads (The Scout): ${ctx.leadsToContact.length} not yet contacted: ${ctx.leadsToContact.slice(0, 5).join(', ')}; introductions are drafted.`); numbers.push(ctx.leadsToContact.length); }
   if (ctx.strongLeads) { lines.push(`Research (The Scout): ${ctx.strongLeads} strong-fit matches not yet added to leads.`); numbers.push(ctx.strongLeads); }
@@ -296,6 +300,7 @@ export async function answer(userId: string, profile: any, question: string) {
     block('reviews', rv ? `Google reviews (${day(rv.checkedAt)}): ${rv.rating} stars from ${rv.count} reviews. Recent: ${rv.reviews.slice(0, 5).map((r: any) => `${r.author} ${r.rating}★${r.isNew ? ' (new)' : ''} "${String(r.text).slice(0, 120)}"`).join(' | ')}. Competitors: ${rv.competitors.map((c: any) => `${c.name} ${c.rating ?? '–'}★ (${c.count ?? '–'})`).join(', ')}.` : 'Google reviews: listing not connected yet.'),
     w?.prices?.rows?.length ? block('prices', `Price comparison (${day(w.prices.checkedAt)}): ${w.prices.rows.map((r: any) => `${r.item}: you ${r.yours?.price ?? '–'}; ${w.prices.competitors.map((c: string, i: number) => `${c} ${r.theirs[i]?.price ?? '–'}`).join(', ')}`).join(' | ')}`) : '',
     block('changes', changes.length ? `Competitor changes:\n${changes.map((c) => `- ${c.created_at.slice(0, 10)} ${c.summary} ${c.detail || ''}`).join('\n')}` : 'Competitor changes: none recorded yet.'),
+    w?.competitors?.list?.length ? block('competitors', `Competitors watched (${day(w.competitors.checkedAt)}; new Google reviews are a sign of how busy a business looks, never bookings):\n${w.competitors.list.map((c: any) => `- ${c.name} (${c.source === 'typed' ? 'named by the owner' : 'found nearby'}${c.distanceKm != null ? `, ${c.distanceKm} km` : ''}): Google ${c.rating ?? '–'}★ from ${c.count ?? '–'} reviews. Services: ${(c.services || []).slice(0, 10).map((s: any) => `${s.name} ${s.price}`).join('; ') || 'none read'}. Offers: ${(c.offers || []).map((o: any) => o.text).join(' | ') || 'none'}.${c.social && !c.social.error ? ` Instagram ${c.social.followers ?? '–'} followers, ${c.social.postsLast30 ?? '–'} posts in 30 days.` : ''}`).join('\n')}${w.competitors.events?.length ? `\nRecent events: ${w.competitors.events.slice(0, 6).map((e: any) => `${e.at.slice(0, 10)} ${e.summary}`).join(' | ')}` : ''}${w.competitors.advice?.lines?.length ? `\nThe Watcher's advice: ${w.competitors.advice.lines.map((l: any) => `${l.text} Action: ${l.action}`).join(' | ')}` : ''}`) : '',
     block('scout', scout.length ? `Scout research:\n${scout.map((s) => `- "${s.query}" (${s.kind ?? 'customers'}, ${s.created_at.slice(0, 10)}): ${s.summary} Top: ${(s.results || []).filter((r: any) => !r.dismissed).slice(0, 5).map((r: any) => `${r.name} (${r.location}, ${r.fit}${r.when ? `, ${r.when}` : ''}): ${r.reason}`).join(' | ')}`).join('\n')}` : 'Scout: no research yet.'),
     block('leads', leads.length ? `Leads: ${leads.map((l) => `${l.name} (${l.stage}${l.next_follow_up_at ? `, follow-up due ${l.next_follow_up_at.slice(0, 10)}` : ''})`).join('; ')}` : 'Leads: none yet.'),
     tenders.length ? block('tenders', `Public contracts that fit: ${tenders.map((t) => `${t.tenders?.title} for ${t.tenders?.buyer} (${t.tenders?.value ? `published value £${t.tenders.value}` : 'value not stated'}, closes ${t.tenders?.deadline?.slice(0, 10) ?? 'n/a'}): ${t.reason}`).join(' | ')}`) : '',

@@ -69,6 +69,15 @@ export function planToday(input: TodayInput, limit = 3): TodayItem[] {
     const recent = w.changes.filter((c) => now.getTime() - new Date(c.at).getTime() < 7 * DAY);
     const priceOrOffer = recent.find((c) => c.kind === 'price' || c.kind === 'offer');
     if (priceOrOffer) items.push({ id: `change-${priceOrOffer.id}`, agent: 'watcher', weight: 48, title: `Decide how to answer ${priceOrOffer.competitor}`, why: `${priceOrOffer.summary}${priceOrOffer.detail ? ` ${priceOrOffer.detail}` : ''}`, cta: 'See what changed', link: '/watcher?tab=competitors' });
+    // The competition's reach: review surges, new offers (website or Instagram) and new businesses nearby.
+    const reach = (w.competitors?.events ?? []).filter((e) => now.getTime() - new Date(e.at).getTime() < 7 * DAY);
+    const advice = (k: string) => w.competitors?.advice?.lines.find((l) => l.key === k)?.action;
+    const surge = reach.find((e) => e.kind === 'reviews');
+    if (surge) items.push({ id: `reach-${surge.id}`, agent: 'watcher', weight: 46, title: 'Ask your recent customers for a Google review', why: `${surge.summary} New reviews are a sign of how busy a business looks to people choosing on Google, not a count of bookings.`, cta: 'See the comparison', link: '/watcher?tab=competitors' });
+    const offer = reach.find((e) => (e.kind === 'offer' || e.kind === 'post') && !(priceOrOffer && priceOrOffer.competitor === e.competitor));
+    if (offer) items.push({ id: `reach-${offer.id}`, agent: 'watcher', weight: 44, title: `Decide how to answer ${offer.competitor}’s offer`, why: `${offer.summary}${advice(offer.key) ? ` ${advice(offer.key)}` : ''}`, cta: 'See the offer', link: '/watcher?tab=competitors' });
+    const opened = reach.find((e) => e.kind === 'new-nearby');
+    if (opened) items.push({ id: `reach-${opened.id}`, agent: 'watcher', weight: 38, title: `Look at ${opened.competitor}, newly listed near you`, why: `${opened.summary}${opened.detail ? ` ${opened.detail}` : ''} The Watcher now reads their website and Google listing every day.`, cta: 'See what they offer', link: '/watcher?tab=competitors' });
     const fix = w.speed?.fixes.find((f) => !f.done && f.impact === 'High' && f.who === 'You');
     if (fix) items.push({ id: `fix-${fix.id}`, agent: 'watcher', weight: 42, title: fix.title, why: `${fix.why}${fix.saving ? ` Google’s test says this ${fix.saving}.` : ''} You can do it yourself.`, cta: 'See how', link: '/watcher?tab=speed' });
     if (w.brokenLinks.length) items.push({ id: 'links', agent: 'watcher', weight: 28, title: `Fix ${plural(w.brokenLinks.length, 'broken link')}`, why: 'Visitors who click them see an error page and many give up. The list shows where each one is.', cta: 'See the list', link: '/watcher?tab=overview' });
@@ -139,7 +148,7 @@ export function actionLink(a: Pick<Action, 'text' | 'agent'>): string | null {
   if (/google listing/.test(t)) return '/watcher?tab=reviews';
   if (/contract|tender/.test(t)) return '/scout?tab=contracts';
   if (/follow up|follow-up|contacted|introduc|leads?\b|stockist/.test(t)) return '/scout?tab=leads';
-  if (/competitor|deliver|price|changed|match /.test(t)) return '/watcher?tab=competitors';
+  if (/competitor|deliver|price|changed|match |offer|newly listed|getting more than you/.test(t)) return '/watcher?tab=competitors';
   if (/photo|image|speed|load|lazy|description for google|alt text/.test(t)) return '/watcher?tab=speed';
   if (/contact page|broken link|site is down|host|certificate|website/.test(t)) return '/watcher?tab=overview';
   if (/numbers|brief|win-back|past customers/.test(t)) return '/brief';

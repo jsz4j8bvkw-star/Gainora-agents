@@ -6,9 +6,10 @@ import { Feedback } from '../components/feedback';
 import { hostOf, relative, shortDate } from '../lib/format';
 import { queryParam } from '../lib/router';
 import { priceValue } from '../../shared/prices';
+import { bookingPlatform, distanceLabel, reviewsSince } from '../../shared/competitors';
 import { socialLabel } from '../../shared/social';
 import { scoreLabel } from '../../shared/speed';
-import type { CompetitorChange, PlaceSummary, ReviewItem, WatcherState } from '../lib/types';
+import type { CompetitorChange, PlaceSummary, ReachEvent, ReviewItem, TrackedCompetitor, WatcherState } from '../lib/types';
 
 const KIND: Record<CompetitorChange['kind'], { label: string; cls: string }> = {
   price: { label: 'Price change', cls: 'tag-brass' },
@@ -45,14 +46,16 @@ function WatcherPage() {
 
   const newReviews = data.reviews?.reviews.filter((r) => r.isNew).length ?? 0;
   const bigFixes = data.speed?.fixes.filter((f) => f.impact === 'High' && !f.done).length ?? 0;
-  const recentChanges = data.changes.filter((c) => Date.now() - new Date(c.at).getTime() < 7 * 86_400_000).length;
+  const recentChanges = data.changes.filter((c) => Date.now() - new Date(c.at).getTime() < 7 * 86_400_000).length
+    + (data.competitors?.events ?? []).filter((e) => Date.now() - new Date(e.at).getTime() < 7 * 86_400_000).length;
+  const watched = data.competitors?.list.length ?? profile.competitors.list.filter((c) => c.name).length;
 
   return (
     <div className="page">
       <div className="page-head">
         <div>
           <h1 className="title">The Watcher</h1>
-          <p className="lede">Keeps an eye on {(data.site || profile.business.website) ? `${hostOf(data.site || profile.business.website)}, ` : ''}your Google reviews and {profile.competitors.list.length} competitor{profile.competitors.list.length === 1 ? '' : 's'}, and tells you what to do about what it finds.</p>
+          <p className="lede">Keeps an eye on {(data.site || profile.business.website) ? `${hostOf(data.site || profile.business.website)}, ` : ''}your Google reviews and {watched} competitor{watched === 1 ? '' : 's'}, and tells you what to do about what it finds.</p>
         </div>
         <div className="stack gap-4" style={{ alignItems: 'flex-end' }}>
           <Button kind="secondary" icon="refresh" busy={running} onClick={run}>{running ? (data.site ? 'Checking your site' : 'Checking') : 'Check now'}</Button>
@@ -71,7 +74,7 @@ function WatcherPage() {
         {tab === 'overview' && <Overview data={data} />}
         {tab === 'reviews' && <Reviews data={data} setData={setData} />}
         {tab === 'speed' && <Speed data={data} setData={setData} />}
-        {tab === 'competitors' && <Competitors data={data} />}
+        {tab === 'competitors' && <Competitors data={data} setData={setData} />}
       </div>
     </div>
   );
@@ -92,7 +95,13 @@ function SocialPages({ data }: { data: WatcherState }) {
             <span className="issue-mark notice"><Icon name="info" title={p.name} /></span>
             <div className="stack gap-4">
               <h3 className="subhead">{p.name}: {p.label}</h3>
-              <p className="muted" style={{ maxWidth: '68ch' }}>{data.site ? 'The Watcher checks that your website links here.' : 'Saved with your business details, so the Brief and Ask can refer to it.'} Reading posts and followers needs your page connected, which is coming soon.</p>
+              {p.name === 'Instagram' && data.competitors?.you?.instagram && !data.competitors.you.instagram.error ? (
+                <p className="muted" style={{ maxWidth: '68ch' }}>{data.competitors.you.instagram.followers?.toLocaleString('en-GB') ?? '–'} followers{data.competitors.you.instagram.postsLast30 != null ? `, ${data.competitors.you.instagram.postsLast30} posts in the last 30 days` : ''}, read from your public profile {relative(data.competitors.you.instagram.checkedAt)}. {data.site ? 'The Watcher also checks that your website links here.' : ''}</p>
+              ) : p.name === 'Instagram' && data.competitors?.you?.instagram?.error === 'not-business' ? (
+                <p className="muted" style={{ maxWidth: '68ch' }}>This account is personal or private, so its public posts can’t be read. Switching it to a professional (business or creator) account in Instagram’s settings lets the Watcher follow your followers and posts.</p>
+              ) : (
+                <p className="muted" style={{ maxWidth: '68ch' }}>{data.site ? 'The Watcher checks that your website links here.' : 'Saved with your business details, so the Brief and Ask can refer to it.'} Public posts and follower counts are read when Instagram reading is switched on for your account.</p>
+              )}
               <a className="small mt-8" href={p.url} target="_blank" rel="noreferrer">Open the page<span className="sr-only"> (opens in a new tab)</span></a>
             </div>
           </div>
@@ -399,25 +408,120 @@ function Speed({ data, setData }: { data: WatcherState; setData: (w: WatcherStat
   );
 }
 
-/* ---------- Competitors: prices and changes ---------- */
-function Competitors({ data }: { data: WatcherState }) {
+/* ---------- Competitors: who is nearby, what they offer and charge, what changed ---------- */
+const REACH_KIND: Record<ReachEvent['kind'], { label: string; cls: string }> = {
+  reviews: { label: 'Review surge', cls: 'tag-brass' }, service: { label: 'New service', cls: 'tag-forest' }, price: { label: 'Price change', cls: 'tag-brass' },
+  offer: { label: 'New offer', cls: 'tag-forest' }, post: { label: 'Instagram post', cls: 'tag-forest' }, 'new-nearby': { label: 'New nearby', cls: 'tag-danger' }, followers: { label: 'Followers', cls: 'tag-plain' },
+};
+const n = (v: number | null | undefined) => (v == null ? '–' : v.toLocaleString('en-GB'));
+
+type TimelineItem = { id: string; at: string; competitor: string; label: string; cls: string; summary: string; detail?: string; url?: string; changeKind?: string; key?: string };
+
+function Competitors({ data, setData }: { data: WatcherState; setData: (w: WatcherState) => void }) {
+  const { profile } = useApp();
+  const comps = data.competitors;
+  const list = comps?.list ?? [];
   const [filter, setFilter] = useState('All');
   const [hidden, setHidden] = useState<string[]>([]);
-  const competitors = ['All', ...new Set(data.changes.map((c) => c.competitor))];
-  const changes = (filter === 'All' ? data.changes : data.changes.filter((c) => c.competitor === filter)).filter((c) => !hidden.includes(c.id));
+  const [busy, setBusy] = useState<string | null>(null);
+  const [finding, setFinding] = useState(false);
+  const toast = useToast();
+  const you = { rating: data.reviews?.rating ?? null, count: data.reviews?.count ?? null, reviews30: reviewsSince(data.reviews?.history, 30) };
+
+  const timeline: TimelineItem[] = [
+    ...(comps?.events ?? []).map((e) => ({ id: e.id, at: e.at, competitor: e.competitor, key: e.key, ...REACH_KIND[e.kind], summary: e.summary, detail: e.detail, url: e.url, changeKind: e.kind === 'price' ? 'price' : e.kind === 'offer' || e.kind === 'post' ? 'offer' : undefined })),
+    ...data.changes.map((c) => ({ id: c.id, at: c.at, competitor: c.competitor, ...KIND[c.kind], summary: c.summary, detail: c.detail, url: c.url || undefined, changeKind: c.kind })),
+  ].sort((a, b) => b.at.localeCompare(a.at));
+  const names = ['All', ...new Set(timeline.map((c) => c.competitor))];
+  const shown = (filter === 'All' ? timeline : timeline.filter((c) => c.competitor === filter)).filter((c) => !hidden.includes(c.id)).slice(0, 40);
   const pt = data.prices;
+  const town = profile.business.location.split(',')[0].trim();
+  const typedN = list.filter((c) => c.source === 'typed').length; const foundN = list.length - typedN;
+
+  const act = async (op: 'dismiss' | 'watch' | 'restore' | 'instagram', key: string, handle?: string, done?: string) => {
+    setBusy(key + op);
+    try { setData(await api.updateCompetitor(op, key, handle)); if (done) toast(done); }
+    catch (e: any) { toast(e?.message || 'That didn’t save. Try again.'); }
+    finally { setBusy(null); }
+  };
+  const find = async () => {
+    setFinding(true);
+    try { const r = await api.findCompetitors(); toast(r.started ? 'Searching Google for businesses near you. Check back in a few minutes.' : r.message || 'Searched recently.'); }
+    catch (e: any) { toast(e?.message || 'That didn’t work. Try again in a minute.'); }
+    finally { setFinding(false); }
+  };
 
   return (
     <>
-      <section aria-labelledby="price-h">
+      <section className="panel panel-pad reach-intro" aria-label="Who the Watcher follows">
+        <div className="split" style={{ alignItems: 'flex-start' }}>
+          <div className="stack gap-4" style={{ maxWidth: '68ch' }}>
+            <h2 className="heading">{list.length ? `Watching ${list.length} competitor${list.length === 1 ? '' : 's'}` : 'Finding your competition'}</h2>
+            <p className="muted">
+              {list.length
+                ? `${typedN ? `${typedN} you named` : ''}${typedN && foundN ? ' and ' : ''}${foundN ? `${foundN} found on Google near ${town || 'you'}` : ''}. Every day the Watcher reads their websites and public booking pages, follows their Google reviews${comps?.list.some((c) => c.social && !c.social.error) ? ' and their public Instagram posts' : ''}, and tells you what changed.`
+                : `The Watcher looks for businesses like yours around ${town || 'your location'} on Google and follows the closest ones, alongside any you name under Your business. The first search runs with your next check.`}
+              {comps?.checkedAt ? ` Checked ${relative(comps.checkedAt)}.` : ''}
+            </p>
+          </div>
+          <Button kind="secondary" small icon="search" busy={finding} onClick={find}>Find more nearby</Button>
+        </div>
+      </section>
+
+      {comps?.advice?.lines.length ? (
+        <section className="section" aria-labelledby="advice-h">
+          <div className="section-head"><h2 className="heading" id="advice-h">What this means for you</h2><span className="small faint">Updated {relative(comps.advice.at)}</span></div>
+          <div className="panel rows">
+            {comps.advice.lines.map((l, i) => (
+              <article className="advice" key={i}>
+                <p className="voice">{l.text}</p>
+                <p className="advice-action"><span className="tag tag-forest">Do this</span><span>{l.action}</span></p>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      <section className="section" aria-labelledby="comp-h">
+        <div className="section-head">
+          <h2 className="heading" id="comp-h">What changed</h2>
+          {names.length > 2 && (
+            <label className="row gap-8 small">
+              <span className="faint">Show</span>
+              <select className="select" style={{ minHeight: 36, padding: '4px 34px 4px 10px', width: 'auto' }} value={filter} onChange={(e: any) => setFilter(e.target.value)}>
+                {names.map((c) => <option key={c}>{c}</option>)}
+              </select>
+            </label>
+          )}
+        </div>
+        <div className="panel rows">
+          {shown.length === 0 && <div className="empty"><p className="muted">No changes spotted yet. The Watcher compares each competitor’s pages, Google listing and public Instagram every day and lists anything new here.</p></div>}
+          {shown.map((c) => (
+            <article className="change" key={c.id}>
+              <div className="change-when"><time dateTime={c.at}>{shortDate(c.at)}</time></div>
+              <div className="stack gap-8">
+                <div className="row gap-8 wrap"><span className={`tag ${c.cls}`}>{c.label}</span><span className="small faint">{c.competitor}</span></div>
+                <p className="voice">{c.summary}</p>
+                {c.detail && <p className="muted small" style={{ maxWidth: '68ch' }}>{c.detail}</p>}
+                <div className="row gap-16 wrap">
+                  {c.url && <a className="small" href={c.url} target="_blank" rel="noreferrer">{/instagram\.com/.test(c.url) ? 'See the post' : /google\.com\/maps/.test(c.url) ? 'See their listing' : 'See their page'}<span className="sr-only"> (opens in a new tab)</span></a>}
+                  <Feedback agent="watcher" kind="change" id={c.id} text={c.summary} changeKind={c.changeKind} onNotRelevant={() => setTimeout(() => setHidden((h) => [...h, c.id]), 1200)} />
+                </div>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="section" aria-labelledby="price-h">
         <div className="section-head"><h2 className="heading" id="price-h">Your prices against theirs</h2>{pt && <span className="small faint">Checked {relative(pt.checkedAt)}</span>}</div>
         {!pt || pt.rows.length === 0 ? (
-          <div className="panel empty"><p className="muted">The Watcher compares your prices with your competitors’ once a week. It only shows prices it found on their websites, with a link to each one.</p></div>
+          <div className="panel empty"><p className="muted">The Watcher compares your prices with your competitors’ once a week. It only shows prices it found on their websites or public booking pages, with a link to each one.</p></div>
         ) : (
           <div className="panel table-wrap">
             <table className="price-table">
               <caption className="sr-only">Your prices compared with competitors</caption>
-              <thead><tr><th>Product</th><th>You</th>{pt.competitors.map((c) => <th key={c}>{c}</th>)}</tr></thead>
+              <thead><tr><th>Product or service</th><th>You</th>{pt.competitors.map((c) => <th key={c}>{c}</th>)}</tr></thead>
               <tbody>
                 {pt.rows.map((r) => {
                   const mine = r.yours ? priceValue(r.yours.price) : null;
@@ -439,36 +543,136 @@ function Competitors({ data }: { data: WatcherState }) {
         )}
       </section>
 
-      <section className="section" aria-labelledby="comp-h">
-        <div className="section-head">
-          <h2 className="heading" id="comp-h">What your competitors changed</h2>
-          {competitors.length > 2 && (
-            <label className="row gap-8 small">
-              <span className="faint">Show</span>
-              <select className="select" style={{ minHeight: 36, padding: '4px 34px 4px 10px', width: 'auto' }} value={filter} onChange={(e: any) => setFilter(e.target.value)}>
-                {competitors.map((c) => <option key={c}>{c}</option>)}
-              </select>
-            </label>
-          )}
-        </div>
-        <div className="panel rows">
-          {changes.length === 0 && <div className="empty"><p className="muted">No changes spotted yet. The Watcher compares each competitor’s pages every day and lists anything new here.</p></div>}
-          {changes.map((c) => (
-            <article className="change" key={c.id}>
-              <div className="change-when"><time dateTime={c.at}>{shortDate(c.at)}</time></div>
-              <div className="stack gap-8">
-                <div className="row gap-8 wrap"><span className={`tag ${KIND[c.kind].cls}`}>{KIND[c.kind].label}</span><span className="small faint">{c.competitor}</span></div>
-                <p className="voice">{c.summary}</p>
-                {c.detail && <p className="muted small" style={{ maxWidth: '68ch' }}>{c.detail}</p>}
-                <div className="row gap-16 wrap">
-                  {c.url && <a className="small" href={c.url} target="_blank" rel="noreferrer">See their page<span className="sr-only"> (opens in a new tab)</span></a>}
-                  <Feedback agent="watcher" kind="change" id={c.id} text={c.summary} changeKind={c.kind} onNotRelevant={() => setTimeout(() => setHidden((h) => [...h, c.id]), 1200)} />
+      <section className="section" aria-labelledby="who-h">
+        <div className="section-head"><h2 className="heading" id="who-h">Who you’re up against</h2><span className="small faint">{you.count != null ? `You: ${you.rating?.toFixed(1) ?? '–'} stars, ${n(you.count)} reviews${you.reviews30 != null ? `, ${you.reviews30} new in 30 days` : ''}` : ''}</span></div>
+        {list.length === 0 ? (
+          <div className="panel empty"><p className="muted">Nobody yet. Name competitors under Your business, or wait for the Watcher’s first search of businesses near you.</p></div>
+        ) : (
+          <div className="comp-grid">
+            {list.map((c) => <CompetitorCard key={c.key} c={c} you={you} busy={busy} act={act} />)}
+          </div>
+        )}
+        <p className="xsmall faint mt-16">Everything here comes from a public page or a Google listing, with the link and the date it was seen. The Watcher never contacts a competitor, never logs in anywhere and never guesses a price. New Google reviews are a sign of how busy a business looks, not a count of their bookings.</p>
+      </section>
+
+      {(comps?.nearby.length || comps?.dismissed.length) ? (
+        <section className="section" aria-labelledby="near-h">
+          <div className="section-head"><h2 className="heading" id="near-h">Others nearby</h2><span className="small faint">From Google, around {town || 'you'}</span></div>
+          <div className="panel rows">
+            {(comps?.nearby ?? []).map((p) => (
+              <div className="place-row" key={p.key}>
+                <div className="stack gap-4" style={{ minWidth: 0 }}>
+                  <span className="subhead">{p.name}</span>
+                  <span className="small muted">{[p.address, distanceLabel(p.distanceKm)].filter(Boolean).join(' · ')}</span>
+                  {p.rating != null && <span className="row gap-8 small"><Stars value={p.rating} />{p.rating.toFixed(1)} from {n(p.count)} reviews</span>}
+                </div>
+                <div className="row gap-8 wrap">
+                  <Button kind="secondary" small busy={busy === p.key + 'watch'} onClick={() => act('watch', p.key, undefined, `Watching ${p.name}. Their pages are read with the next check.`)}>Watch</Button>
+                  <Button kind="quiet" small busy={busy === p.key + 'dismiss'} onClick={() => act('dismiss', p.key, undefined, 'Noted: not a competitor.')}>Not a competitor</Button>
                 </div>
               </div>
-            </article>
-          ))}
-        </div>
-      </section>
+            ))}
+            {comps?.nearby.length === 0 && <p className="empty muted small">Nothing else nearby that the Watcher hasn’t shown you.</p>}
+          </div>
+          {comps?.dismissed.length ? (
+            <details className="done-list mt-16">
+              <summary>{comps.dismissed.length} marked “not a competitor”</summary>
+              <ul>{comps.dismissed.map((d) => <li key={d.key}><span>{d.name}</span><button className="btn btn-quiet btn-small" disabled={busy === d.key + 'restore'} onClick={() => act('restore', d.key, undefined, `${d.name} can be found again.`)}>Undo</button></li>)}</ul>
+            </details>
+          ) : null}
+        </section>
+      ) : null}
     </>
   );
+}
+
+function CompetitorCard({ c, you, busy, act }: { c: TrackedCompetitor; you: { rating: number | null; count: number | null; reviews30: number | null }; busy: string | null; act: (op: 'dismiss' | 'watch' | 'restore' | 'instagram', key: string, handle?: string, done?: string) => Promise<void> }) {
+  const [more, setMore] = useState(false);
+  const [editIg, setEditIg] = useState(false);
+  const [handle, setHandle] = useState('');
+  const theirs30 = reviewsSince(c.history, 30);
+  const ig = c.social;
+  const services = more ? c.services : c.services.slice(0, 5);
+  const igFindings = ig && !ig.error ? ig.findings.slice(0, more ? 8 : 2) : [];
+  return (
+    <article className="panel comp-card" aria-label={c.name}>
+      <div className="comp-head">
+        <div className="stack gap-4" style={{ minWidth: 0 }}>
+          <h3 className="subhead">{c.name}</h3>
+          <div className="row gap-8 wrap small muted">
+            <span className={`tag ${c.source === 'found' ? 'tag-forest' : 'tag-plain'}`}>{c.source === 'found' ? 'Found nearby' : 'You named'}</span>
+            {(c.distanceKm != null || c.address) && <span>{[distanceLabel(c.distanceKm), c.address].filter(Boolean).join(' · ')}</span>}
+          </div>
+        </div>
+        {c.source === 'found'
+          ? <Button kind="quiet" small busy={busy === c.key + 'dismiss'} onClick={() => act('dismiss', c.key, undefined, `${c.name} removed. The Watcher won’t suggest them again.`)}>Not a competitor</Button>
+          : <a className="btn btn-quiet btn-small" href="/business">Edit</a>}
+      </div>
+
+      <div className="comp-facts">
+        <div className="comp-fact">
+          <span className="stat-label">Google reviews</span>
+          <span className="comp-fact-value">{c.rating != null ? <><Stars value={c.rating} /> {c.rating.toFixed(1)}</> : <span className="faint">No listing matched</span>}</span>
+          <span className="stat-note">{c.count != null ? `${n(c.count)} reviews` : ''}{theirs30 != null ? ` · ${theirs30} new in 30 days${you.reviews30 != null ? ` (you: ${you.reviews30})` : ''}` : ''}</span>
+        </div>
+        <div className="comp-fact">
+          <span className="stat-label">Instagram</span>
+          {ig && !ig.error ? (
+            <><span className="comp-fact-value">{n(ig.followers)} <span className="small muted">followers</span></span><span className="stat-note">{ig.postsLast30 != null ? `${ig.postsLast30} post${ig.postsLast30 === 1 ? '' : 's'} in 30 days` : ''}{ig.followersHistory.length > 7 ? ` · ${trend(ig.followersHistory)}` : ''}</span></>
+          ) : ig?.error === 'not-business' ? (
+            <><span className="comp-fact-value small">{socialLabel('instagram', c.instagram || '')}</span><span className="stat-note">This account is personal or private, so its posts can’t be read.</span></>
+          ) : c.instagram ? (
+            <><span className="comp-fact-value small">{socialLabel('instagram', c.instagram)}</span><span className="stat-note">{ig?.error === 'unavailable' ? 'Instagram didn’t answer today; trying again tomorrow.' : 'Link only; public posts are read when Instagram reading is switched on.'}</span></>
+          ) : (
+            <><span className="comp-fact-value small faint">Not found on their website</span><button type="button" className="link-btn xsmall" onClick={() => setEditIg(true)}>Add their handle</button></>
+          )}
+        </div>
+      </div>
+      {editIg && (
+        <form className="row gap-8 wrap comp-ig-form" onSubmit={async (e: any) => { e.preventDefault(); await act('instagram', c.key, handle, handle ? 'Saved. Their posts are read with the next check.' : 'Instagram handle removed.'); setEditIg(false); }}>
+          <input className="input" aria-label={`Instagram handle for ${c.name}`} placeholder="@theirbusiness" value={handle} onChange={(e: any) => setHandle(e.target.value)} style={{ flex: '1 1 160px', minHeight: 38 }} />
+          <Button type="submit" small busy={busy === c.key + 'instagram'}>Save</Button>
+          <Button kind="quiet" small onClick={() => setEditIg(false)}>Cancel</Button>
+        </form>
+      )}
+
+      {c.offers.length > 0 || igFindings.length > 0 ? (
+        <div className="comp-block">
+          <span className="stat-label">Offers and announcements</span>
+          <ul className="comp-list-plain">
+            {c.offers.map((o) => <li key={o.url + o.text}><a href={o.url} target="_blank" rel="noreferrer">“{o.text}”</a><span className="xsmall faint"> · their website, seen {shortDate(o.seenAt)}</span></li>)}
+            {igFindings.map((o) => <li key={o.url + o.text}><a href={o.url} target="_blank" rel="noreferrer">“{o.text}”</a><span className="xsmall faint"> · Instagram, posted {shortDate(o.seenAt)}</span></li>)}
+          </ul>
+        </div>
+      ) : null}
+
+      <div className="comp-block">
+        <span className="stat-label">Services and prices{c.bookingPages.length ? ` (website and ${c.bookingPages.map(bookingPlatform).join(', ')})` : ''}</span>
+        {c.services.length === 0 ? (
+          <p className="small faint">{c.url ? (c.sourcesCheckedAt ? 'No prices published on the pages the Watcher could read.' : 'Pages not read yet; they are read with the next check.') : 'No website known, so no prices to read.'}</p>
+        ) : (
+          <table className="comp-services"><tbody>
+            {services.map((s) => <tr key={s.url + s.name}><td>{s.name}</td><td className="tabular"><a href={s.url} target="_blank" rel="noreferrer">{s.price}</a></td></tr>)}
+          </tbody></table>
+        )}
+        {(c.services.length > 5 || (ig && !ig.error && ig.findings.length > 2)) && <button type="button" className="link-btn small" onClick={() => setMore(!more)}>{more ? 'Show less' : `Show all ${c.services.length} services`}</button>}
+      </div>
+
+      <div className="row gap-16 wrap comp-links">
+        {c.url && <a className="small" href={c.url} target="_blank" rel="noreferrer">Website<span className="sr-only"> (opens in a new tab)</span></a>}
+        {c.mapsUrl && <a className="small" href={c.mapsUrl} target="_blank" rel="noreferrer">Google listing</a>}
+        {c.instagram && <a className="small" href={c.instagram} target="_blank" rel="noreferrer">Instagram</a>}
+        {c.facebook && <a className="small" href={c.facebook} target="_blank" rel="noreferrer">Facebook</a>}
+        {c.instagram && !editIg && <button type="button" className="link-btn small" onClick={() => { setHandle(socialLabel('instagram', c.instagram!)); setEditIg(true); }}>Change handle</button>}
+        {c.sourcesCheckedAt && <span className="xsmall faint">Pages read {relative(c.sourcesCheckedAt)}</span>}
+      </div>
+    </article>
+  );
+}
+
+function trend(h: { at: string; n: number }[]): string {
+  const first = h[0].n; const last = h[h.length - 1].n;
+  const diff = last - first;
+  if (!first || Math.abs(diff) < 5) return 'steady';
+  return `${diff > 0 ? '+' : ''}${diff.toLocaleString('en-GB')} in ${Math.max(1, Math.round((new Date(h[h.length - 1].at).getTime() - new Date(h[0].at).getTime()) / 86_400_000))} days`;
 }

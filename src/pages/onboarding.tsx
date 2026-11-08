@@ -17,7 +17,7 @@ export function FieldInput({ f, profile, onChange, error }: { f: Q; profile: Bus
     const list = v as BusinessProfile['competitors']['list'];
     const set = (i: number, key: 'name' | 'url', val: string) => onChange(f.path, list.map((c, k) => (k === i ? { ...c, [key]: val } : c)));
     return (
-      <Field label="Competitors" as="group" error={error} className={f.wide ? 'wide' : ''}>
+      <Field label="Competitors" help={f.help} optional as="group" error={error} className={f.wide ? 'wide' : ''}>
         {() => (
           <div className="comp-list">
             {list.map((c, i) => (

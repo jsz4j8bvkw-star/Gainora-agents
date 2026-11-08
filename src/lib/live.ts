@@ -273,6 +273,8 @@ export function createLiveApi(): Api {
     async selectPlace(placeId) { await fn('places', { op: 'select', placeId }); return this.getWatcher(); },
     async draftReviewReply(reviewId) { return (await fn<{ text: string }>('review-reply', { reviewId })).text; },
     async setFixDone(title, done) { await fn('fix-done', { title, done }); },
+    async updateCompetitor(op, key, handle) { await fn('competitors', { op, key, handle }); return this.getWatcher(); },
+    async findCompetitors() { return fn<{ started: boolean; message?: string }>('competitors', { op: 'find' }); },
 
     async listLeads() { return (await rest<any[]>('leads?select=*&order=created_at.desc&limit=300')).map(mapLead); },
     async addLead(searchId, resultId) { return mapLead(await fn<any>('leads', { op: 'add', searchId, resultId })); },

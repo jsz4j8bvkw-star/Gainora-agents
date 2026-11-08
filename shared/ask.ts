@@ -17,6 +17,7 @@ export function sourceCatalogue(dates: Partial<Record<string, string>> = {}): As
     { key: 'reviews', title: `The Watcher’s Google reviews${when('reviews')}`, url: '/watcher?tab=reviews' },
     { key: 'prices', title: `The Watcher’s price comparison${when('prices')}`, url: '/watcher?tab=competitors' },
     { key: 'changes', title: 'The Watcher’s competitor changes', url: '/watcher?tab=competitors' },
+    { key: 'competitors', title: 'The Watcher’s competitor watch', url: '/watcher?tab=competitors' },
     { key: 'scout', title: 'The Scout’s research', url: '/scout?tab=research' },
     { key: 'leads', title: 'The Scout’s lead pipeline', url: '/scout?tab=leads' },
     { key: 'tenders', title: 'The Scout’s public contracts', url: '/scout?tab=contracts' },

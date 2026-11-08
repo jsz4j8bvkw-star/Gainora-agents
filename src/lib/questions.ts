@@ -75,9 +75,9 @@ export const SECTIONS: Section[] = [
   {
     id: 'competitors', title: 'Competitors',
     question: 'Who do customers compare you with?',
-    intro: 'Add up to five. The Watcher tracks their prices, offers and new pages, and tells you when something changes.',
+    intro: 'Add up to five, or leave it empty and the Watcher finds the nearest comparable businesses from your location. Either way it follows their Google reviews, services, prices and offers, and tells you when something changes.',
     fields: [
-      { path: 'competitors.list', label: 'Competitors', kind: 'competitors', wide: true },
+      { path: 'competitors.list', label: 'Competitors', kind: 'competitors', help: 'Optional. The Watcher also finds businesses like yours nearby on Google; you can say “not a competitor” to any of them.', wide: true },
       { path: 'competitors.ourEdge', label: 'What you do better', kind: 'textarea', placeholder: 'For example: everything is made within 30 miles and we gift-wrap for free.', required: true, wide: true },
       { path: 'competitors.theirEdge', label: 'What they do better', kind: 'textarea', placeholder: 'For example: faster delivery and a bigger range.', optional: true, wide: true },
     ],
@@ -165,9 +165,9 @@ export function validateSection(section: Section, p: BusinessProfile): Record<st
   for (const f of section.fields) {
     const v = getPath(p, f.path);
     if (f.kind === 'competitors') {
-      const list = (v as BusinessProfile['competitors']['list']).filter((c) => c.name.trim() || c.url.trim());
-      if (list.length === 0) errors[f.path] = 'Add at least one competitor so The Watcher has someone to watch.';
-      else if (list.some((c) => !c.name.trim())) errors[f.path] = 'Add a name for each competitor.';
+      const list = ((v as BusinessProfile['competitors']['list']) || []).filter((c) => c.name.trim() || c.url.trim());
+      // Optional: with none typed, the Watcher finds nearby businesses itself.
+      if (list.some((c) => !c.name.trim())) errors[f.path] = 'Add a name for each competitor.';
       else if (list.some((c) => c.url.trim() && !isValidUrl(c.url))) errors[f.path] = 'Check the competitor websites: use a full web address, or leave it empty if they don’t have one.';
       continue;
     }

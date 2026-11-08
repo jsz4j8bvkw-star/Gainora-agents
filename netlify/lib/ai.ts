@@ -105,6 +105,9 @@ async function callOpenAI(c: AiCall): Promise<AiResult> {
   return { text, citations, usage: { input, output, searches, costUsd: estimateCost(input, output, searches) } };
 }
 
+/** Whether any AI provider key is set. Callers with a rule-based fallback skip the call when it isn't. */
+export const aiConfigured = () => Boolean(env('ANTHROPIC_API_KEY') || env('OPENAI_API_KEY'));
+
 export async function ai(c: AiCall): Promise<AiResult> {
   const provider = env('AI_PROVIDER', env('ANTHROPIC_API_KEY') ? 'anthropic' : 'openai');
   if (provider === 'anthropic' && !env('ANTHROPIC_API_KEY')) throw new HttpError(503, 'AI is not set up yet (ANTHROPIC_API_KEY).');

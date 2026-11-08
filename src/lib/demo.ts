@@ -13,6 +13,7 @@ import { followUpSent, moveLead } from '../../shared/leads';
 import { hostOf } from '../../shared/learning';
 import { planToday } from '../../shared/today';
 import { sourceCatalogue } from '../../shared/ask';
+import { adviseReach, reviewsSince, type CompetitorsState, type TrackedCompetitor } from '../../shared/competitors';
 import { mondayOf, uid } from './format';
 
 const KEY = 'gainora.agents.demo.v2';
@@ -142,6 +143,71 @@ function briefContextOf(s: DemoState): BriefContext {
   };
 }
 
+/** Sample competition for the demo: two the owner named, three found nearby, with the kind of detail the live app reads from public pages. */
+function sampleCompetitors(p: BusinessProfile, comps: { name: string; url: string }[], now: number): CompetitorsState {
+  const d = (n: number) => iso(now - n * DAY);
+  const samples = (start: number, perWeek: number) => Array.from({ length: 7 }, (_, i) => ({ at: d(42 - i * 7), rating: 4.3, count: start + i * perWeek }));
+  const c1 = comps[0]?.name || 'Cove Living'; const c2 = comps[1]?.name || 'Saltwater Store';
+  const u1 = comps[0]?.url || 'https://example.org'; const u2 = comps[1]?.url || comps[0]?.url || 'https://example.net';
+  const base = { services: [], offers: [], bookingPages: [], social: null, history: [], rating: null, count: null };
+  const list: TrackedCompetitor[] = [
+    { ...base, key: 'p:sample-cove', name: c1, source: 'typed', url: u1, placeId: 'sample-cove', address: `Arwenack Street, ${p.business.location.split(',')[0]}`, mapsUrl: 'https://www.google.com/maps', distanceKm: 0.6,
+      rating: 4.3, count: 140, history: samples(122, 3), ratingCheckedAt: d(0), firstSeenAt: d(40),
+      instagram: 'https://www.instagram.com/coveliving/', instagramSetBy: 'website', facebook: 'https://www.facebook.com/coveliving',
+      services: [
+        { name: 'Stoneware mug', price: '£22', url: `${u1}/shop`, seenAt: d(0) }, { name: 'Linen tea towel', price: '£14', url: `${u1}/shop`, seenAt: d(0) },
+        { name: 'Soy candle 200g', price: '£15', url: `${u1}/shop`, seenAt: d(0) }, { name: 'Christmas gift box', price: '£55', url: `${u1}/gifts`, seenAt: d(0) },
+      ],
+      offers: [{ text: 'Free UK delivery on orders over £40', url: u1, seenAt: d(2), from: 'website' }],
+      pagesRead: [u1, `${u1}/shop`, `${u1}/gifts`],
+      social: { handle: 'coveliving', url: 'https://www.instagram.com/coveliving/', checkedAt: d(0), followers: 4120, mediaCount: 612, postsLast30: 11,
+        followersHistory: Array.from({ length: 14 }, (_, i) => ({ at: d(13 - i), n: 3980 + i * 10 })),
+        posts: [
+          { id: 'ig1', caption: 'Candle season is here. 20% off all gift sets until Sunday, in store and online.', at: d(1), likes: 86, comments: 7, url: 'https://www.instagram.com/p/sample1/', type: 'IMAGE' },
+          { id: 'ig2', caption: 'New in: hand-thrown stoneware mugs from our Penryn maker, £22 each.', at: d(5), likes: 142, comments: 12, url: 'https://www.instagram.com/p/sample2/', type: 'CAROUSEL_ALBUM' },
+        ],
+        findings: [
+          { text: '20% off all gift sets until Sunday', url: 'https://www.instagram.com/p/sample1/', seenAt: d(1), from: 'instagram' },
+          { text: 'hand-thrown stoneware mugs from our Penryn maker, £22 each', url: 'https://www.instagram.com/p/sample2/', seenAt: d(5), from: 'instagram' },
+        ], error: null },
+    },
+    { ...base, key: 'h:example.net', name: c2, source: 'typed', url: u2, placeId: 'sample-salt', address: `Church Street, ${p.business.location.split(',')[0]}`, mapsUrl: 'https://www.google.com/maps', distanceKm: 1.1,
+      rating: 4.7, count: 58, history: samples(52, 1), ratingCheckedAt: d(0), firstSeenAt: d(40),
+      services: [{ name: 'Ceramic mug', price: '£16', url: `${u2}/shop`, seenAt: d(0) }, { name: 'Soy candle', price: '£18', url: `${u2}/shop`, seenAt: d(0) }, { name: 'Gift set', price: '£65', url: `${u2}/shop`, seenAt: d(0) }],
+      social: { handle: 'saltwaterstore', url: 'https://www.instagram.com/saltwaterstore/', checkedAt: d(0), followers: null, mediaCount: null, postsLast30: null, followersHistory: [], posts: [], findings: [], error: 'not-business' },
+      instagram: 'https://www.instagram.com/saltwaterstore/', instagramSetBy: 'website' },
+    { ...base, key: 'p:sample-saltcedar', name: 'Salt & Cedar Homeware', source: 'found', url: 'https://example.com/salt-cedar', placeId: 'sample-saltcedar', address: `Market Strand, ${p.business.location.split(',')[0]}`, mapsUrl: 'https://www.google.com/maps', distanceKm: 0.3,
+      rating: 4.5, count: 212, history: samples(190, 3), ratingCheckedAt: d(0), firstSeenAt: d(30),
+      services: [{ name: 'Large serving bowl', price: '£48', url: 'https://example.com/salt-cedar/shop', seenAt: d(0) }, { name: 'Linen napkin set of 4', price: '£36', url: 'https://example.com/salt-cedar/shop', seenAt: d(0) }, { name: 'Soy candle 220g', price: '£19', url: 'https://example.com/salt-cedar/shop', seenAt: d(0) }],
+      offers: [{ text: '20% off candles this November', url: 'https://example.com/salt-cedar', seenAt: d(1), from: 'website' }] },
+    { ...base, key: 'p:sample-candleco', name: 'Falmouth Candle Co.', source: 'found', url: '', placeId: 'sample-candleco', address: `Killigrew Street, ${p.business.location.split(',')[0]}`, mapsUrl: 'https://www.google.com/maps', distanceKm: 0.8,
+      rating: 4.9, count: 31, history: samples(27, 1).slice(2), ratingCheckedAt: d(0), firstSeenAt: d(30) },
+    { ...base, key: 'p:sample-pendower', name: 'Pendower Living', source: 'found', url: 'https://example.com/pendower', placeId: 'sample-pendower', address: `High Street, ${p.business.location.split(',')[0]}`, mapsUrl: 'https://www.google.com/maps', distanceKm: 1.6,
+      rating: 5, count: 4, history: [{ at: d(0), rating: 5, count: 4 }], ratingCheckedAt: d(0), firstSeenAt: d(0), services: [], offers: [] },
+  ];
+  const events = [
+    { id: 'new-nearby:p:sample-pendower', at: d(0), key: 'p:sample-pendower', competitor: 'Pendower Living', kind: 'new-nearby' as const, url: 'https://www.google.com/maps', summary: 'New on Google near you: Pendower Living, 1.6 km away (4 reviews).', detail: 'A listing with few reviews is often a recent opening.' },
+    { id: 'post:p:sample-cove', at: d(1), key: 'p:sample-cove', competitor: c1, kind: 'post' as const, url: 'https://www.instagram.com/p/sample1/', summary: `${c1} posted on Instagram: “20% off all gift sets until Sunday”.` },
+    { id: 'offer:p:sample-saltcedar', at: d(1), key: 'p:sample-saltcedar', competitor: 'Salt & Cedar Homeware', kind: 'offer' as const, url: 'https://example.com/salt-cedar', summary: 'Salt & Cedar Homeware is advertising “20% off candles this November”.' },
+    { id: 'reviews:p:sample-cove', at: d(2), key: 'p:sample-cove', competitor: c1, kind: 'reviews' as const, url: 'https://www.google.com/maps', summary: `${c1} got ${reviewsSince(list[0].history, 30, new Date(now))} new Google reviews in the last 30 days; you got 3.`, detail: 'New reviews are a sign of how busy a business looks, not a count of their bookings.' },
+  ];
+  const you = { rating: 4.6, count: 87, reviews30: reviewsSince([{ at: d(30), rating: 4.6, count: 84 }, { at: d(0), rating: 4.6, count: 87 }], 30, new Date(now)), services: [
+    { name: 'Hand-thrown mug', price: '£18', url: p.business.website, seenAt: d(0) }, { name: 'Linen tea towel', price: '£12', url: p.business.website, seenAt: d(0) },
+    { name: 'Soy candle, 200g', price: '£16', url: p.business.website, seenAt: d(0) }, { name: 'Gift set', price: '£60', url: p.business.website, seenAt: d(0) },
+  ] };
+  return {
+    checkedAt: d(0), foundAt: d(30), searchTerms: ['homeware and gift shop'], list, events,
+    you: { lat: 50.153, lng: -5.07, services: you.services, sourcesCheckedAt: d(0), instagram: { handle: 'harbourandhome', url: 'https://www.instagram.com/harbourandhome/', checkedAt: d(0), followers: 2310, mediaCount: 418, postsLast30: 6, followersHistory: Array.from({ length: 14 }, (_, i) => ({ at: d(13 - i), n: 2260 + i * 4 })), posts: [], findings: [], error: null } },
+    nearby: [
+      { key: 'p:sample-quay', placeId: 'sample-quay', name: 'The Quay Pantry', address: `Quay Street, ${p.business.location.split(',')[0]}`, url: 'https://example.com/quay', rating: 4.4, count: 77, distanceKm: 0.5 },
+      { key: 'p:sample-gull', placeId: 'sample-gull', name: 'Gull Cottage Goods', address: `Swanpool, ${p.business.location.split(',')[0]}`, rating: 4.8, count: 19, distanceKm: 2.3 },
+    ],
+    dismissed: [{ key: 'p:sample-fishmonger', name: 'Harbour Fishmongers', at: d(28) }],
+    placesCalls: { month: iso(now).slice(0, 7), n: 11 },
+    advice: { at: d(0), lines: adviseReach(list, you, events, new Date(now)) },
+  };
+}
+
 function seed(s: DemoState) {
   const p = s.profile!;
   const now = Date.now();
@@ -209,6 +275,7 @@ function seed(s: DemoState) {
         { item: 'Gift set', yours: { price: '£60', url: site }, theirs: [{ price: '£55', url: 'https://example.org' }, { price: '£65', url: 'https://example.net' }], note: 'Yours includes free gift wrapping; theirs charge extra.' },
       ],
     },
+    competitors: sampleCompetitors(p, comps, now),
   };
 
   // The Scout
@@ -535,6 +602,25 @@ export function createDemoApi(): Api {
       }
       return fallbackReply(rv, p.business.name, p.business.ownerName);
     },
+    async updateCompetitor(op, key, handle) {
+      await wait(300);
+      const w = s.watcher!; const c = w.competitors!;
+      const now = new Date().toISOString();
+      if (op === 'dismiss') {
+        const x = c.list.find((t) => t.key === key) ?? c.nearby.find((t) => t.key === key);
+        if (x) { c.list = c.list.filter((t) => t.key !== key); c.nearby = c.nearby.filter((t) => t.key !== key); c.events = c.events.filter((e) => e.key !== key); c.dismissed = [...c.dismissed, { key, name: x.name, at: now }]; if (c.advice) c.advice = { ...c.advice, lines: c.advice.lines.filter((l) => l.key !== key) }; }
+      } else if (op === 'watch') {
+        const n = c.nearby.find((t) => t.key === key);
+        if (n) { c.nearby = c.nearby.filter((t) => t.key !== key); c.list = [...c.list, { key: n.key, name: n.name, source: 'found', url: n.url || '', placeId: n.placeId, address: n.address, mapsUrl: 'https://www.google.com/maps', distanceKm: n.distanceKm, rating: n.rating, count: n.count, history: [{ at: now, rating: n.rating, count: n.count }], services: [], offers: [], bookingPages: [], social: null, firstSeenAt: now }]; }
+      } else if (op === 'restore') {
+        c.dismissed = c.dismissed.filter((d) => d.key !== key);
+      } else if (op === 'instagram') {
+        const x = c.list.find((t) => t.key === key);
+        if (x) { x.instagram = handle ? `https://www.instagram.com/${handle.replace(/^@/, '')}/` : undefined; x.instagramSetBy = 'owner'; x.social = null; }
+      }
+      save(); return w;
+    },
+    async findCompetitors() { await wait(600); return { started: false, message: 'In the demo the nearby list is a sample. In your account the Watcher searches Google around your location every month, and on request once a week.' }; },
     async setFixDone(title, done) {
       const sp = s.watcher?.speed;
       if (sp) sp.fixes = sp.fixes.map((f) => (f.title === title ? { ...f, done } : f));

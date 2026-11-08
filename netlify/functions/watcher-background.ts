@@ -5,9 +5,9 @@ import { runWatcher } from '../lib/watcher';
 export default async (req: Request) => {
   try {
     requireInternal(req);
-    const { userId, quiet, manual } = await req.json();
+    const { userId, quiet, manual, findNow } = await req.json();
     const profile = await getProfile(userId);
-    if (profile) await runWatcher(userId, profile, { quiet, manual: !!manual });
+    if (profile) await runWatcher(userId, profile, { quiet, manual: !!manual, findNow: !!findNow });
   } catch (e: any) { console.error('[gainora] watcher-background', e?.message); }
   return new Response(null, { status: 202 });
 };
