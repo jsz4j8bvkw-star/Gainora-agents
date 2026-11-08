@@ -1,7 +1,8 @@
 // The demo: a plumbing and heating business in Cornwall, with five weeks of enquiries.
 // Everything runs in the browser with the same rules as the live app (shared/capture.ts).
 import type { Api } from './api';
-import type { CaptureSettings, EnquiryRecord, Source, User } from './types';
+import type { CaptureSettings, EnquiryRecord, MessageRecord, Source, User } from './types';
+import { afterSend, defaultAutomations, dueNow, fieldsFor, ownerAlert, patchForStep, render, stepDef, type MessageLite, type StepId, type WorkflowId } from '../../shared/automations';
 import { applyPatch, DEFAULT_GREETING, DEFAULT_SAFETY, firstReply, greetingFor, isAfterHours, normaliseEnquiry, triage } from '../../shared/capture';
 import { uid } from './format';
 
@@ -9,8 +10,8 @@ const KEY = 'gainora.capture.demo.v1';
 const DAY = 86_400_000;
 
 export type Sample = 'trade' | 'clinic';
-interface DemoState { user: User | null; sample: Sample; settings: CaptureSettings | null; enquiries: EnquiryRecord[]; sources: Source[] }
-const fresh = (): DemoState => ({ user: null, sample: 'trade', settings: null, enquiries: [], sources: [] });
+interface DemoState { user: User | null; sample: Sample; settings: CaptureSettings | null; enquiries: EnquiryRecord[]; sources: Source[]; messages: MessageRecord[]; optOuts: string[] }
+const fresh = (): DemoState => ({ user: null, sample: 'trade', settings: null, enquiries: [], sources: [], messages: [], optOuts: [] });
 
 function load(): DemoState {
   try { const raw = localStorage.getItem(KEY); if (raw) return { ...fresh(), ...JSON.parse(raw) }; } catch { /* no storage */ }
@@ -31,11 +32,13 @@ export const DEMO_SETTINGS: CaptureSettings = {
     emergencies: 'No heating or hot water for someone vulnerable\nWater leaking or a burst pipe\nNo water at all',
     transferTo: 'Text Dave on 07700 900111 and say it’s urgent',
     quotePolicy: 'ranges', priceNotes: 'Boiler service from £85. Call-out and first hour £75. New boilers and bathrooms are quoted after a visit.',
-    booking: 'callback', gasWork: true, recording: true, notify: 'urgent', greeting: DEFAULT_GREETING, announceAi: false, safety: '',
+    booking: 'callback', gasWork: true, recording: true, notify: 'urgent', greeting: DEFAULT_GREETING, announceAi: false, safety: '', alertText: 'urgent',
   },
   bookings: { system: 'Google Calendar', systemOther: '', account: 'dave@smithplumbing.example', mode: 'offer', address: '', arrival: '', types: [{ name: 'Quote visit', minutes: 30, price: 'Free', who: 'Dave' }, { name: 'Boiler service', minutes: 60, price: '£85', who: 'Dave' }], staff: 'Dave Smith', noticeHours: 24, aheadWeeks: 4, cancellation: '', status: 'connected' },
   followUps: { reviewLink: 'https://g.page/r/smith-plumbing/review', payLink: 'https://pay.example/smith-plumbing', paymentDays: 14 },
   provider: { name: 'Retell', aiNumber: '01872 000001' },
+  automations: defaultAutomations('trade', new Date(Date.now() - 60 * DAY).toISOString()),
+  texting: { number: '07700 900500', status: 'on' },
   completedAt: new Date(Date.now() - 36 * DAY).toISOString(),
 };
 
@@ -45,7 +48,7 @@ export const CLINIC_SETTINGS: CaptureSettings = {
   calls: {
     days: [1, 2, 3, 4, 5, 6], open: '08:00', close: '19:00', emergencies: '', transferTo: 'Text Sarah on 07700 900222',
     quotePolicy: 'fixed', priceNotes: '', booking: 'calendar', gasWork: false, recording: true, notify: 'urgent',
-    greeting: DEFAULT_GREETING, announceAi: false, safety: DEFAULT_SAFETY,
+    greeting: DEFAULT_GREETING, announceAi: false, safety: DEFAULT_SAFETY, alertText: 'emergencies',
   },
   bookings: {
     system: 'Cliniko', systemOther: '', account: 'Lemon Street Physio', mode: 'book', address: '12 Lemon Street, Truro TR1 2LS',
@@ -55,6 +58,8 @@ export const CLINIC_SETTINGS: CaptureSettings = {
   },
   followUps: { reviewLink: 'https://g.page/r/lemon-street-physio/review', payLink: 'https://pay.example/lemon-street', paymentDays: 0 },
   provider: { name: 'Retell', aiNumber: '01872 000101' },
+  automations: defaultAutomations('appointments', new Date(Date.now() - 60 * DAY).toISOString()),
+  texting: { number: '07700 900600', status: 'on' },
   completedAt: new Date(Date.now() - 40 * DAY).toISOString(),
 };
 
@@ -96,7 +101,7 @@ function seed(settings: CaptureSettings): EnquiryRecord[] {
     { name: 'Linda Moss', phone: '07700 900777', channel: 'call', days: 21, hour: 7, min: 15, summary: 'Hot water cylinder not heating up. TR4 8AA.',
       then: (e, t) => { let x = step(e, t(21, 8.4), { replied: true }); x = step(x, t(19, 10), { status: 'won', jobValue: 320 }); return { ...x, invoiceDue: t(5, 0).toISOString().slice(0, 10) }; } },
     { name: 'Rob Turner', phone: '07700 900888', email: 'rob.turner@example.com', channel: 'call', days: 30, hour: 18, min: 40, summary: 'New combi boiler to replace an old back boiler. TR1 3XY.',
-      then: (e, t) => { let x = step(e, t(29, 9), { replied: true }); x = step(x, t(28, 15), { status: 'quoted', quoteAmount: 2950 }); x = step(x, t(24, 9), { status: 'won', jobValue: 2950 }); x = { ...x, invoiceDue: t(9, 0).toISOString().slice(0, 10) }; return step(x, t(9, 10), { paymentReminderSent: true }); } },
+      then: (e, t) => { let x = step(e, t(29, 9), { replied: true }); x = step(x, t(28, 15), { status: 'quoted', quoteAmount: 2950 }); x = step(x, t(24, 9), { status: 'won', jobValue: 2950 }); x = { ...x, invoiceDue: t(15, 0).toISOString().slice(0, 10) }; x = step(x, t(15, 10), { paymentReminderSent: true }); return step(x, t(8, 10), { paymentReminderSent: true }); } },
     { name: 'Chris Young', phone: '07700 900999', channel: 'call', days: 16, hour: 11, summary: 'Leaking kitchen tap and a stiff isolation valve. TR2 4QQ.',
       then: (e, t) => { let x = step(e, t(16, 11.3), { replied: true, status: 'booked', bookedFor: t(15, 9).toISOString() }); x = step(x, t(15, 12), { status: 'won', jobValue: 95 }); x = step(x, t(13, 9), { paid: true }); return step(x, t(12, 10), { reviewAsked: true }); } },
     { name: 'Sophie Hall', phone: '07700 900135', channel: 'call', days: 18, hour: 19, summary: 'No hot water since this morning, combi boiler showing an error code. TR3 6AA.',
@@ -152,14 +157,14 @@ function clinicSeeds(step: Step, now: number): Seed[] {
   };
   return [
     { name: 'George Hammond', phone: '07700 900310', channel: 'call', days: 0, hour: 0, ago: 0.7, summary: 'Lower back pain for two weeks, worse when sitting. New patient. Booked an initial consultation.',
-      then: (e) => step(e, new Date(new Date(e.receivedAt).getTime() + 3 * 60_000), { status: 'booked', bookedFor: slot(2, 10) }) },
+      then: (e) => step(e, new Date(new Date(e.receivedAt).getTime() + 3 * 60_000), { status: 'booked', bookedFor: slot(2, 10), bookedType: 'Initial consultation', bookedWith: 'Sarah' }) },
     { name: 'Priya Shah', phone: '07700 900311', channel: 'call', days: 0, hour: 0, ago: 2.2, summary: 'Sore shoulder after swimming. Asked whether we treat sports injuries and would like a call back about times after work.' },
     { name: 'Mark Davies', phone: '07700 900312', channel: 'call', days: 1, hour: 19, min: 40, summary: 'Lower back pain since this morning with new numbness around the groin, and he has lost control of his bladder. Receptionist did not book and told him to go to A&E now.',
       then: (e, t) => ({ ...step(e, t(1, 19.9), { replied: true, status: 'lost' }), notes: 'Sarah rang at 7.55pm. He was on his way to A&E at Treliske. Call him tomorrow to check in.' }) },
     { name: 'Emma Wilson', email: 'emma.wilson@example.com', phone: '07700 900313', channel: 'form', days: 1, hour: 21, min: 10, summary: 'Could I book a sports massage for Saturday morning? Training for the Cornwall half marathon.',
-      then: (e, t) => step(step(e, t(0, 8.2), { replied: true }), t(0, 8.3), { status: 'booked', bookedFor: slot(6 - new Date(now).getDay() || 7, 9) }) },
+      then: (e, t) => step(step(e, t(0, 8.2), { replied: true }), t(0, 8.3), { status: 'booked', bookedFor: slot(6 - new Date(now).getDay() || 7, 9), bookedType: 'Sports massage', bookedWith: 'Tom' }) },
     { name: 'Tom Baker', phone: '07700 900314', channel: 'call', days: 2, hour: 12, min: 15, summary: 'Returning patient. Follow-up for knee rehab with James. Booked.',
-      then: (e) => step(e, new Date(new Date(e.receivedAt).getTime() + 3 * 60_000), { status: 'booked', bookedFor: slot(1, 16, 30) }) },
+      then: (e) => step(e, new Date(new Date(e.receivedAt).getTime() + 3 * 60_000), { status: 'booked', bookedFor: slot(1, 16, 30), bookedType: 'Follow-up', bookedWith: 'James' }) },
     { name: 'Clinic Growth Ltd', phone: '02079 460111', channel: 'call', days: 2, hour: 10, summary: 'Caller offered SEO and a better Google ranking for the clinic website.' },
     { name: 'Lucy Grant', phone: '07700 900315', channel: 'call', days: 6, hour: 18, min: 30, summary: 'Neck pain and headaches from desk work. New patient. Booked an initial consultation.', then: attended(65, true, false) },
     { name: 'Rachel Hughes', phone: '07700 900316', channel: 'call', days: 7, hour: 13, summary: 'Follow-up for plantar fasciitis. Returning patient. Booked.',
@@ -228,6 +233,57 @@ function demoTranscript(name: string, summary: string, s: CaptureSettings, booke
   ].join('\n');
 }
 
+/* ---------- Messages in the demo ---------- */
+
+const msg = (m: Partial<MessageRecord> & Pick<MessageRecord, 'enquiryId' | 'direction' | 'channel' | 'body' | 'createdAt'>): MessageRecord => ({
+  id: uid('m_'), audience: 'customer', to: '', from: '', subject: '', automatic: false, workflow: null, step: null, key: null,
+  status: m.direction === 'in' ? 'received' : 'sent', error: null, read: true, sentAt: m.createdAt, ...m,
+});
+const lite = (m: MessageRecord): MessageLite => ({ enquiryId: m.enquiryId, direction: m.direction, key: m.key, status: m.status, createdAt: m.createdAt, automatic: m.automatic });
+
+/** The texts that would already have gone out, read from each enquiry's history. */
+function seedMessages(list: EnquiryRecord[], s: CaptureSettings, sample: Sample): MessageRecord[] {
+  const out: MessageRecord[] = [];
+  const later = (iso: string, sec: number) => new Date(new Date(iso).getTime() + sec * 1000).toISOString();
+  const auto = (e: EnquiryRecord, wf: WorkflowId, step: StepId, key: string, at: string) => {
+    const st = s.automations[wf]?.steps[step];
+    if (!st || !e.phone) return;
+    out.push(msg({ enquiryId: e.id, direction: 'out', channel: 'text', to: e.phone, body: render(st.text, fieldsFor(e, s, new Date(at)), !!stepDef(wf, step).marketing), createdAt: at, automatic: true, workflow: wf, step, key: `${wf}.${key}` }));
+  };
+  for (const e of list) {
+    if (e.status === 'spam' || e.isTest) continue;
+    const bookedOnCall = e.history.some((h) => /^Booked in/.test(h.text) && new Date(h.at).getTime() - new Date(e.receivedAt).getTime() < 15 * 60_000);
+    if (e.urgency !== 'normal' && s.calls.alertText !== 'off' && (s.calls.alertText === 'urgent' || e.urgency === 'emergency')) {
+      out.push(msg({ enquiryId: e.id, direction: 'out', audience: 'owner', channel: 'text', to: s.business.alertMobile, body: ownerAlert(e, s), createdAt: later(e.receivedAt, 8), automatic: true, workflow: 'owner_alert', key: 'owner-alert' }));
+    }
+    if (!bookedOnCall && !(e.urgency === 'emergency' && s.business.kind === 'appointments')) auto(e, 'ack', 'ack', 'ack', later(e.receivedAt, 20));
+    for (const h of e.history) {
+      if (/^Booked in/.test(h.text) && e.bookedFor) {
+        auto(e, 'booking', 'confirm', `confirm@${e.bookedFor}`, later(h.at, 20));
+        const remind = new Date(new Date(e.bookedFor).getTime() - 86_400_000); remind.setHours(9, 0, 0, 0);
+        if (remind.getTime() < Date.now() && remind.getTime() - new Date(h.at).getTime() > 3 * 3_600_000) auto(e, 'booking', 'reminder', `reminder@${e.bookedFor}`, remind.toISOString());
+      }
+      const c = h.text.match(/^Quote chaser (\d) sent/); if (c && e.quotedAt) auto(e, 'quote', `chase${c[1]}` as StepId, `chase${c[1]}@${e.quotedAt}`, h.at);
+      const p = h.text.match(/^Payment reminder (\d) sent/); if (p && e.invoiceDue) auto(e, 'payment', `pay${p[1]}` as StepId, `pay${p[1]}@${e.invoiceDue.slice(0, 10)}`, h.at);
+      if (h.text === 'Review requested') auto(e, 'review', 'review', 'review', h.at);
+    }
+  }
+  // A few replies from customers, as they'd really come in.
+  const reply = (name: string, body: string, minsAgo: number, read: boolean) => {
+    const e = list.find((x) => x.name === name); if (!e) return;
+    out.push(msg({ enquiryId: e.id, direction: 'in', channel: 'text', from: e.phone, body, createdAt: new Date(Date.now() - minsAgo * 60_000).toISOString(), read }));
+  };
+  if (sample === 'clinic') {
+    reply('George Hammond', 'Thanks! Is there parking at the clinic?', 25, false);
+    reply('Priya Shah', 'After 5pm any weekday is best for me, thanks', 70, false);
+    reply('Emma Wilson', 'Perfect, see you Saturday 😊', 6 * 60, true);
+  } else {
+    reply('Priya Shah', 'Thanks Dave. Could you do it for £600 if I book this month?', 18 * 60, false);
+    reply('Kate Brown', 'Great, see you then. The side gate will be open', 26 * 60, true);
+  }
+  return out.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
 export function createDemoApi(): Api {
   let s = load();
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(s)); } catch { /* demo works without storage */ } };
@@ -239,7 +295,25 @@ export function createDemoApi(): Api {
       { id: uid('src_'), label: 'Retell receptionist', channel: 'call', active: true, createdAt: new Date(Date.now() - 35 * DAY).toISOString(), lastUsedAt: s.enquiries.find((e) => e.channel === 'call')?.receivedAt ?? null },
       { id: uid('src_'), label: s.sample === 'clinic' ? 'Website booking form' : 'Website contact form', channel: 'form', active: true, createdAt: new Date(Date.now() - 35 * DAY).toISOString(), lastUsedAt: s.enquiries.find((e) => e.channel === 'form')?.receivedAt ?? null },
     ];
+    s.messages = seedMessages(s.enquiries, s.settings, s.sample);
+    run();
     save();
+  };
+  /** The same engine as the live app: what's due now goes out (simulated), or waits for approval. */
+  const run = (only?: string[]) => {
+    if (!s.settings) return;
+    const settings = s.settings;
+    const texting = settings.texting.status === 'on';
+    for (const e0 of s.enquiries) {
+      if (only && !only.includes(e0.id)) continue;
+      let e = e0;
+      for (const d of dueNow(e, settings, s.messages.map(lite), s.optOuts.includes(e.phone))) {
+        const ok = d.channel === 'email' || texting;
+        s.messages.unshift(msg({ enquiryId: e.id, direction: 'out', channel: d.channel, to: d.to, subject: d.subject, body: d.body, createdAt: new Date().toISOString(), automatic: true, workflow: d.workflow, step: d.step, key: d.key, status: d.ask ? 'awaiting_approval' : ok ? 'sent' : 'failed', error: ok ? null : 'Texting isn’t switched on yet.' }));
+        if (!d.ask && ok && d.patch) e = afterSend(e, d, settings);
+      }
+      if (e !== e0) s.enquiries = s.enquiries.map((x) => (x.id === e.id ? e : x));
+    }
   };
   const find = (id: string) => { const e = s.enquiries.find((x) => x.id === id); if (!e) throw new Error('That enquiry no longer exists.'); return e; };
 
@@ -265,14 +339,14 @@ export function createDemoApi(): Api {
         notes: '', history: [{ at: e.receivedAt, text: 'Logged by you' }], repliedAt: null, quoteAmount: null, quotedAt: null, chasersSent: 0, bookedFor: null,
         jobValue: null, invoiceDue: null, paidAt: null, paymentRemindersSent: 0, reviewAskedAt: null, receivedAt: e.receivedAt, isTest: false,
       };
-      s.enquiries = [rec, ...s.enquiries]; save(); return rec;
+      s.enquiries = [rec, ...s.enquiries]; run([rec.id]); save(); return find(rec.id);
     },
     async updateEnquiry(id, patch) {
       await wait(200);
       const next = applyPatch(find(id), patch, s.settings);
-      s.enquiries = s.enquiries.map((x) => (x.id === id ? next : x)); save(); return next;
+      s.enquiries = s.enquiries.map((x) => (x.id === id ? next : x)); run([id]); save(); return find(id);
     },
-    async deleteEnquiry(id) { s.enquiries = s.enquiries.filter((x) => x.id !== id); save(); },
+    async deleteEnquiry(id) { s.enquiries = s.enquiries.filter((x) => x.id !== id); s.messages = s.messages.filter((m) => m.enquiryId !== id); save(); },
     async draftReply(id) {
       await wait(700);
       const e = find(id);
@@ -290,6 +364,32 @@ export function createDemoApi(): Api {
       };
       s.enquiries = [rec, ...s.enquiries]; save(); return rec;
     },
+
+    async listMessages() { await wait(80); ensure(); run(); save(); return s.messages; },
+    async reply(enquiryId, channel, text, subject) {
+      await wait(500);
+      const e = find(enquiryId);
+      const to = channel === 'text' ? e.phone : e.email;
+      if (!to) throw new Error(channel === 'text' ? 'There’s no mobile number for this customer.' : 'There’s no email address for this customer.');
+      if (channel === 'text' && s.optOuts.includes(e.phone)) throw new Error('This customer replied STOP, so they can’t be texted. Call or email them instead.');
+      const m = msg({ enquiryId, direction: 'out', channel, to, subject: subject ?? '', body: text, createdAt: new Date().toISOString() });
+      s.messages.unshift(m);
+      const next = applyPatch(e, { replied: true }, s.settings);
+      s.enquiries = s.enquiries.map((x) => (x.id === enquiryId ? next : x)); save();
+      return { message: m, enquiry: next };
+    },
+    async approveMessage(id, text) {
+      await wait(400);
+      const m = s.messages.find((x) => x.id === id && x.status === 'awaiting_approval');
+      if (!m) throw new Error('That message has already been dealt with.');
+      m.status = 'sent'; m.sentAt = new Date().toISOString(); if (text?.trim()) m.body = text.trim();
+      const p = patchForStep(m.step);
+      if (p && m.enquiryId) { const e = applyPatch(find(m.enquiryId), p, s.settings); s.enquiries = s.enquiries.map((x) => (x.id === e.id ? e : x)); }
+      save();
+    },
+    async skipMessage(id) { const m = s.messages.find((x) => x.id === id); if (m) m.status = 'skipped'; save(); },
+    async markRead(enquiryId) { for (const m of s.messages) if (m.enquiryId === enquiryId && m.direction === 'in') m.read = true; save(); },
+    async testText() { await wait(400); },
 
     async listSources() { await wait(100); ensure(); return s.sources; },
     async createSource(label, channel) {

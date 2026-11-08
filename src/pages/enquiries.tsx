@@ -4,6 +4,7 @@ import { useApp } from '../app';
 import { Link, navigate } from '../lib/router';
 import { Button, Choices, ErrorNote, Field, Icon, Loading, Modal, Tabs, copyText, useToast } from '../components/ui';
 import { Compose } from '../components/compose';
+import { Thread } from '../components/thread';
 import { CHANNEL_ICON, EnquiryRow, StatusTag, UrgencyTag, who } from '../components/enquiry';
 import { csv, money, phone, relative, shortDate } from '../lib/format';
 import {
@@ -31,18 +32,20 @@ const dayLabel = (iso: string) => {
 /* ---------- The inbox ---------- */
 
 export function Enquiries({ adding = false }: { adding?: boolean }) {
-  const { enquiries, enquiriesError, reloadEnquiries, settings } = useApp();
+  const { enquiries, enquiriesError, reloadEnquiries, settings, messages } = useApp();
   const W = words(settings.business.kind);
+  const repliedIds = useMemo(() => new Set(messages.filter((m) => m.direction === 'in' && !m.read).map((m) => m.enquiryId)), [messages]);
   const [filter, setFilter] = useState<Filter>(() => (enquiries ?? []).some((e) => e.status === 'new') ? 'new' : 'all');
   const [q, setQ] = useState('');
   const [add, setAdd] = useState(adding);
   const toast = useToast();
 
-  const counts = useMemo(() => Object.fromEntries((Object.keys(IN) as Filter[]).map((f) => [f, (enquiries ?? []).filter(IN[f]).length])) as Record<Filter, number>, [enquiries]);
+  const inFilter = (f: Filter) => (e: EnquiryRecord) => IN[f](e) || (f === 'new' && repliedIds.has(e.id));
+  const counts = useMemo(() => Object.fromEntries((Object.keys(IN) as Filter[]).map((f) => [f, (enquiries ?? []).filter(inFilter(f)).length])) as Record<Filter, number>, [enquiries, repliedIds]);
   const list = useMemo(() => {
     const term = q.trim().toLowerCase();
-    return (enquiries ?? []).filter(IN[filter]).filter((e) => !term || [e.name, e.phone, e.email, e.postcode, e.summary, e.notes].join(' ').toLowerCase().includes(term));
-  }, [enquiries, filter, q]);
+    return (enquiries ?? []).filter(inFilter(filter)).filter((e) => !term || [e.name, e.phone, e.email, e.postcode, e.summary, e.notes].join(' ').toLowerCase().includes(term));
+  }, [enquiries, filter, q, repliedIds]);
   const groups = useMemo(() => {
     const g: { day: string; items: EnquiryRecord[] }[] = [];
     for (const e of list) { const d = dayLabel(e.receivedAt); const last = g[g.length - 1]; if (last?.day === d) last.items.push(e); else g.push({ day: d, items: [e] }); }
@@ -219,6 +222,8 @@ export function EnquiryDetail({ id }: { id: string }) {
             </dl>
           </section>
 
+          <Thread e={e} />
+
           {(e.transcript || e.recordingUrl) && (
             <details className="panel transcript">
               <summary><span className="subhead">Call transcript</span><span className="small faint">{e.transcript ? `${e.transcript.split('\n').length} lines` : ''}</span></summary>
@@ -263,7 +268,7 @@ export function EnquiryDetail({ id }: { id: string }) {
               <p className="next-line">Quote sent{e.quoteAmount ? ` for ${money(e.quoteAmount)}` : ''}{e.quotedAt ? ` ${relative(e.quotedAt)}` : ''}. {e.chasersSent ? `${e.chasersSent} ${e.chasersSent === 1 ? 'chaser' : 'chasers'} sent.` : ''}</p>
               {chaseDue && <div className="next-actions"><Button icon="send" onClick={openChaser}>{e.chasersSent ? 'Draft the last chaser' : 'Draft a chaser'}</Button></div>}
             </>}
-            {e.status === 'booked' && <p className="next-line">{e.bookedFor ? `Booked for ${new Date(e.bookedFor).toLocaleString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', hour: 'numeric', minute: '2-digit' })}.` : 'Booked in.'}</p>}
+            {e.status === 'booked' && <p className="next-line">{e.bookedFor ? `${e.bookedType ? `${e.bookedType}, ` : 'Booked for '}${new Date(e.bookedFor).toLocaleString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', hour: 'numeric', minute: '2-digit' })}${e.bookedWith ? ` with ${e.bookedWith}` : ''}.` : 'Booked in.'}</p>}
             {e.status === 'won' && <>
               <p className="next-line">{W.won}{e.jobValue ? `, ${money(e.jobValue)}` : ''}. {e.paidAt ? `Paid ${relative(e.paidAt)}.` : e.invoiceDue ? `Payment ${overdue ? 'was due' : 'due'} ${shortDate(e.invoiceDue)}.` : ''}</p>
               <div className="next-actions">
@@ -302,7 +307,7 @@ export function EnquiryDetail({ id }: { id: string }) {
       </div>
 
       {draft && <Compose title={draft.title} load={draft.load} {...contact} onSent={draft.onSent} sentLabel={draft.sentLabel} note={draft.note} onClose={() => setDraft(null)} />}
-      {ask && <StageModal e={e} kind={ask.kind} words={W} paymentDays={settings.followUps.paymentDays} onClose={() => setAsk(null)} onSave={(p, msg) => update(p, msg).then(() => setAsk(null))} />}
+      {ask && <StageModal e={e} kind={ask.kind} words={W} types={settings.bookings.types.map((t) => t.name).filter(Boolean)} staff={settings.bookings.staff.split('\n').map((x) => x.trim()).filter(Boolean)} paymentDays={settings.followUps.paymentDays} onClose={() => setAsk(null)} onSave={(p, msg) => update(p, msg).then(() => setAsk(null))} />}
       {confirmDelete && (
         <Modal title="Delete this enquiry?" onClose={() => setConfirmDelete(false)} footer={<><Button kind="secondary" onClick={() => setConfirmDelete(false)}>Keep it</Button><Button onClick={async () => { await api.deleteEnquiry(e.id); dropEnquiry(e.id); toast('Deleted.'); navigate('/enquiries'); }}>Delete for good</Button></>}>
           <p className="panel-pad muted">This removes {who(e)}’s details, the transcript and your notes. It can’t be undone. Use this when a customer asks you to delete their information.</p>
@@ -312,12 +317,14 @@ export function EnquiryDetail({ id }: { id: string }) {
   );
 }
 
-function StageModal({ e, kind, words: W, paymentDays, onClose, onSave }: { e: EnquiryRecord; kind: 'quote' | 'booked' | 'won' | 'invoice'; words: ReturnType<typeof words>; paymentDays: number; onClose: () => void; onSave: (p: EnquiryPatch, msg: string) => Promise<void> }) {
+function StageModal({ e, kind, words: W, types, staff, paymentDays, onClose, onSave }: { e: EnquiryRecord; kind: 'quote' | 'booked' | 'won' | 'invoice'; words: ReturnType<typeof words>; types: string[]; staff: string[]; paymentDays: number; onClose: () => void; onSave: (p: EnquiryPatch, msg: string) => Promise<void> }) {
   const tomorrow = new Date(Date.now() + 86_400_000); tomorrow.setHours(9, 0, 0, 0);
   const local = (d: Date) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
   const [amount, setAmount] = useState(String((kind === 'quote' ? e.quoteAmount : e.jobValue ?? e.quoteAmount) ?? ''));
   const [when, setWhen] = useState(e.bookedFor ? local(new Date(e.bookedFor)) : local(tomorrow));
   const [due, setDue] = useState(e.invoiceDue ?? new Date(Date.now() + paymentDays * 86_400_000).toISOString().slice(0, 10));
+  const [bType, setBType] = useState(e.bookedType || types[0] || '');
+  const [bWith, setBWith] = useState(e.bookedWith || '');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const n = () => { const v = Number(amount.replace(/[£,\s]/g, '')); return amount.trim() && Number.isFinite(v) && v >= 0 ? v : null; };
@@ -327,7 +334,7 @@ function StageModal({ e, kind, words: W, paymentDays, onClose, onSave }: { e: En
     setBusy(true);
     try {
       if (kind === 'quote') await onSave({ status: 'quoted', quoteAmount: n() }, 'Quote logged. Chasers are set for day 3 and day 8.');
-      if (kind === 'booked') await onSave({ status: 'booked', bookedFor: new Date(when).toISOString() }, 'Booked in.');
+      if (kind === 'booked') await onSave({ status: 'booked', bookedFor: new Date(when).toISOString(), bookedType: bType, bookedWith: bWith }, e.status === 'booked' ? 'Moved. A new confirmation is on its way.' : 'Booked in. The confirmation is on its way.');
       if (kind === 'won') await onSave({ status: 'won', jobValue: n(), invoiceDue: n() ? due : null }, n() ? `${W.won}. Payment reminders are set.` : `${W.won}.`);
       if (kind === 'invoice') await onSave({ jobValue: n(), invoiceDue: due }, 'Updated.');
     } catch { setBusy(false); }
@@ -344,6 +351,9 @@ function StageModal({ e, kind, words: W, paymentDays, onClose, onSave }: { e: En
           </Field>
         )}
         {kind === 'booked' && <Field label="Date and time">{(id) => <input id={id} className="input" type="datetime-local" value={when} onChange={(ev: any) => setWhen(ev.target.value)} />}</Field>}
+        {kind === 'booked' && types.length > 0 && <Field label="What’s booked">{(id) => <select id={id} className="select" value={bType} onChange={(ev: any) => setBType(ev.target.value)}><option value="">Not set</option>{types.map((t) => <option key={t} value={t}>{t}</option>)}</select>}</Field>}
+        {kind === 'booked' && staff.length > 0 && <Field label="With" optional>{(id) => <select id={id} className="select" value={bWith} onChange={(ev: any) => setBWith(ev.target.value)}><option value="">Anyone</option>{staff.map((t) => <option key={t} value={t.split(' ')[0]}>{t}</option>)}</select>}</Field>}
+        {kind === 'booked' && <p className="xsmall faint">If booking confirmations are switched on in Automations, the customer gets one straight away.</p>}
         {(kind === 'won' || kind === 'invoice') && <Field label="Payment due" help={`Your usual terms: ${paymentDays ? `${paymentDays} days` : 'on completion'}.`}>{(id, d) => <input id={id} className="input" type="date" value={due} aria-describedby={d} onChange={(ev: any) => setDue(ev.target.value)} />}</Field>}
       </div>
     </Modal>

@@ -22,8 +22,10 @@ export function UrgencyTag({ e }: { e: EnquiryRecord }) {
 }
 
 export function EnquiryRow({ e, compact = false }: { e: EnquiryRecord; compact?: boolean }) {
+  const { messages } = useApp();
+  const replied = messages.some((m) => m.enquiryId === e.id && m.direction === 'in' && !m.read);
   return (
-    <Link to={`/enquiries/${e.id}`} className={`enq-row ${e.status === 'new' ? 'unread' : ''} urg-${e.urgency}`}>
+    <Link to={`/enquiries/${e.id}`} className={`enq-row ${e.status === 'new' || replied ? 'unread' : ''} urg-${e.urgency}`}>
       <span className="enq-ico" title={CHANNEL_LABEL[e.channel]}><Icon name={CHANNEL_ICON[e.channel]} /><span className="sr-only">{CHANNEL_LABEL[e.channel]}</span></span>
       <span className="enq-main">
         <span className="enq-top">
@@ -31,6 +33,7 @@ export function EnquiryRow({ e, compact = false }: { e: EnquiryRecord; compact?:
           <UrgencyTag e={e} />
           {e.afterHours && <span className="tag tag-plain"><Icon name="moon" className="tag-ico" />Out of hours</span>}
           {!compact && e.kind !== 'other' && e.kind !== 'spam' && <span className="tag tag-plain">{e.status === 'booked' ? 'Booked' : KIND_LABEL[e.kind]}</span>}
+          {replied && <span className="tag tag-brass"><Icon name="message" className="tag-ico" />New reply</span>}
           {e.isTest && <span className="tag tag-plain">Test</span>}
         </span>
         <span className="enq-summary">{e.summary || 'No summary sent.'}</span>

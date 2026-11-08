@@ -21,10 +21,14 @@ const whenLabel = (f: FollowItem) => {
 };
 
 export function FollowUps() {
-  const { enquiries, enquiriesError, reloadEnquiries, settings, putEnquiry } = useApp();
+  const { enquiries, enquiriesError, reloadEnquiries, settings, putEnquiry, messages } = useApp();
   const [draft, setDraft] = useState<FollowItem | null>(null);
   const toast = useToast();
   const items = useMemo(() => followUps(enquiries ?? []), [enquiries]);
+  const wfFor = (f: FollowItem) => (f.kind === 'quote' ? 'quote' : f.kind === 'payment' ? 'payment' : 'review') as 'quote' | 'payment' | 'review';
+  const stepFor = (f: FollowItem) => (f.kind === 'quote' ? `chase${f.stage}` : f.kind === 'payment' ? `pay${f.stage}` : 'review') as 'chase1';
+  const isAuto = (f: FollowItem) => { const w = settings.automations[wfFor(f)]; return !!w?.on && !!w.steps[stepFor(f)]?.on && new Date(w.since) <= new Date(f.enquiry.receivedAt); };
+  const paused = (f: FollowItem) => messages.some((m) => m.enquiryId === f.enquiry.id && m.direction === 'in');
 
   if (enquiriesError && !enquiries) return <div className="page"><ErrorNote message={enquiriesError} retry={reloadEnquiries} /></div>;
   if (!enquiries) return <Loading />;
@@ -56,13 +60,13 @@ export function FollowUps() {
   const Row = ({ f }: { f: FollowItem }) => (
     <article className={`follow-row ${f.due ? '' : 'later'}`}>
       <div className="stack gap-4" style={{ minWidth: 0 }}>
-        <div className="row gap-8 wrap"><Link to={`/enquiries/${f.enquiry.id}`} className="lead-name">{who(f.enquiry)}</Link><span className={`tag ${f.due ? (f.kind === 'payment' && f.stage > 1 ? 'tag-danger' : 'tag-brass') : 'tag-plain'}`}>{whenLabel(f)}</span></div>
+        <div className="row gap-8 wrap"><Link to={`/enquiries/${f.enquiry.id}`} className="lead-name">{who(f.enquiry)}</Link>{isAuto(f) && !paused(f) && <span className="tag tag-forest"><Icon name="bolt" className="tag-ico" />Automatic</span>}{paused(f) && <span className="tag tag-plain">Paused: they replied</span>}<span className={`tag ${f.due ? (f.kind === 'payment' && f.stage > 1 ? 'tag-danger' : 'tag-brass') : 'tag-plain'}`}>{whenLabel(f)}</span></div>
         <span className="small">{f.label}</span>
         <span className="small muted">{detail(f)}</span>
       </div>
       <div className="lead-actions">
         {f.due && <Button small icon="send" onClick={() => setDraft(f)}>Draft message</Button>}
-        {!f.due && <Button kind="secondary" small icon="send" onClick={() => setDraft(f)}>Draft early</Button>}
+        {!f.due && <Button kind="secondary" small icon="send" onClick={() => setDraft(f)}>{isAuto(f) ? 'Send it myself' : 'Draft early'}</Button>}
         {f.kind === 'quote' && <Button kind="secondary" small onClick={() => navigate(`/enquiries/${f.enquiry.id}`)}>They said yes</Button>}
         {f.kind === 'payment' && <Button kind="secondary" small onClick={() => update(f.enquiry.id, { paid: true }, 'Marked as paid.').catch(() => {})}>Paid</Button>}
       </div>

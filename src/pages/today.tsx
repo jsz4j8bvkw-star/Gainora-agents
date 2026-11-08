@@ -8,7 +8,7 @@ import { greeting, money, relative } from '../lib/format';
 import { followUps, report, words } from '../../shared/capture';
 
 export function Today() {
-  const { settings, enquiries, enquiriesError, reloadEnquiries, putEnquiry } = useApp();
+  const { settings, enquiries, enquiriesError, reloadEnquiries, putEnquiry, messages } = useApp();
   const sources = useLoad(() => api.listSources());
   const [testing, setTesting] = useState(false);
   const toast = useToast();
@@ -29,6 +29,12 @@ export function Today() {
       upcoming: real.filter((e) => e.status === 'booked' && e.bookedFor && new Date(e.bookedFor) >= new Date(now.toDateString())).sort((a, b) => a.bookedFor!.localeCompare(b.bookedFor!)).slice(0, 4),
     };
   }, [enquiries]);
+
+  const replies = useMemo(() => {
+    const seen = new Set<string>();
+    return messages.filter((m) => m.direction === 'in' && !m.read && m.enquiryId && !seen.has(m.enquiryId) && seen.add(m.enquiryId));
+  }, [messages]);
+  const waitingOk = messages.filter((m) => m.status === 'awaiting_approval');
 
   if (enquiriesError && !enquiries) return <div className="page"><ErrorNote message={enquiriesError} retry={reloadEnquiries} /></div>;
   if (!data) return <Loading />;
@@ -90,7 +96,30 @@ export function Today() {
         </section>
       )}
 
-      <section className={`panel ${data.now.length ? 'section' : ''}`} aria-label="The last 7 days">
+      {(replies.length > 0 || waitingOk.length > 0) && (
+        <section className={`section-tight ${data.now.length ? 'section' : ''}`} aria-labelledby="replies-h">
+          <div className="section-head"><h2 className="heading" id="replies-h">Messages for you</h2><Link to="/automations" className="btn btn-quiet btn-small">Automations<Icon name="chevron" /></Link></div>
+          <div className="panel rows">
+            {replies.map((m) => {
+              const e = enquiries?.find((x) => x.id === m.enquiryId);
+              return (
+                <Link key={m.id} to={`/enquiries/${m.enquiryId}`} className="mini-row reply-row">
+                  <span className="enq-ico"><Icon name="message" /></span>
+                  <span className="stack" style={{ minWidth: 0 }}><span className="small"><strong>{e?.name || 'A customer'}</strong> replied {relative(m.createdAt)}</span><span className="small muted enq-summary">“{m.body}”</span></span>
+                </Link>
+              );
+            })}
+            {waitingOk.length > 0 && (
+              <Link to="/automations" className="mini-row reply-row">
+                <span className="enq-ico"><Icon name="bolt" /></span>
+                <span className="stack"><span className="small"><strong>{waitingOk.length} {waitingOk.length === 1 ? 'message is' : 'messages are'} waiting for your OK</strong></span><span className="small muted">Read them, then send or skip.</span></span>
+              </Link>
+            )}
+          </div>
+        </section>
+      )}
+
+      <section className={`panel ${data.now.length || replies.length || waitingOk.length ? 'section' : ''}`} aria-label="The last 7 days">
         <div className="stats">
           <div className="stat"><span className="stat-label">Enquiries, last 7 days</span><span className="stat-value">{data.week.caught}</span><span className="stat-note">{data.week.byChannel.call} by phone</span></div>
           <div className="stat"><span className="stat-label">Caught out of hours</span><span className="stat-value">{data.week.afterHours}</span><span className="stat-note">Calls you’d have missed</span></div>

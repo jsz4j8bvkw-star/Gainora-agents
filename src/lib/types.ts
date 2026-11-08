@@ -22,3 +22,19 @@ export interface Source {
 }
 
 export interface NewEnquiry { channel: 'call' | 'form' | 'email' | 'text'; name: string; phone: string; email: string; postcode: string; summary: string }
+
+export interface MessageRecord {
+  id: string;
+  enquiryId: string | null;
+  direction: 'in' | 'out';
+  audience: 'customer' | 'owner';
+  channel: 'text' | 'email';
+  to: string; from: string;
+  subject: string; body: string;
+  automatic: boolean;
+  workflow: string | null; step: string | null; key: string | null;
+  status: 'awaiting_approval' | 'sending' | 'sent' | 'failed' | 'skipped' | 'received';
+  error: string | null;
+  read: boolean;
+  createdAt: string; sentAt: string | null;
+}

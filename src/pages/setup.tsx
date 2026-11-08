@@ -5,6 +5,7 @@ import { Button, Choices, Field, Icon, useToast } from '../components/ui';
 import { BOOKING_SYSTEMS, CLINICS, DAYS, DEFAULT_SAFETY, emptySettings, greetingFor, hoursText, lines, packFromSettings, TRADES } from '../../shared/capture';
 import type { CaptureSettings, User } from '../lib/types';
 import type { AppointmentType } from '../../shared/capture';
+import { defaultAutomations } from '../../shared/automations';
 
 /* ---------- The questions, shared by setup and Settings ---------- */
 
@@ -95,9 +96,12 @@ export const SETUP: SetupSection[] = [
 
 /** Sensible starting answers when the business type changes. */
 export function withKindDefaults(s: CaptureSettings): CaptureSettings {
-  if (s.business.kind !== 'appointments') return s;
+  // Message wording follows the business type ("your appointment" or "your visit").
+  const automations = defaultAutomations(s.business.kind, new Date().toISOString());
+  if (s.business.kind !== 'appointments') return { ...s, automations };
   return {
     ...s,
+    automations,
     calls: { ...s.calls, safety: s.calls.safety || DEFAULT_SAFETY, quotePolicy: s.calls.quotePolicy === 'ranges' ? 'fixed' : s.calls.quotePolicy, gasWork: false },
     bookings: { ...s.bookings, mode: s.bookings.mode === 'callback' && !s.bookings.types.length ? 'book' : s.bookings.mode, types: s.bookings.types.length ? s.bookings.types : [{ name: 'Initial consultation', minutes: 45, price: '', who: '' }, { name: 'Follow-up', minutes: 30, price: '', who: '' }] },
     followUps: { ...s.followUps, paymentDays: s.followUps.paymentDays === 14 ? 0 : s.followUps.paymentDays },

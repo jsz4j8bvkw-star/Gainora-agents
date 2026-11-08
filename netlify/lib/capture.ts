@@ -24,7 +24,7 @@ export const toRecord = (r: any): EnquiryRecord => ({
   urgency: r.urgency, kind: r.kind, reasons: r.reasons ?? [], status: r.status, afterHours: !!r.after_hours,
   notes: r.notes ?? '', history: r.history ?? [], repliedAt: r.replied_at ?? null,
   quoteAmount: r.quote_amount != null ? Number(r.quote_amount) : null, quotedAt: r.quoted_at ?? null, chasersSent: Number(r.chasers_sent ?? 0),
-  bookedFor: r.booked_for ?? null, jobValue: r.job_value != null ? Number(r.job_value) : null, invoiceDue: r.invoice_due ?? null,
+  bookedFor: r.booked_for ?? null, bookedType: r.booked_type ?? '', bookedWith: r.booked_with ?? '', jobValue: r.job_value != null ? Number(r.job_value) : null, invoiceDue: r.invoice_due ?? null,
   paidAt: r.paid_at ?? null, paymentRemindersSent: Number(r.payment_reminders_sent ?? 0), reviewAskedAt: r.review_asked_at ?? null,
   receivedAt: r.received_at, isTest: !!r.is_test,
 });
@@ -32,7 +32,7 @@ export const toRecord = (r: any): EnquiryRecord => ({
 /** The database columns a change touches. */
 export const toRow = (e: EnquiryRecord) => ({
   name: e.name, phone: e.phone, email: e.email, postcode: e.postcode, kind: e.kind, status: e.status, notes: e.notes, history: e.history.slice(-100),
-  replied_at: e.repliedAt, quote_amount: e.quoteAmount, quoted_at: e.quotedAt, chasers_sent: e.chasersSent, booked_for: e.bookedFor,
+  replied_at: e.repliedAt, quote_amount: e.quoteAmount, quoted_at: e.quotedAt, chasers_sent: e.chasersSent, booked_for: e.bookedFor, booked_type: e.bookedType ?? '', booked_with: e.bookedWith ?? '',
   job_value: e.jobValue, invoice_due: e.invoiceDue, paid_at: e.paidAt, payment_reminders_sent: e.paymentRemindersSent,
   review_asked_at: e.reviewAskedAt, updated_at: new Date().toISOString(),
 });

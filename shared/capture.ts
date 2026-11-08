@@ -5,6 +5,8 @@
 //  - triage: flags emergencies and sorts enquiries so the owner sees what matters first
 //  - reminder templates: quote chasers, payment reminders and review requests the owner approves and sends
 
+import { automationsWithDefaults, defaultAutomations, type Automations } from './automations';
+
 export const GAS_EMERGENCY = '0800 111 999';
 
 /* ---------- Receptionist setup pack ---------- */
@@ -351,6 +353,8 @@ export interface Bookings {
   status: 'not_connected' | 'requested' | 'connected';
 }
 
+export interface Texting { number: string; status: 'off' | 'requested' | 'on' }
+
 export interface CaptureSettings {
   business: { kind: BusinessKind; name: string; ownerName: string; trade: string; location: string; website: string; phone: string; alertEmail: string; alertMobile: string };
   work: { services: string; notDone: string; areas: string };          // one per line
@@ -361,8 +365,11 @@ export interface CaptureSettings {
     booking: 'calendar' | 'callback'; gasWork: boolean; recording: boolean;
     notify: 'all' | 'urgent';
     greeting: string; announceAi: boolean; safety: string;
+    alertText: 'emergencies' | 'urgent' | 'off';
   };
   bookings: Bookings;
+  automations: Automations;
+  texting: Texting;
   followUps: { reviewLink: string; payLink: string; paymentDays: number };
   provider: { name: string; aiNumber: string };
   completedAt?: string;
@@ -379,10 +386,12 @@ export function emptySettings(email = ''): CaptureSettings {
   return {
     business: { kind: 'trade', name: '', ownerName: '', trade: '', location: '', website: '', phone: '', alertEmail: email, alertMobile: '' },
     work: { services: '', notDone: '', areas: '' },
-    calls: { days: [1, 2, 3, 4, 5], open: '08:00', close: '17:30', emergencies: '', transferTo: '', quotePolicy: 'never', priceNotes: '', booking: 'callback', gasWork: false, recording: true, notify: 'urgent', greeting: DEFAULT_GREETING, announceAi: false, safety: '' },
+    calls: { days: [1, 2, 3, 4, 5], open: '08:00', close: '17:30', emergencies: '', transferTo: '', quotePolicy: 'never', priceNotes: '', booking: 'callback', gasWork: false, recording: true, notify: 'urgent', greeting: DEFAULT_GREETING, announceAi: false, safety: '', alertText: 'urgent' },
     bookings: { system: '', systemOther: '', account: '', mode: 'callback', address: '', arrival: '', types: [], staff: '', noticeHours: 2, aheadWeeks: 4, cancellation: '', status: 'not_connected' },
     followUps: { reviewLink: '', payLink: '', paymentDays: 14 },
     provider: { name: '', aiNumber: '' },
+    automations: defaultAutomations('trade', new Date(0).toISOString()),
+    texting: { number: '', status: 'off' },
   };
 }
 
@@ -397,6 +406,8 @@ export function withDefaults(data: any): CaptureSettings {
     bookings: { ...d.bookings, ...(data?.bookings ?? {}), types: Array.isArray(data?.bookings?.types) ? data.bookings.types : [] },
     followUps: { ...d.followUps, ...(data?.followUps ?? {}) },
     provider: { ...d.provider, ...(data?.provider ?? {}) },
+    automations: automationsWithDefaults(data?.automations, data?.business?.kind === 'appointments' ? 'appointments' : 'trade', data?.completedAt || new Date(0).toISOString()),
+    texting: { ...d.texting, ...(data?.texting ?? {}) },
     completedAt: data?.completedAt,
   };
 }
@@ -446,6 +457,8 @@ export interface EnquiryRecord {
   repliedAt: string | null;
   quoteAmount: number | null; quotedAt: string | null; chasersSent: number;
   bookedFor: string | null;
+  bookedType?: string;          // what was booked, e.g. "Initial consultation"
+  bookedWith?: string;          // who with
   jobValue: number | null; invoiceDue: string | null; paidAt: string | null; paymentRemindersSent: number;
   reviewAskedAt: string | null;
   receivedAt: string;
@@ -456,6 +469,8 @@ export interface EnquiryPatch {
   status?: EnquiryStatus;
   quoteAmount?: number | null;
   bookedFor?: string | null;
+  bookedType?: string;
+  bookedWith?: string;
   jobValue?: number | null;
   invoiceDue?: string | null;
   paid?: boolean;
@@ -496,6 +511,8 @@ export function applyPatch(e: EnquiryRecord, p: EnquiryPatch, settings: (Pick<Ca
   if (p.replied && !next.repliedAt) { next.repliedAt = at; log('Replied to the customer'); if (next.status === 'new') next.status = 'replied'; }
   if (p.quoteAmount !== undefined) next.quoteAmount = p.quoteAmount;
   if (p.bookedFor !== undefined) next.bookedFor = p.bookedFor;
+  if (typeof p.bookedType === 'string') next.bookedType = p.bookedType.slice(0, 80);
+  if (typeof p.bookedWith === 'string') next.bookedWith = p.bookedWith.slice(0, 80);
   if (p.jobValue !== undefined) next.jobValue = p.jobValue;
   if (p.invoiceDue !== undefined) next.invoiceDue = p.invoiceDue;
 
@@ -513,6 +530,7 @@ export function applyPatch(e: EnquiryRecord, p: EnquiryPatch, settings: (Pick<Ca
     else log(`Moved to ${STATUS_LABEL[p.status].toLowerCase()}`);
   } else if (p.status === 'won' && p.jobValue !== undefined) log(`${W.value} set${money(next.jobValue)}`);
 
+  if (p.bookedFor && e.bookedFor && p.bookedFor !== e.bookedFor && e.status === 'booked' && (!p.status || p.status === 'booked')) log(`Moved to ${new Date(p.bookedFor).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}`);
   if (p.chaserSent) { next.chasersSent = e.chasersSent + 1; log(`Quote chaser ${next.chasersSent} sent`); }
   if (p.paymentReminderSent) { next.paymentRemindersSent = e.paymentRemindersSent + 1; log(`Payment reminder ${next.paymentRemindersSent} sent`); }
   if (p.paid === true && !e.paidAt) { next.paidAt = at; log('Paid'); }

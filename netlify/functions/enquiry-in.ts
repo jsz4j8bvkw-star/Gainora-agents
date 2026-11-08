@@ -1,5 +1,6 @@
 import { db, handler, HttpError, json } from '../lib/core';
-import { hashToken, intake, TOKEN } from '../lib/capture';
+import { hashToken, intake, TOKEN, withDefaults } from '../lib/capture';
+import { alertOwner, runAutomations } from '../lib/messages';
 import type { Channel } from '../../shared/capture';
 
 // Where the client's AI receptionist (or website form, or email forwarder) sends each enquiry.
@@ -29,6 +30,12 @@ export default handler(async (req) => {
   if (typeof raw?.website_url_confirm === 'string' && raw.website_url_confirm) return json({ ok: true });
 
   const r = await intake(src.user_id, src.id, raw, src.channel as Channel);
+  if ('saved' in r && r.saved) {
+    // Urgent: text the owner. Then the thank-you or booking confirmation goes to the customer.
+    const [srow] = await db<any[]>(`capture_settings?select=data&user_id=eq.${src.user_id}`);
+    await alertOwner(src.user_id, withDefaults(srow?.data), r.saved).catch((e) => console.error('[capture] alert', e?.message));
+    await runAutomations(src.user_id, [r.saved.id]).catch((e) => console.error('[capture] automations', e?.message));
+  }
   await db(`enquiry_sources?id=eq.${src.id}`, { method: 'PATCH', body: { last_used_at: new Date().toISOString() } }).catch(() => {});
 
   // A form posted from a browser goes back to the business's own site, or a plain thank-you page.

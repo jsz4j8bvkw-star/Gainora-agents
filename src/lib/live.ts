@@ -1,5 +1,5 @@
 import type { Api } from './api';
-import type { EnquiryRecord, Plan, Source, User } from './types';
+import type { EnquiryRecord, MessageRecord, Plan, Source, User } from './types';
 import { withDefaults } from '../../shared/capture';
 
 declare const __SUPABASE_URL__: string;
@@ -102,9 +102,15 @@ const mapEnquiry = (r: any): EnquiryRecord => ({
   urgency: r.urgency, kind: r.kind, reasons: r.reasons ?? [], status: r.status, afterHours: !!r.after_hours,
   notes: r.notes ?? '', history: r.history ?? [], repliedAt: r.replied_at ?? null,
   quoteAmount: r.quote_amount != null ? Number(r.quote_amount) : null, quotedAt: r.quoted_at ?? null, chasersSent: Number(r.chasers_sent ?? 0),
-  bookedFor: r.booked_for ?? null, jobValue: r.job_value != null ? Number(r.job_value) : null, invoiceDue: r.invoice_due ?? null,
+  bookedFor: r.booked_for ?? null, bookedType: r.booked_type ?? '', bookedWith: r.booked_with ?? '', jobValue: r.job_value != null ? Number(r.job_value) : null, invoiceDue: r.invoice_due ?? null,
   paidAt: r.paid_at ?? null, paymentRemindersSent: Number(r.payment_reminders_sent ?? 0), reviewAskedAt: r.review_asked_at ?? null,
   receivedAt: r.received_at, isTest: !!r.is_test,
+});
+export const mapMessage = (r: any): MessageRecord => ({
+  id: r.id, enquiryId: r.enquiry_id ?? null, direction: r.direction, audience: r.audience ?? 'customer', channel: r.channel,
+  to: r.to_addr ?? '', from: r.from_addr ?? '', subject: r.subject ?? '', body: r.body ?? '', automatic: !!r.automatic,
+  workflow: r.workflow ?? null, step: r.step ?? null, key: r.key ?? null, status: r.status, error: r.error ?? null,
+  read: r.read !== false, createdAt: r.created_at, sentAt: r.sent_at ?? null,
 });
 const mapSource = (r: any): Source => ({ id: r.id, label: r.label, channel: r.channel, active: r.active, createdAt: r.created_at, lastUsedAt: r.last_used_at ?? null });
 
@@ -147,6 +153,13 @@ export function createLiveApi(): Api {
     async deleteEnquiry(id) { await fn('enquiries', { op: 'delete', id }); },
     async draftReply(id) { return (await fn<{ text: string }>('enquiries', { op: 'draft', id })).text; },
     async sendTest() { return fn<EnquiryRecord>('enquiries', { op: 'test' }); },
+
+    async listMessages() { return (await rest<any[]>('messages?select=*&order=created_at.desc&limit=1500')).map(mapMessage); },
+    async reply(enquiryId, channel, text, subject) { const r = await fn<any>('enquiries', { op: 'reply', id: enquiryId, channel, text, subject }); return { message: mapMessage(r.message), enquiry: r.enquiry }; },
+    async approveMessage(id, text) { await fn('enquiries', { op: 'approve', messageId: id, text }); },
+    async skipMessage(id) { await fn('enquiries', { op: 'skip', messageId: id }); },
+    async markRead(enquiryId) { await fn('enquiries', { op: 'read', id: enquiryId }); },
+    async testText(text) { await fn('enquiries', { op: 'test-text', text }); },
 
     async listSources() { return (await rest<any[]>('enquiry_sources?select=id,label,channel,active,created_at,last_used_at&order=created_at.desc')).map(mapSource); },
     async createSource(label, channel) { return fn<Source>('enquiries', { op: 'link', label, channel }); },

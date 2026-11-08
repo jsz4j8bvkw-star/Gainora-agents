@@ -82,3 +82,53 @@ begin
   drop policy if exists "own enquiry sources" on public.enquiry_sources;
   create policy "own enquiry sources" on public.enquiry_sources for select to authenticated using (user_id = auth.uid());
 end $$;
+
+-- What was booked and who with (from the receptionist or the owner).
+alter table public.enquiries add column if not exists booked_type text not null default '';
+alter table public.enquiries add column if not exists booked_with text not null default '';
+
+-- Every text and email in and out: automatic messages, the owner's replies, customers' replies and alerts to the owner.
+create table if not exists public.messages (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  enquiry_id uuid references public.enquiries(id) on delete cascade,
+  direction text not null check (direction in ('in','out')),
+  audience text not null default 'customer' check (audience in ('customer','owner')),
+  channel text not null check (channel in ('text','email')),
+  to_addr text not null default '',
+  from_addr text not null default '',
+  subject text not null default '',
+  body text not null,
+  automatic boolean not null default false,
+  workflow text,
+  step text,
+  key text,                    -- one automatic message per enquiry, step and channel
+  status text not null default 'sent' check (status in ('awaiting_approval','sending','sent','failed','skipped','received')),
+  error text,
+  provider_id text,
+  read boolean not null default true,
+  created_at timestamptz not null default now(),
+  sent_at timestamptz,
+  unique (enquiry_id, key, channel)
+);
+create index if not exists messages_user_idx on public.messages(user_id, created_at desc);
+create index if not exists messages_enquiry_idx on public.messages(enquiry_id, created_at);
+create index if not exists messages_waiting_idx on public.messages(user_id) where status = 'awaiting_approval';
+
+-- People who replied STOP: no more texts to them from that business.
+create table if not exists public.opt_outs (
+  user_id uuid not null references auth.users(id) on delete cascade,
+  phone text not null,
+  created_at timestamptz not null default now(),
+  primary key (user_id, phone)
+);
+
+alter table public.messages enable row level security;
+alter table public.opt_outs enable row level security;
+do $$
+begin
+  drop policy if exists "own messages" on public.messages;
+  create policy "own messages" on public.messages for select to authenticated using (user_id = auth.uid());
+  drop policy if exists "own opt outs" on public.opt_outs;
+  create policy "own opt outs" on public.opt_outs for select to authenticated using (user_id = auth.uid());
+end $$;

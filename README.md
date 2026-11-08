@@ -18,17 +18,29 @@ Same look as Gainora Command Centre (black and champagne), separate app and site
 | **Enquiries** | The inbox: needs a reply, in progress, won, didn’t go ahead, spam. Search, export to CSV, log a call by hand. Each enquiry: summary, transcript, contact buttons, notes, history, and the next step (draft a reply, quote sent, booked in, job done, paid, payment reminder, review request). |
 | **Follow-ups** | Quote chasers (day 3 and day 8), payment reminders (due date, +7, +14 days) and review requests (the day after a paid job), each drafted and ready to copy or open in Messages or email. |
 | **Receptionist** | The script, written from the owner’s answers (copy or download). Connect: platform, secret enquiry links, call forwarding codes. Test enquiry and a ready-made website form. |
+| **Automations** | Messages that go out on their own: thank-you, booking confirmation and reminder, quote chasers, payment reminders, review request. Each can be switched on or off, reworded with fill-in details, retimed, sent by text, email or both, and set to “ask me first”. Also: urgent-call texts to the owner, a “waiting for you” queue and a log of everything sent and received. |
 | **Report** | Month by month: enquiries caught, out of hours, emergencies, reply time, quotes, jobs won, paid, still owed, a weekly chart and the enquiry-to-job funnel. Prints to PDF for the monthly review call. |
 | **Settings** | Every setup answer, the plan and billing, data download, sign out. |
 
 First sign-in goes through a four-part setup (business, work, calls, follow-ups) and ends by
 showing the receptionist’s opening line and rules.
 
+## Texts
+
+- Sent through Twilio from each business's own UK number (`texting.number` in their settings, stored as +44…,
+  with `texting.status` set to `on` once Gainora has set it up). `TWILIO_FROM` is the fallback number.
+- Each number's “A message comes in” webhook: `https://<this site>/api/sms-in` (POST). Requests are checked
+  against Twilio's signature; set `TWILIO_WEBHOOK_URL` to that exact address.
+- Replies land on the customer's latest enquiry, pause chasers, and show as unread. STOP/START are handled.
+- Rules that always apply: quiet hours 8pm–8am (except instant replies), stop when the customer replies,
+  STOP honoured, at most 4 automatic messages a week per customer, review requests carry an opt-out,
+  and switching a message on only affects enquiries from then on.
+- `automations-tick` runs every 5 minutes for timed messages; instant ones go when the event happens.
+
 ## Safety rules built in
 
-- **Nothing is sent to a customer by Gainora.** Every message is drafted; the owner sends it from
-  their own phone or email and taps “I’ve sent it” to log it. The only emails Gainora sends go to
-  the owner (emergency alerts, the morning follow-up list, the monthly report).
+- **Customers only get messages the owner switched on, approved or wrote.** Everything sent is logged
+  on the enquiry and in Automations → Sent and received.
 - The receptionist always says it’s an AI and, when calls are recorded, says so. Gas smells get the
   National Gas Emergency number (0800 111 999). It never takes card details or gives safety advice.
 - Review requests are treated as marketing and always carry an opt-out line.

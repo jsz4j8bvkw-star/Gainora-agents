@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { api } from './lib/api';
-import type { CaptureSettings, EnquiryRecord, Plan, User } from './lib/types';
+import type { CaptureSettings, EnquiryRecord, MessageRecord, Plan, User } from './lib/types';
 import { Link, navigate, usePath } from './lib/router';
 import { Icon, Loading, ToastProvider } from './components/ui';
 import { longDate } from './lib/format';
@@ -13,6 +13,7 @@ import { FollowUps } from './pages/followups';
 import { Receptionist } from './pages/receptionist';
 import { ReportPage } from './pages/report';
 import { Settings } from './pages/settings';
+import { AutomationsPage } from './pages/automations';
 
 interface AppState {
   user: User;
@@ -24,6 +25,9 @@ interface AppState {
   reloadEnquiries: () => Promise<void>;
   putEnquiry: (e: EnquiryRecord) => void;
   dropEnquiry: (id: string) => void;
+  messages: MessageRecord[];
+  reloadMessages: () => Promise<void>;
+  putMessage: (m: MessageRecord) => void;
 }
 const Ctx = createContext<AppState>(null as any);
 export const useApp = () => useContext(Ctx);
@@ -66,9 +70,11 @@ export function App() {
 function Store(props: { user: User; settings: CaptureSettings; plan: Plan; setSettings: (s: CaptureSettings) => void }) {
   const [enquiries, setEnquiries] = useState<EnquiryRecord[] | undefined>(undefined);
   const [enquiriesError, setErr] = useState<string | null>(null);
+  const [messages, setMessages] = useState<MessageRecord[]>([]);
+  const reloadMessages = useCallback(async () => { try { setMessages(await api.listMessages()); } catch { /* the inbox still works */ } }, []);
   const reloadEnquiries = useCallback(async () => {
     setErr(null);
-    try { setEnquiries(await api.listEnquiries()); }
+    try { setEnquiries(await api.listEnquiries()); await reloadMessages(); setEnquiries(await api.listEnquiries()); }
     catch (e: any) { setErr(e?.message || 'Your enquiries could not load.'); }
   }, []);
   useEffect(() => {
@@ -82,8 +88,9 @@ function Store(props: { user: User; settings: CaptureSettings; plan: Plan; setSe
     return l.some((x) => x.id === e.id) ? l.map((x) => (x.id === e.id ? e : x)) : [e, ...l];
   }), []);
   const dropEnquiry = useCallback((id: string) => setEnquiries((l) => (l ?? []).filter((x) => x.id !== id)), []);
+  const putMessage = useCallback((m: MessageRecord) => setMessages((l) => (l.some((x) => x.id === m.id) ? l.map((x) => (x.id === m.id ? m : x)) : [m, ...l])), []);
   return (
-    <Ctx.Provider value={{ ...props, enquiries, enquiriesError, reloadEnquiries, putEnquiry, dropEnquiry }}>
+    <Ctx.Provider value={{ ...props, enquiries, enquiriesError, reloadEnquiries, putEnquiry, dropEnquiry, messages, reloadMessages, putMessage }}>
       <Shell />
     </Ctx.Provider>
   );
@@ -93,13 +100,16 @@ const NAV = [
   { path: '/', label: 'Today', icon: 'home' },
   { path: '/enquiries', label: 'Enquiries', icon: 'inbox' },
   { path: '/follow-ups', label: 'Follow-ups', icon: 'repeat' },
+  { path: '/automations', label: 'Automations', icon: 'bolt' },
   { path: '/receptionist', label: 'Receptionist', icon: 'headset' },
   { path: '/report', label: 'Report', icon: 'results' },
 ];
+/** On phones the bar has room for five; Receptionist moves to the top bar. */
+const TABS = NAV.filter((n) => n.path !== '/receptionist');
 
 function Shell() {
   const path = usePath();
-  const { settings, enquiries } = useApp();
+  const { settings, enquiries, messages } = useApp();
   const active = (p: string) => (p === '/' ? path === '/' : path.startsWith(p)) ? 'page' : undefined;
   const counts = useMemo(() => {
     const list = enquiries ?? [];
@@ -107,9 +117,11 @@ function Shell() {
       fresh: list.filter((e) => e.status === 'new').length,
       urgent: list.filter((e) => e.status === 'new' && e.urgency !== 'normal').length,
       due: followUps(list).filter((f) => f.due).length,
+      unread: new Set(messages.filter((m) => m.direction === 'in' && !m.read).map((m) => m.enquiryId)).size,
+      waiting: messages.filter((m) => m.status === 'awaiting_approval').length,
     };
-  }, [enquiries]);
-  const badge = (p: string) => (p === '/enquiries' ? counts.fresh : p === '/follow-ups' ? counts.due : 0);
+  }, [enquiries, messages]);
+  const badge = (p: string) => (p === '/enquiries' ? counts.fresh + counts.unread : p === '/follow-ups' ? counts.due : p === '/automations' ? counts.waiting : 0);
 
   const page = (() => {
     const m = path.match(/^\/enquiries\/([^/]+)$/);
@@ -118,6 +130,7 @@ function Shell() {
     if (path.startsWith('/enquiries')) return <Enquiries />;
     if (path.startsWith('/follow-ups')) return <FollowUps />;
     if (path.startsWith('/receptionist')) return <Receptionist />;
+    if (path.startsWith('/automations')) return <AutomationsPage />;
     if (path.startsWith('/report')) return <ReportPage />;
     if (path.startsWith('/settings')) return <Settings />;
     return <Today />;
@@ -149,7 +162,10 @@ function Shell() {
       <div className="main">
         <header className="topbar">
           <span className="topbar-brand"><img src={`${BASE}gainora-logo.svg`} alt="Gainora" /><span>Capture &amp; Convert</span></span>
-          <Link to="/settings" className="btn btn-quiet btn-small" aria-current={active('/settings')}><Icon name="settings" /><span className="sr-only">Settings</span></Link>
+          <span className="row gap-4">
+            <Link to="/receptionist" className="btn btn-quiet btn-small" aria-current={active('/receptionist')}><Icon name="headset" /><span className="sr-only">Receptionist</span></Link>
+            <Link to="/settings" className="btn btn-quiet btn-small" aria-current={active('/settings')}><Icon name="settings" /><span className="sr-only">Settings</span></Link>
+          </span>
         </header>
         {api.mode === 'demo' && (
           <div className="demo-flag" role="note">
@@ -163,7 +179,7 @@ function Shell() {
         </div>
         <main key={path} className="route-in">{page}</main>
         <nav className="tabbar" aria-label="Sections">
-          {NAV.map((n) => (
+          {TABS.map((n) => (
             <Link key={n.path} to={n.path} aria-current={active(n.path)}>
               <span className="tab-ico"><Icon name={n.icon} />{badge(n.path) > 0 && <span className="tab-dot" aria-hidden="true" />}</span>{n.label}
             </Link>

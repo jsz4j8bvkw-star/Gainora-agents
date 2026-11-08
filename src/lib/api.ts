@@ -1,4 +1,4 @@
-import type { CaptureSettings, EnquiryPatch, EnquiryRecord, NewEnquiry, Plan, Source, User } from './types';
+import type { CaptureSettings, EnquiryPatch, EnquiryRecord, MessageRecord, NewEnquiry, Plan, Source, User } from './types';
 import { createDemoApi } from './demo';
 import { createLiveApi } from './live';
 
@@ -22,6 +22,14 @@ export interface Api {
   deleteEnquiry(id: string): Promise<void>;
   draftReply(id: string): Promise<string>;
   sendTest(): Promise<EnquiryRecord>;
+
+  // Messages: automatic ones, the owner's replies and customers' replies
+  listMessages(): Promise<MessageRecord[]>;
+  reply(enquiryId: string, channel: 'text' | 'email', text: string, subject?: string): Promise<{ message: MessageRecord; enquiry: EnquiryRecord }>;
+  approveMessage(id: string, text?: string): Promise<void>;
+  skipMessage(id: string): Promise<void>;
+  markRead(enquiryId: string): Promise<void>;
+  testText(text: string): Promise<void>;
 
   listSources(): Promise<Source[]>;
   createSource(label: string, channel: Source['channel']): Promise<Source>;
