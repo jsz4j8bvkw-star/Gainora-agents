@@ -44,7 +44,8 @@ export const SECTIONS: Section[] = [
       { path: 'business.facebook', label: 'Facebook page', kind: 'text', placeholder: 'facebook.com/yourbusiness', help: 'A link to your business page.', optional: true },
       { path: 'business.oneLiner', label: 'What you do, in one sentence', kind: 'textarea', placeholder: 'For example: we sell handmade homeware from Cornish makers, online and in our Falmouth shop.', required: true, wide: true },
       { path: 'business.industry', label: 'Industry', kind: 'select', options: INDUSTRIES, required: true },
-      { path: 'business.location', label: 'Where you’re based', kind: 'text', placeholder: 'For example: Falmouth, Cornwall', required: true },
+      { path: 'business.location', label: 'Where you’re based', kind: 'text', placeholder: 'For example: Crewe, Cheshire', required: true },
+      { path: 'business.postcode', label: 'Postcode', kind: 'text', placeholder: 'CW1 2AB', help: 'Lets the Watcher measure how far away each nearby business is. Your Google listing is used instead once it is connected.', optional: true },
       { path: 'business.tradingSince', label: 'Trading since', kind: 'text', placeholder: '2019', optional: true },
       { path: 'business.teamSize', label: 'Team size', kind: 'chips', options: ['Just me', '2–5', '6–20', '21–50', '50+'], required: true, wide: true },
       { path: 'business.legalForm', label: 'Business type', kind: 'chips', options: ['Limited company', 'Sole trader', 'Partnership', 'Other'], required: true, wide: true },
@@ -123,7 +124,7 @@ export const SECTIONS: Section[] = [
 
 export function emptyProfile(): BusinessProfile {
   return {
-    business: { name: '', website: '', instagram: '', facebook: '', oneLiner: '', industry: '', location: '', tradingSince: '', teamSize: '', legalForm: '', ownerName: '' },
+    business: { name: '', website: '', instagram: '', facebook: '', oneLiner: '', industry: '', location: '', postcode: '', tradingSince: '', teamSize: '', legalForm: '', ownerName: '' },
     offer: { products: '', typicalPrice: '', salesChannels: [], bestSeller: '' },
     customers: { ideal: '', sources: [], areas: [], repeat: '' },
     competitors: { list: [{ name: '', url: '' }], ourEdge: '', theirEdge: '' },
@@ -180,6 +181,7 @@ export function validateSection(section: Section, p: BusinessProfile): Record<st
     if (!empty && f.path === 'business.instagram' && !socialUrl('instagram', String(v))) errors[f.path] = 'Enter your Instagram handle, like @yourbusiness, or a link to your page.';
     if (!empty && f.path === 'business.facebook' && !socialUrl('facebook', String(v))) errors[f.path] = 'Enter a link to your Facebook page, like facebook.com/yourbusiness.';
     if (!empty && f.kind === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v))) errors[f.path] = 'Enter a valid email address.';
+    if (!empty && f.path === 'business.postcode' && !/^[A-Z]{1,2}\d[A-Z\d]?\s*(\d[A-Z]{2})?$/i.test(String(v).trim())) errors[f.path] = 'Enter a UK postcode, like CW1 2AB (or just CW1).';
     if (!empty && (f.kind === 'number' || f.kind === 'money') && !/^\d+(\.\d+)?$/.test(String(v).replace(/[£,\s]/g, ''))) errors[f.path] = 'Enter a number.';
   }
   return errors;

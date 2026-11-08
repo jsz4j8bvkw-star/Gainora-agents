@@ -5,6 +5,7 @@
 import { env, HttpError, requireEnv } from './core';
 import { parsePlace, parseSearch, type PlaceSummary, type ReviewItem } from '../../shared/reviews';
 import { parsePageSpeed, type SpeedState } from '../../shared/speed';
+import { rectangleAround, type LatLng } from '../../shared/geo';
 
 const PLACES = 'https://places.googleapis.com/v1';
 const PAGESPEED = 'https://pagespeedonline.googleapis.com/pagespeedonline/v5/runPagespeed';
@@ -31,19 +32,42 @@ export interface SearchOpts {
   pageSize?: number;
   withWebsite?: boolean;
   withLocation?: boolean;
-  /** Prefer results near a point (a circle in metres). Used to find competitors around the client. */
+  /** Prefer results near a point (a circle in metres). A preference only: far results can still come back. */
   near?: { lat: number; lng: number; radiusM: number };
+  /** Only results inside this area (Text Search restricts by rectangle, so a circle becomes its bounding box), closest first. */
+  within?: { center: LatLng; radiusKm: number };
+  /** Also ask for Google's main type and whether the place is still open (for the competitor search). */
+  withType?: boolean;
 }
+
+const SEARCH_FIELDS = (opts: SearchOpts) => ['places.id', 'places.displayName', 'places.formattedAddress', 'places.rating', 'places.userRatingCount',
+  ...(opts.withWebsite ? ['places.websiteUri'] : []), ...(opts.withLocation ? ['places.location'] : []), ...(opts.withType ? ['places.primaryType', 'places.businessStatus'] : [])].join(',');
 
 /** Text Search: listings that match a query, with rating and review count (and website, coordinates on request). */
 export async function searchPlaces(query: string, opts: SearchOpts = {}): Promise<PlaceSummary[]> {
-  const fields = ['places.id', 'places.displayName', 'places.formattedAddress', 'places.rating', 'places.userRatingCount',
-    ...(opts.withWebsite ? ['places.websiteUri'] : []), ...(opts.withLocation ? ['places.location'] : [])].join(',');
   const size = Math.min(20, opts.pageSize ?? 5);
   const body: any = { textQuery: query.slice(0, 200), regionCode: 'GB', languageCode: 'en-GB', pageSize: size };
-  if (opts.near) body.locationBias = { circle: { center: { latitude: opts.near.lat, longitude: opts.near.lng }, radius: Math.min(50_000, Math.max(500, opts.near.radiusM)) } };
-  const json = await places('places:searchText', fields, body);
+  if (opts.within) {
+    const r = rectangleAround(opts.within.center, opts.within.radiusKm);
+    body.locationRestriction = { rectangle: { low: { latitude: r.low.lat, longitude: r.low.lng }, high: { latitude: r.high.lat, longitude: r.high.lng } } };
+    body.rankPreference = 'DISTANCE';
+  } else if (opts.near) body.locationBias = { circle: { center: { latitude: opts.near.lat, longitude: opts.near.lng }, radius: Math.min(50_000, Math.max(500, opts.near.radiusM)) } };
+  const json = await places('places:searchText', SEARCH_FIELDS(opts), body);
   return parseSearch(json, size);
+}
+
+/**
+ * Nearby Search (New): every listing of the given types inside a circle, closest first. This is
+ * how businesses with no website are found: nearly every salon and clinic has a Google listing.
+ * One request, up to 20 results, smallest useful field mask.
+ */
+export async function searchNearby(center: LatLng, radiusKm: number, includedTypes: string[], max = 20): Promise<PlaceSummary[]> {
+  const body = {
+    includedTypes: includedTypes.slice(0, 50), maxResultCount: Math.min(20, Math.max(1, max)), rankPreference: 'DISTANCE', languageCode: 'en-GB', regionCode: 'GB',
+    locationRestriction: { circle: { center: { latitude: center.lat, longitude: center.lng }, radius: Math.min(50_000, Math.max(500, Math.round(radiusKm * 1000))) } },
+  };
+  const json = await places('places:searchNearby', SEARCH_FIELDS({ withWebsite: true, withLocation: true, withType: true }), body);
+  return parseSearch(json, 20);
 }
 
 /** Place Details: rating, review count and the (up to five) reviews Google shares. */

@@ -13,7 +13,7 @@ export interface ReviewItem {
   seenAt?: string;       // when the Watcher first saw it
 }
 
-export interface PlaceSummary { id: string; name: string; address: string; rating: number | null; count: number | null; website?: string; lat?: number; lng?: number }
+export interface PlaceSummary { id: string; name: string; address: string; rating: number | null; count: number | null; website?: string; lat?: number; lng?: number; primaryType?: string; closed?: boolean }
 
 export interface ReviewPoint { at: string; rating: number | null; count: number | null }
 
@@ -58,6 +58,8 @@ export function parseSearch(json: any, max = 5): PlaceSummary[] {
     count: typeof p.userRatingCount === 'number' ? p.userRatingCount : null,
     ...(p.websiteUri ? { website: String(p.websiteUri) } : {}),
     ...(typeof p.location?.latitude === 'number' && typeof p.location?.longitude === 'number' ? { lat: p.location.latitude, lng: p.location.longitude } : {}),
+    ...(typeof p.primaryType === 'string' ? { primaryType: p.primaryType } : {}),
+    ...(p.businessStatus === 'CLOSED_PERMANENTLY' || p.businessStatus === 'CLOSED_TEMPORARILY' ? { closed: true } : {}),
   }));
 }
 

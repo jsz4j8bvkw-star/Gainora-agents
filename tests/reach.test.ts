@@ -215,13 +215,19 @@ function fakeNetwork(log: { url: string; body?: any }[]) {
       if (u.includes('job_state')) return new Response(JSON.stringify([]), { status: 200 });
       return new Response(init?.method === 'POST' ? '[]' : '[]', { status: 200 });
     }
-    if (u.includes('places:searchText')) {
-      const q = JSON.parse(init.body).textQuery as string;
-      if (/aesthetics clinic/.test(q)) return new Response(JSON.stringify({ places: [
+    if (u.startsWith('https://api.postcodes.io/')) return new Response(JSON.stringify({ status: 404, error: 'not found' }), { status: 404 });
+    if (u.includes('places:searchNearby') || (u.includes('places:searchText') && /aesthetics clinic|lip filler|skin clinic/.test(JSON.parse(init.body).textQuery))) {
+      if (u.includes('places:searchNearby')) assert.ok(JSON.parse(init.body).locationRestriction?.circle, 'nearby search restricts to a circle');
+      else assert.ok(JSON.parse(init.body).locationRestriction?.rectangle, 'text search restricts to the area');
+      return new Response(JSON.stringify({ places: [
         { id: 'ChIJ_you_place_0001', displayName: { text: 'Willow Skin' }, formattedAddress: 'Falmouth', rating: 4.6, userRatingCount: 60, websiteUri: 'https://you.example', location: { latitude: 50.153, longitude: -5.07 } },
-        { id: 'ChIJ_glow_000000001', displayName: { text: 'Glow Aesthetics' }, formattedAddress: 'High St, Falmouth', rating: 4.9, userRatingCount: 210, websiteUri: 'https://glow.example', location: { latitude: 50.155, longitude: -5.072 } },
-        { id: 'ChIJ_skin_000000002', displayName: { text: 'Skin Studio' }, formattedAddress: 'Church St, Falmouth', rating: 4.7, userRatingCount: 80, location: { latitude: 50.16, longitude: -5.08 } },
+        { id: 'ChIJ_glow_000000001', displayName: { text: 'Glow Aesthetics' }, formattedAddress: 'High St, Falmouth', rating: 4.9, userRatingCount: 210, websiteUri: 'https://glow.example', location: { latitude: 50.155, longitude: -5.072 }, primaryType: 'beauty_salon' },
+        { id: 'ChIJ_skin_000000002', displayName: { text: 'Skin Studio' }, formattedAddress: 'Church St, Falmouth', rating: 4.7, userRatingCount: 80, location: { latitude: 50.16, longitude: -5.08 }, primaryType: 'beauty_salon' },
+        { id: 'ChIJ_far_0000000003', displayName: { text: 'Truro Skin Clinic' }, formattedAddress: 'Truro', rating: 4.9, userRatingCount: 300, location: { latitude: 50.2632, longitude: -5.051 }, primaryType: 'skin_care_clinic' },
+        { id: 'ChIJ_barber_00000004', displayName: { text: 'Falmouth Barbers' }, formattedAddress: 'Falmouth', rating: 4.9, userRatingCount: 50, location: { latitude: 50.154, longitude: -5.071 }, primaryType: 'barber_shop' },
       ] }), { status: 200 });
+    }
+    if (u.includes('places:searchText')) {
       // The typed competitor's own lookup.
       return new Response(JSON.stringify({ places: [{ id: 'ChIJ_beautyroom_003', displayName: { text: 'The Beauty Room' }, formattedAddress: 'Quay St', rating: 4.8, userRatingCount: 120 }] }), { status: 200 });
     }
@@ -270,9 +276,15 @@ test('reach: a full day finds the clinic’s competition, reads their prices and
     const { checkReach } = await import('../netlify/lib/reach');
     const day1 = await checkReach({ userId: 'u1', profile: CLINIC, prev: null, placeId: 'ChIJ_you_place_0001', you: { rating: 4.6, count: 60, history: [] }, now });
     const s = day1.state;
-    // Who: the typed competitor plus the two found nearby; never the client's own listing.
-    assert.deepEqual(s.list.map((c) => `${c.name}:${c.source}`), ['The Beauty Room:typed', 'Glow Aesthetics:found', 'Skin Studio:found']);
+    // Who: the typed competitor plus the ones found nearby; never the client's own listing or the barber. Falmouth has only two
+    // comparable businesses within 10 km, so the search widened to 15 km and the Truro clinic (12.3 km) is in, with its distance shown.
+    assert.deepEqual(s.list.map((c) => `${c.name}:${c.source}`), ['The Beauty Room:typed', 'Glow Aesthetics:found', 'Skin Studio:found', 'Truro Skin Clinic:found']);
+    assert.equal(s.list[3].distanceKm, 12.3);
     assert.ok(!s.list.some((c) => c.placeId === 'ChIJ_you_place_0001'));
+    assert.ok(s.list.every((c) => c.source === 'typed' || (c.distanceKm != null && c.distanceKm <= 15)), 'every found competitor has a distance inside the radius');
+    assert.equal(s.you?.locSource, 'listing');
+    assert.equal(s.foundFrom, 'listing');
+    assert.equal(s.foundRadiusKm, 15, 'two comparable businesses is too few, so the search widened to the limit and no further');
     assert.equal(s.list[0].placeId, 'ChIJ_beautyroom_003', 'typed competitor matched to its listing');
     const glow = s.list[1];
     assert.equal(glow.distanceKm, 0.3);
@@ -294,8 +306,8 @@ test('reach: a full day finds the clinic’s competition, reads their prices and
     assert.equal(s.events.length, 0);
     assert.equal(s.advice?.lines.length, 1);
     assert.match(s.advice!.lines[0].text, /£220/);
-    // Cost: one location lookup, two nearby searches (one term, "aesthetics clinic"), one typed lookup.
-    assert.equal(s.placesCalls?.n, 3);
+    // Cost: one location lookup; 5 km: one nearby search + three phrases; 10 km and 15 km: one nearby + one phrase each; one typed lookup.
+    assert.equal(s.placesCalls?.n, 10);
     const places = log.filter((l) => l.url.includes('places.googleapis.com'));
     assert.ok(places.every((l) => !/reviews|photos|openingHours/.test(JSON.stringify(l))), 'small field masks only');
     const graph = log.filter((l) => l.url.startsWith('https://graph.facebook.com/'));
@@ -314,7 +326,7 @@ test('reach: a full day finds the clinic’s competition, reads their prices and
     assert.equal(day2.added.find((e) => e.kind === 'price')!.url, 'https://glow.example/prices');
     assert.equal(day2.state.list[1].count, 228);
     assert.equal(day2.state.list[1].history.length, 2);
-    assert.ok(!log.some((l) => l.url.includes('places:searchText')), 'no new nearby search within the month');
+    assert.ok(!log.some((l) => l.url.includes('places:searchText') || l.url.includes('places:searchNearby')), 'no new nearby search within the month');
     const aiAgain = log.filter((l) => l.url.includes('anthropic')).map((l) => l.body.system as string);
     assert.equal(aiAgain.filter((x) => /lines of text copied/.test(x)).length, 1, 'only the changed site is extracted again');
     assert.equal(log.filter((l) => l.url.startsWith('https://graph')).length, 2, 'Instagram read once a day per account');

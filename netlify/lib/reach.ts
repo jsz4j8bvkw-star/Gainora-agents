@@ -5,22 +5,26 @@
 // and advice. Everything reported is on a public page or a Google listing, with the link and
 // the date it was seen.
 //
-// Cost rules: Google Places calls are counted per client per month (PLACES_MONTHLY_CAP, default 60);
-// the nearby search runs monthly; ratings weekly with the smallest field mask. The AI runs on
+// Cost rules: Google Places calls are counted per client per month (PLACES_MONTHLY_CAP, default 90);
+// the nearby search runs monthly (up to 8 calls: one Nearby Search by type and one to three phrase
+// searches per radius rung); ratings weekly with the smallest field mask. Coordinates come from the
+// listing or, free of charge, from postcodes.io. The AI runs on
 // the fast model and only when a page's text actually changed (hashes are kept per URL).
 import { ai, aiConfigured, extractJson, hasBanned, HOUSE_STYLE, profileContext } from './ai';
 import { env } from './core';
-import { googleConfigured, placeLocation, placeRating, searchPlaces } from './google';
+import { googleConfigured, placeLocation, placeRating, searchNearby, searchPlaces } from './google';
+import { geocodeClient } from './geo';
+import { nextRadius, RADII_KM, type LatLng } from '../../shared/geo';
 import { discover, metaConfigured, refreshTokenIfDue } from './meta';
 import { fetchPage, okPage, pool, type Fetched } from './http';
 import {
-  addSample, adviseReach, competitorKey, diffCompetitor, distanceKm, emptyCompetitors, hostOf, instagramHandle, mergeEvents, mergeTracked, newlyFound, postsInLast,
-  reviewsSince, sameBusiness, searchTerms, validateCaptionFindings, validateOffers, validateServices, bookingLinks,
-  type CompetitorsState, type FoundPlace, type InstagramSnapshot, type OfferLine, type ReachAdvice, type ReachEvent, type ServiceLine, type TrackedCompetitor,
+  addSample, adviseReach, classifyWebsiteUri, competitorKey, diffCompetitor, distanceKm as distanceKm_, emptyCompetitors, hostOf, instagramHandle, mergeEvents, mergeTracked, newlyFound, postsInLast,
+  relevanceOf, reviewsSince, sameBusiness, searchPlan, validateCaptionFindings, validateOffers, validateServices, bookingLinks, withinRadius,
+  type CompetitorsState, type FoundPlace, type InstagramSnapshot, type OfferLine, type ReachAdvice, type ReachEvent, type SearchPlan, type ServiceLine, type TrackedCompetitor,
 } from '../../shared/competitors';
 import { extractLinks, extractOffers, hashText, visibleText } from '../../shared/pages';
 import { priceLines, pricePageCandidates } from '../../shared/prices';
-import { mapsUrl, pickCompetitorPlace, type ReviewPoint } from '../../shared/reviews';
+import { mapsUrl, pickCompetitorPlace, type PlaceSummary, type ReviewPoint } from '../../shared/reviews';
 import { socialUrl } from '../../shared/social';
 import { findUnsupportedNumbers } from '../../shared/metrics';
 import type { Learned } from '../../shared/learning';
@@ -37,9 +41,52 @@ class PlacesBudget {
     const m = monthKey(now);
     if (!state.placesCalls || state.placesCalls.month !== m) state.placesCalls = { month: m, n: 0 };
   }
-  get cap() { return Number(env('PLACES_MONTHLY_CAP', '60')); }
+  get cap() { return Number(env('PLACES_MONTHLY_CAP', '90')); }
   can(n = 1) { return googleConfigured() && this.state.placesCalls!.n + n <= this.cap; }
   spend(n = 1) { this.state.placesCalls!.n += n; }
+}
+
+/* ---------- Finding the competition around the client ---------- */
+/**
+ * Businesses like the client's within a tight radius, widened only when too few are found and
+ * never beyond MAX_NEARBY_KM. One Nearby Search by type (finds the ones with no website) plus
+ * phrase searches restricted to the same area (finds the niche ones). Every result carries its
+ * distance; anything outside the radius, closed, or clearly a different trade is dropped.
+ */
+export async function findNearby(here: LatLng, plan: SearchPlan, budget: { can(n?: number): boolean; spend(n?: number): void }, isSelf: (p: { id: string; name: string; website?: string }) => boolean): Promise<{ found: FoundPlace[]; radiusKm: number; searched: boolean }> {
+  const seen = new Map<string, FoundPlace>();
+  let radius: number | null = null; let used = RADII_KM[0]; let calls = 0;
+  const comparable = (km: number) => [...seen.values()].filter((f) => (f.relevance ?? 0) >= 1 && f.distanceKm != null && f.distanceKm <= km).length;
+  const add = (res: PlaceSummary[], km: number, fromTerm: boolean) => {
+    for (const p of res) {
+      if (p.closed || isSelf(p)) continue;
+      const distanceKm = p.lat != null && p.lng != null ? distanceKm_(here, { lat: p.lat, lng: p.lng }) : null;
+      if (distanceKm == null || distanceKm > km) continue; // a rectangle's corners reach past the circle
+      const links = classifyWebsiteUri(p.website);
+      const relevance = relevanceOf({ name: p.name, primaryType: p.primaryType, fromTerm }, plan);
+      const prev = seen.get(p.id);
+      seen.set(p.id, {
+        placeId: p.id, name: p.name, address: p.address, url: links.url ?? prev?.url, instagram: links.instagram ?? prev?.instagram, facebook: links.facebook ?? prev?.facebook,
+        booking: links.booking ? [...new Set([...(prev?.booking ?? []), links.booking])] : prev?.booking,
+        rating: p.rating, count: p.count, mapsUrl: mapsUrl(p.id), distanceKm, primaryType: p.primaryType ?? prev?.primaryType, relevance: Math.max(relevance, prev?.relevance ?? 0),
+      });
+    }
+  };
+  while ((radius = nextRadius(radius, comparable(used))) != null) {
+    used = radius;
+    const terms = radius === RADII_KM[0] ? plan.terms.slice(0, 3) : plan.terms.slice(0, 1);
+    if (!budget.can((plan.types.length ? 1 : 0) + terms.length)) break;
+    if (plan.types.length) {
+      try { budget.spend(); calls++; add(await searchNearby(here, radius, plan.types, 20), radius, false); }
+      catch (e: any) { console.error('[gainora] reach nearby', e?.message); }
+    }
+    for (const term of terms) {
+      try { budget.spend(); calls++; add(await searchPlaces(term, { pageSize: 10, withWebsite: true, withLocation: true, withType: true, within: { center: here, radiusKm: radius } }), radius, true); }
+      catch (e: any) { console.error('[gainora] reach find', e?.message); }
+    }
+  }
+  const found = withinRadius([...seen.values()].filter((f) => (f.relevance ?? 0) >= 1), used).sort((a, b) => ((b.relevance ?? 0) - (a.relevance ?? 0)) || ((a.distanceKm ?? 1e9) - (b.distanceKm ?? 1e9)));
+  return { found, radiusKm: used, searched: calls > 0 };
 }
 
 /* ---------- Reading a business's public pages ---------- */
@@ -207,35 +254,39 @@ export async function checkReach(input: ReachInput): Promise<ReachOutput> {
   const ownHost = hostOf(ownSite);
   const ownName = String(profile?.business?.name || '');
 
-  // 1. Where the client is (once), so distances and the nearby search make sense.
-  if (input.placeId && (state.you?.lat == null) && budget.can()) {
-    try { budget.spend(); const loc = await placeLocation(input.placeId); if (loc) state.you = { ...(state.you ?? {}), ...loc }; }
+  // 1. Where the client is. The Google listing is the most accurate; without one, the postcode or the
+  //    town centre from postcodes.io (free). A listing chosen later upgrades the coordinates.
+  const you0 = state.you ?? {};
+  let locSource: NonNullable<CompetitorsState['you']>['locSource'] | undefined = you0.locSource ?? (you0.lat != null ? 'listing' : undefined);
+  if (input.placeId && locSource !== 'listing' && budget.can()) {
+    try { budget.spend(); const loc = await placeLocation(input.placeId); if (loc) { you0.lat = loc.lat; you0.lng = loc.lng; locSource = 'listing'; } }
     catch (e: any) { console.error('[gainora] reach location', e?.message); }
   }
-  const here = state.you?.lat != null && state.you?.lng != null ? { lat: state.you.lat, lng: state.you.lng } : null;
+  if (you0.lat == null || you0.lng == null) {
+    const g = await geocodeClient(String(profile?.business?.location || ''), profile?.business?.postcode);
+    if (g) { you0.lat = g.lat; you0.lng = g.lng; locSource = g.source; }
+  }
+  if (locSource) you0.locSource = locSource;
+  state.you = you0;
+  const here = state.you.lat != null && state.you.lng != null ? { lat: state.you.lat, lng: state.you.lng } : null;
 
-  // 2. Find the competition nearby: monthly, or on request.
+  // 2. Find the competition nearby: monthly, on request, when coordinates are known for the first time,
+  //    or when a better location (the listing) replaces a rougher one (the town centre).
   let found: FoundPlace[] = [];
-  const findDue = input.findNow || !state.foundAt || now.getTime() - new Date(state.foundAt).getTime() > MONTH;
-  const terms = searchTerms(profile);
-  if (findDue && terms.length && town(profile) && budget.can(terms.length)) {
-    const seen = new Set<string>();
-    for (const term of terms) {
-      try {
-        budget.spend();
-        const res = await searchPlaces(here ? term : `${term} near ${town(profile)}`, { pageSize: 10, withWebsite: true, withLocation: true, ...(here ? { near: { ...here, radiusM: 8000 } } : {}) });
-        for (const p of res) {
-          if (seen.has(p.id) || p.id === input.placeId) continue;
-          if (ownHost && p.website && hostOf(p.website) === ownHost) continue;
-          if (ownName && sameBusiness({ name: ownName, url: ownSite }, { name: p.name, url: p.website })) continue;
-          seen.add(p.id);
-          found.push({ placeId: p.id, name: p.name, address: p.address, url: p.website, rating: p.rating, count: p.count, mapsUrl: mapsUrl(p.id), distanceKm: here && p.lat != null && p.lng != null ? distanceKm(here, { lat: p.lat, lng: p.lng }) : null });
-        }
-      } catch (e: any) { console.error('[gainora] reach find', e?.message); }
-    }
-    // Too far away is not "nearby": with coordinates, keep within 25 km.
-    found = found.filter((f) => f.distanceKm == null || f.distanceKm <= 25);
-    state.foundAt = at; state.searchTerms = terms;
+  const plan = searchPlan(profile);
+  const age = state.foundAt ? now.getTime() - new Date(state.foundAt).getTime() : Infinity;
+  const neverWithCoordinates = !!here && (!state.foundFrom || state.foundFrom === 'none');
+  const betterLocation = !!here && !!state.foundFrom && state.foundFrom !== 'none' && state.foundFrom !== 'listing' && locSource === 'listing';
+  const findDue = input.findNow || !state.foundAt || age > MONTH || neverWithCoordinates || betterLocation;
+  const isSelf = (p: { id: string; name: string; website?: string }) =>
+    p.id === input.placeId || (!!ownHost && !!p.website && hostOf(p.website) === ownHost) || (!!ownName && sameBusiness({ name: ownName, url: ownSite }, { name: p.name, url: p.website }));
+  if (findDue && here && (plan.terms.length || plan.types.length)) {
+    const r = await findNearby(here, plan, budget, isSelf);
+    found = r.found;
+    if (r.searched) { state.foundAt = at; state.searchTerms = plan.terms; state.foundFrom = locSource ?? 'none'; state.foundRadiusKm = r.radiusKm; }
+  } else if (findDue && !here) {
+    // No coordinates at all: an honest "not searched yet" rather than a search centred nowhere.
+    state.foundFrom = 'none'; state.foundRadiusKm = null;
   }
 
   // 3. The owner's typed competitors, matched to a Google listing once (monthly retry).
@@ -248,9 +299,13 @@ export async function checkReach(input: ReachInput): Promise<ReachOutput> {
     if (!placeId && retry && town(profile) && budget.can()) {
       try {
         budget.spend();
-        const res = await searchPlaces(`${t.name} ${town(profile)}`, { pageSize: 3, withWebsite: true, withLocation: !!here });
+        const res = await searchPlaces(`${t.name} ${town(profile)}`, { pageSize: 3, withWebsite: true, withLocation: true, ...(here ? { near: { ...here, radiusM: 15_000 } } : {}) });
         const pick = pickCompetitorPlace(res, t);
-        if (pick) { placeId = pick.id; extra = { address: pick.address, mapsUrl: mapsUrl(pick.id), rating: pick.rating, count: pick.count, url: t.url || pick.website || '', distanceKm: here && pick.lat != null && pick.lng != null ? distanceKm(here, { lat: pick.lat, lng: pick.lng }) : null }; }
+        if (pick) {
+          const links = classifyWebsiteUri(pick.website);
+          placeId = pick.id;
+          extra = { address: pick.address, mapsUrl: mapsUrl(pick.id), rating: pick.rating, count: pick.count, url: t.url || links.url || '', instagram: links.instagram, facebook: links.facebook, bookingPages: links.booking ? [links.booking] : undefined, distanceKm: here && pick.lat != null && pick.lng != null ? distanceKm_(here, { lat: pick.lat, lng: pick.lng }) : null };
+        }
       } catch (e: any) { console.error('[gainora] reach typed', e?.message); }
       extra.placeLookupAt = at;
     }

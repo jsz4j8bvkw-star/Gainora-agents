@@ -55,7 +55,11 @@ export interface TrackedCompetitor {
   placeLookupAt?: string;      // when we last tried to match a typed competitor to a Google listing
   instagram?: string;          // clean page link
   facebook?: string;
-  instagramSetBy?: 'owner' | 'website';
+  instagramSetBy?: 'owner' | 'website' | 'listing';
+  /** Google's main type for the listing (beauty_salon, skin_care_clinic...). */
+  primaryType?: string;
+  /** How comparable the business looks: 2 = matched the search terms or core type, 1 = name suggests it, 0 = unsure. */
+  relevance?: number;
   services: ServiceLine[];
   offers: OfferLine[];
   bookingPages: string[];
@@ -66,7 +70,7 @@ export interface TrackedCompetitor {
   firstSeenAt: string;
 }
 
-export interface NearbyPlace { key: string; placeId: string; name: string; address: string; url?: string; rating: number | null; count: number | null; distanceKm: number | null }
+export interface NearbyPlace { key: string; placeId: string; name: string; address: string; url?: string; instagram?: string; facebook?: string; booking?: string[]; rating: number | null; count: number | null; distanceKm: number | null; primaryType?: string; relevance?: number }
 
 export type ReachKind = 'reviews' | 'service' | 'price' | 'offer' | 'post' | 'new-nearby' | 'followers';
 export interface ReachEvent { id: string; at: string; key: string; competitor: string; kind: ReachKind; summary: string; detail?: string; url?: string }
@@ -78,7 +82,15 @@ export interface CompetitorsState {
   foundAt?: string | null;
   searchTerms?: string[];
   /** The client's own side of the comparison: where they are, their own public services and their Instagram. */
-  you?: { lat?: number; lng?: number; instagram?: InstagramSnapshot | null; services?: ServiceLine[]; offers?: OfferLine[]; sourceHashes?: Record<string, string>; sourcesCheckedAt?: string };
+  you?: {
+    lat?: number; lng?: number;
+    /** How the coordinates were worked out: the Google listing, the postcode, or the town centre. */
+    locSource?: 'listing' | 'postcode' | 'town' | 'google-town';
+    instagram?: InstagramSnapshot | null; services?: ServiceLine[]; offers?: OfferLine[]; sourceHashes?: Record<string, string>; sourcesCheckedAt?: string;
+  };
+  /** How far the last nearby search reached (km) and what it was centred on, so the owner can see it and the app knows when to search again. */
+  foundRadiusKm?: number | null;
+  foundFrom?: 'listing' | 'postcode' | 'town' | 'google-town' | 'none';
   list: TrackedCompetitor[];
   nearby: NearbyPlace[];
   dismissed: { key: string; name: string; placeId?: string; at: string }[];
@@ -160,6 +172,103 @@ export function searchTerms(profile: any): string[] {
   }
   const fallback = BY_INDUSTRY[String(profile?.business?.industry || '')];
   return fallback ? [fallback] : [];
+}
+
+/* ---------- The search plan: Google place types and niche phrases for this kind of business ---------- */
+/**
+ * Google Places (New) types that businesses like this one list under, plus a sense of which names
+ * clearly are or are not comparable. The nearby search by type finds the businesses with no
+ * website that a phrase search misses (a lash tech listed as beauty_salon, say); the phrase
+ * searches find the niche ones (an aesthetics clinic listed as a spa).
+ */
+export interface SearchPlan { terms: string[]; types: string[]; core: RegExp; skip?: RegExp }
+const PLANS: [RegExp, SearchPlan][] = [
+  [/aesthetic|botox|anti-?wrinkle|filler|skin clinic|dermal|laser|injectables?|profhilo|polynucleotide|skin booster|microneedl|hifu|fat dissolv/i,
+    { terms: ['aesthetics clinic', 'lip filler and anti-wrinkle injections', 'skin clinic'], types: ['beauty_salon', 'skin_care_clinic', 'spa'], core: /aesthetic|skin|clinic|botox|filler|laser|derm|face|facial|cosmetic|beauty|medi ?spa|injectab|glow|lash|brow|wellness|rejuven|anti.?wrinkle|contour/i, skip: /barber|tattoo|dentist|dental|optician|pharmacy|\bvet\b|\bhair\b|\bnails?\b/i }],
+  [/\bbarber/i, { terms: ['barber'], types: ['barber_shop'], core: /barber|gents|grooming|cuts/i, skip: /nail|lash|beauty|dog|pet/i }],
+  [/\bnails?\b|manicure/i, { terms: ['nail salon'], types: ['nail_salon'], core: /nail|manicure|pedicure|beauty/i, skip: /barber|dog|pet/i }],
+  [/\blash|brow/i, { terms: ['lash and brow studio'], types: ['beauty_salon'], core: /lash|brow|beauty|aesthetic/i, skip: /barber|dog|pet/i }],
+  [/\bhair(dress|\b)|salon|colourist|stylist/i, { terms: ['hair salon'], types: ['hair_salon'], core: /hair|salon|stylist|colour|blow/i, skip: /barber|dog|pet|removal/i }],
+  [/massage|spa\b|facial|waxing|beauty/i, { terms: ['beauty salon'], types: ['beauty_salon', 'spa', 'massage'], core: /beauty|spa|massage|facial|wax|skin|lash|brow|nail/i, skip: /barber|dog|pet/i }],
+  [/tattoo/i, { terms: ['tattoo studio'], types: ['body_art_service'], core: /tattoo|ink|piercing/i }],
+  [/physio/i, { terms: ['physiotherapist'], types: ['physiotherapist'], core: /physio|sports (injury|therapy)|rehab|osteo|chiro/i }],
+  [/osteopath|chiropract/i, { terms: ['osteopath'], types: ['chiropractor', 'physiotherapist'], core: /osteo|chiro|physio|back/i }],
+  [/dentist|dental/i, { terms: ['dentist'], types: ['dentist', 'dental_clinic'], core: /dent|smile|orthodont/i }],
+  [/\bgym\b|personal train|pilates|yoga|fitness/i, { terms: ['gym'], types: ['gym', 'fitness_center', 'yoga_studio'], core: /gym|fitness|pilates|yoga|crossfit|studio|training/i }],
+  [/\bvet\b|veterinar/i, { terms: ['vet'], types: ['veterinary_care'], core: /vet|animal|pet/i }],
+  [/\bdog groom|pet groom/i, { terms: ['dog groomer'], types: ['pet_store'], core: /groom|dog|pet|pooch|paw/i }],
+  [/florist|flowers/i, { terms: ['florist'], types: ['florist'], core: /flor|flower|bloom|petal/i }],
+  [/bakery|bakes|cakes/i, { terms: ['bakery'], types: ['bakery'], core: /bak|cake|bread|patisserie/i }],
+  [/caf[eé]\b|coffee/i, { terms: ['café'], types: ['cafe', 'coffee_shop'], core: /caf|coffee|tea ?room|espresso|roast/i }],
+  [/restaurant|bistro|dining/i, { terms: ['restaurant'], types: ['restaurant'], core: /restaurant|bistro|kitchen|grill|dining|eatery|trattoria|tapas/i }],
+  [/\bpub\b|bar\b/i, { terms: ['pub'], types: ['pub', 'bar'], core: /pub|bar|inn|arms|tavern|tap/i }],
+  [/plumb/i, { terms: ['plumber'], types: ['plumber'], core: /plumb|heating|gas|boiler/i }], [/electrician/i, { terms: ['electrician'], types: ['electrician'], core: /electric/i }],
+  [/roof/i, { terms: ['roofer'], types: ['roofing_contractor'], core: /roof/i }], [/builder|building work|extension/i, { terms: ['builder'], types: ['general_contractor'], core: /build|construct|extension|renovat/i }],
+  [/garden|landscap/i, { terms: ['gardener'], types: [], core: /garden|landscap|lawn|tree/i }], [/clean(ing|er)/i, { terms: ['cleaning service'], types: [], core: /clean/i }], [/decorat|paint/i, { terms: ['painter and decorator'], types: ['painter'], core: /paint|decorat/i }],
+  [/accountan|bookkeep/i, { terms: ['accountant'], types: ['accounting'], core: /account|bookkeep|tax/i }], [/solicitor|legal/i, { terms: ['solicitor'], types: ['lawyer'], core: /solicitor|law|legal/i }], [/estate agent|lettings/i, { terms: ['estate agent'], types: ['real_estate_agency'], core: /estate|letting|propert|homes/i }], [/photograph/i, { terms: ['photographer'], types: [], core: /photo|studio|portrait|wedding/i }], [/wedding/i, { terms: ['wedding venue'], types: ['wedding_venue'], core: /wedding|venue|hall|manor|barn/i }],
+  [/homeware|gift|ceramic|candle|interiors?/i, { terms: ['homeware and gift shop'], types: ['gift_shop', 'home_goods_store'], core: /home|gift|interior|living|candle|ceramic|design/i }], [/jewell/i, { terms: ['jewellery shop'], types: ['jewelry_store'], core: /jewel|gold|silver|gem/i }], [/clothing|boutique|fashion/i, { terms: ['clothes boutique'], types: ['clothing_store'], core: /boutique|fashion|cloth|wear|apparel/i }], [/book\s?shop/i, { terms: ['bookshop'], types: ['book_store'], core: /book/i }], [/bike|cycle/i, { terms: ['bike shop'], types: ['bicycle_store'], core: /bike|cycle/i }],
+];
+const PLAN_BY_INDUSTRY: Record<string, SearchPlan> = {
+  'Retail and e-commerce': { terms: ['independent shop'], types: ['store'], core: /shop|store|boutique/i },
+  'Food and drink': { terms: ['café'], types: ['cafe', 'restaurant'], core: /caf|food|kitchen|deli|restaurant/i },
+  'Hair, beauty and wellbeing': { terms: ['beauty salon'], types: ['beauty_salon', 'hair_salon', 'spa'], core: /beauty|hair|spa|salon|skin|aesthetic|lash|brow|nail/i },
+  'Trades and home services': { terms: ['tradesman'], types: [], core: /./ },
+  'Professional services': { terms: ['business services'], types: [], core: /./ },
+  'Health and fitness': { terms: ['gym'], types: ['gym', 'fitness_center'], core: /gym|fitness|health|clinic/i },
+  'Hospitality and events': { terms: ['venue'], types: ['wedding_venue', 'event_venue'], core: /venue|hall|hotel|events?/i },
+  'Creative and design': { terms: ['design studio'], types: [], core: /design|studio|creative/i },
+  'Education and training': { terms: ['training provider'], types: [], core: /train|school|academy|tutor/i },
+  'Manufacturing and wholesale': { terms: ['wholesaler'], types: [], core: /wholesale|supplies|manufactur/i },
+  'Property': { terms: ['estate agent'], types: ['real_estate_agency'], core: /estate|letting|propert/i },
+};
+
+/** The plan for this business: phrases to search Google for, place types to list nearby, and what names look comparable. */
+export function searchPlan(profile: any): SearchPlan {
+  for (const text of [profile?.business?.oneLiner, [profile?.offer?.bestSeller, profile?.offer?.products].filter(Boolean).join(' ')]) {
+    const hits: SearchPlan[] = [];
+    for (const [re, plan] of PLANS) if (text && re.test(text) && !hits.includes(plan)) { hits.push(plan); if (hits.length === 2) break; }
+    if (hits.length) {
+      return {
+        terms: [...new Set(hits.flatMap((h) => h.terms))].slice(0, 4),
+        types: [...new Set(hits.flatMap((h) => h.types))].slice(0, 6),
+        core: new RegExp(hits.map((h) => h.core.source).join('|'), 'i'),
+        skip: hits.length === 1 ? hits[0].skip : undefined,
+      };
+    }
+  }
+  return PLAN_BY_INDUSTRY[String(profile?.business?.industry || '')] ?? { terms: [], types: [], core: /./ };
+}
+
+/** Google's websiteUri is often not a website at all: an Instagram or Facebook page, or a Fresha/Booksy/Treatwell booking page. Sort it. */
+export function classifyWebsiteUri(uri: string | null | undefined): { url?: string; instagram?: string; facebook?: string; booking?: string } {
+  const raw = String(uri || '').trim();
+  if (!raw) return {};
+  const ig = socialUrl('instagram', raw); if (ig) return { instagram: ig };
+  const fb = socialUrl('facebook', raw); if (fb) return { facebook: fb };
+  const h = hostOf(raw);
+  if (h && BOOKING_HOSTS.some((b) => h === b || h.endsWith('.' + b))) return { booking: raw.replace(/#.*$/, '') };
+  if (/linktr\.ee|linkin\.bio|beacons\.ai|bio\.site|taplink/i.test(h)) return {}; // a link page tells us nothing on its own
+  return { url: raw };
+}
+
+/**
+ * How comparable a found business looks: 2 when it came from a phrase search or lists under a core
+ * type with a fitting name, 1 when only the name suggests it, 0 when the name says it is something
+ * else (a barber in an aesthetics search). Zero means "do not watch automatically".
+ */
+export function relevanceOf(p: { name: string; primaryType?: string | null; fromTerm?: boolean }, plan: SearchPlan): number {
+  const name = p.name || '';
+  if (plan.skip && plan.skip.test(name) && !plan.core.test(name.replace(plan.skip, ''))) return 0;
+  if (p.fromTerm) return 2;
+  const typed = p.primaryType ? plan.types.includes(p.primaryType) : false;
+  if (typed && plan.core.test(name)) return 2;
+  if (typed || plan.core.test(name)) return 1;
+  return 0;
+}
+
+/** Only businesses within the radius, with a known distance; the ones with none are never called "nearby". */
+export function withinRadius<T extends { distanceKm: number | null }>(list: T[], km: number): T[] {
+  return list.filter((f) => f.distanceKm != null && f.distanceKm <= km);
 }
 
 /* ---------- Review velocity: a sign of how busy a business looks ---------- */
@@ -295,7 +404,13 @@ export function postsInLast(posts: InstaPost[], days: number, now = new Date()):
 }
 
 /* ---------- Merging the watched list ---------- */
-export interface FoundPlace { placeId: string; name: string; address: string; url?: string; rating: number | null; count: number | null; distanceKm: number | null; mapsUrl: string }
+export interface FoundPlace {
+  placeId: string; name: string; address: string;
+  url?: string;                 // a real website; Instagram, Facebook and booking links are split out below
+  instagram?: string; facebook?: string; booking?: string[];
+  rating: number | null; count: number | null; distanceKm: number | null; mapsUrl: string;
+  primaryType?: string; relevance?: number;
+}
 
 /**
  * The watched list: what the owner typed (resolved to a Google listing where one matched),
@@ -304,14 +419,14 @@ export interface FoundPlace { placeId: string; name: string; address: string; ur
  */
 export function mergeTracked(
   prev: TrackedCompetitor[] | undefined,
-  typed: { name: string; url?: string; placeId?: string; address?: string; rating?: number | null; count?: number | null; mapsUrl?: string; distanceKm?: number | null }[],
+  typed: { name: string; url?: string; placeId?: string; address?: string; rating?: number | null; count?: number | null; mapsUrl?: string; distanceKm?: number | null; instagram?: string; facebook?: string; bookingPages?: string[] }[],
   found: FoundPlace[],
   dismissed: { key: string; name: string; placeId?: string }[],
   now = new Date(),
 ): { list: TrackedCompetitor[]; nearby: NearbyPlace[] } {
   const stamp = now.toISOString();
   const old = new Map((prev ?? []).map((c) => [c.key, c]));
-  const carry = (key: string, base: Omit<TrackedCompetitor, 'history' | 'services' | 'offers' | 'bookingPages' | 'firstSeenAt' | 'key'>): TrackedCompetitor => {
+  const carry = (key: string, base: Omit<TrackedCompetitor, 'history' | 'services' | 'offers' | 'bookingPages' | 'firstSeenAt' | 'key'> & { bookingPages?: string[] }): TrackedCompetitor => {
     const p = old.get(key) ?? [...old.values()].find((c) => sameBusiness(c, base));
     return {
       key, ...base,
@@ -319,8 +434,10 @@ export function mergeTracked(
       placeId: base.placeId ?? p?.placeId, address: base.address ?? p?.address, mapsUrl: base.mapsUrl ?? p?.mapsUrl, distanceKm: base.distanceKm ?? p?.distanceKm ?? null,
       rating: base.rating ?? p?.rating ?? null, count: base.count ?? p?.count ?? null,
       history: p?.history ?? [], ratingCheckedAt: p?.ratingCheckedAt, placeLookupAt: p?.placeLookupAt,
-      instagram: p?.instagram, facebook: p?.facebook, instagramSetBy: p?.instagramSetBy,
-      services: p?.services ?? [], offers: p?.offers ?? [], bookingPages: p?.bookingPages ?? [], pagesRead: p?.pagesRead, sourceHashes: p?.sourceHashes, sourcesCheckedAt: p?.sourcesCheckedAt,
+      instagram: p?.instagramSetBy === 'owner' ? p.instagram : (base.instagram || p?.instagram), facebook: base.facebook || p?.facebook,
+      instagramSetBy: p?.instagramSetBy === 'owner' ? 'owner' : base.instagram && !p?.instagram ? 'listing' : p?.instagramSetBy,
+      primaryType: base.primaryType ?? p?.primaryType, relevance: base.relevance ?? p?.relevance,
+      services: p?.services ?? [], offers: p?.offers ?? [], bookingPages: [...new Set([...(p?.bookingPages ?? []), ...(base.bookingPages ?? [])])], pagesRead: p?.pagesRead, sourceHashes: p?.sourceHashes, sourcesCheckedAt: p?.sourcesCheckedAt,
       social: p?.social ?? null, firstSeenAt: p?.firstSeenAt ?? stamp,
     };
   };
@@ -330,16 +447,20 @@ export function mergeTracked(
   for (const t of typed.filter((t) => t.name?.trim()).slice(0, 5)) {
     const key = competitorKey(t);
     if (list.some((c) => c.key === key)) continue;
-    list.push(carry(key, { name: t.name.trim(), source: 'typed', url: t.url || '', placeId: t.placeId, address: t.address, mapsUrl: t.mapsUrl, distanceKm: t.distanceKm ?? null, rating: t.rating ?? null, count: t.count ?? null }));
+    list.push(carry(key, { name: t.name.trim(), source: 'typed', url: t.url || '', placeId: t.placeId, address: t.address, mapsUrl: t.mapsUrl, distanceKm: t.distanceKm ?? null, rating: t.rating ?? null, count: t.count ?? null, instagram: t.instagram, facebook: t.facebook, bookingPages: t.bookingPages }));
   }
   const nearby: NearbyPlace[] = [];
   let foundCount = 0;
-  const sorted = [...found].sort((a, b) => (a.distanceKm ?? 1e9) - (b.distanceKm ?? 1e9));
+  // Comparable first (matched the search or a core type), then closest.
+  const sorted = [...found].sort((a, b) => ((b.relevance ?? 1) - (a.relevance ?? 1)) || ((a.distanceKm ?? 1e9) - (b.distanceKm ?? 1e9)));
   for (const f of sorted) {
     if (list.some((c) => sameBusiness(c, { name: f.name, url: f.url, placeId: f.placeId }))) {
       // The owner typed this one: attach the listing so it gets ratings and a map link.
       const c = list.find((x) => sameBusiness(x, { name: f.name, url: f.url, placeId: f.placeId }))!;
       c.placeId ??= f.placeId; c.address ??= f.address; c.mapsUrl ??= f.mapsUrl; c.distanceKm ??= f.distanceKm; c.url ||= f.url || '';
+      if (f.instagram && c.instagramSetBy !== 'owner' && !c.instagram) { c.instagram = f.instagram; c.instagramSetBy = 'listing'; }
+      c.facebook ||= f.facebook; c.primaryType ??= f.primaryType;
+      if (f.booking?.length) c.bookingPages = [...new Set([...c.bookingPages, ...f.booking])];
       if (c.rating == null) { c.rating = f.rating; c.count = f.count; }
       continue;
     }
@@ -348,9 +469,9 @@ export function mergeTracked(
     const watched = old.get(key)?.source === 'found';
     if (foundCount < MAX_FOUND || watched) {
       foundCount++;
-      list.push(carry(key, { name: f.name, source: 'found', url: f.url || '', placeId: f.placeId, address: f.address, mapsUrl: f.mapsUrl, distanceKm: f.distanceKm, rating: f.rating, count: f.count }));
+      list.push(carry(key, { name: f.name, source: 'found', url: f.url || '', placeId: f.placeId, address: f.address, mapsUrl: f.mapsUrl, distanceKm: f.distanceKm, rating: f.rating, count: f.count, instagram: f.instagram, facebook: f.facebook, bookingPages: f.booking ?? [], primaryType: f.primaryType, relevance: f.relevance }));
     } else {
-      nearby.push({ key, placeId: f.placeId, name: f.name, address: f.address, url: f.url, rating: f.rating, count: f.count, distanceKm: f.distanceKm });
+      nearby.push({ key, placeId: f.placeId, name: f.name, address: f.address, url: f.url, instagram: f.instagram, facebook: f.facebook, booking: f.booking, rating: f.rating, count: f.count, distanceKm: f.distanceKm, primaryType: f.primaryType, relevance: f.relevance });
     }
   }
   // Found businesses that were watched before but didn't come back this month stay watched.

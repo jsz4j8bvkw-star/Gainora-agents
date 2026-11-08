@@ -19,7 +19,7 @@ export interface Competitor { name: string; url: string }
 
 export interface BusinessProfile {
   business: {
-    name: string; website: string; instagram?: string; facebook?: string; oneLiner: string; industry: string; location: string;
+    name: string; website: string; instagram?: string; facebook?: string; oneLiner: string; industry: string; location: string; postcode?: string;
     tradingSince: string; teamSize: string; legalForm: string; ownerName: string;
   };
   offer: { products: string; typicalPrice: string; salesChannels: string[]; bestSeller: string };
