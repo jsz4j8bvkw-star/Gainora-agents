@@ -14,7 +14,50 @@ export const GAS_EMERGENCY = '0800 111 999';
 export type QuotePolicy = 'never' | 'ranges' | 'fixed';
 export type BusinessKind = 'trade' | 'appointments';
 export type BookingMode = 'book' | 'offer' | 'callback';
-export interface AppointmentType { name: string; minutes: number; price: string; who: string }
+/** rebookWeeks: how long after this treatment a client is usually due back (gel nails 3, lashes 6, anti-wrinkle 12). Optional. */
+export interface AppointmentType { name: string; minutes: number; price: string; who: string; rebookWeeks?: number }
+
+/* ---------- Prices and intervals from the client's own treatment list ---------- */
+
+export interface Price { amount: number; from: boolean }
+
+/** "£250" → 250; "from £180" → 180 (a minimum); "Free" → 0; "£60-£90" → 60 (a minimum). Anything else is unknown. */
+export function parsePrice(raw: string | undefined): Price | null {
+  const s = String(raw ?? '').trim();
+  if (!s) return null;
+  if (/^free$/i.test(s)) return { amount: 0, from: false };
+  const m = s.match(/£?\s*(\d[\d,]*(?:\.\d{1,2})?)/);
+  if (!m) return null;
+  const amount = Number(m[1].replace(/,/g, ''));
+  if (!Number.isFinite(amount)) return null;
+  const from = /\bfrom\b|\+|–|-|\bto\b|\bper\b/i.test(s);
+  return { amount, from };
+}
+
+const sameName = (a: string, b: string) => clean(a, 80).toLowerCase() === clean(b, 80).toLowerCase();
+
+/** The price of a named appointment type from the owner's list, or null if it isn't listed or has no price. */
+export function typePrice(name: string | undefined, types: AppointmentType[]): Price | null {
+  if (!name) return null;
+  const t = (types || []).find((x) => sameName(x.name, name));
+  return t ? parsePrice(t.price) : null;
+}
+
+/** What an enquiry is worth: the value the owner entered, or else the list price of what was booked. Never a guess. */
+export function enquiryValue(e: Pick<EnquiryRecord, 'jobValue' | 'quoteAmount' | 'bookedType' | 'status'>, s: Pick<CaptureSettings, 'bookings'>): (Price & { source: 'entered' | 'list' }) | null {
+  if (e.jobValue != null && e.jobValue > 0) return { amount: e.jobValue, from: false, source: 'entered' };
+  if (e.status === 'quoted' && e.quoteAmount) return { amount: e.quoteAmount, from: false, source: 'entered' };
+  const p = typePrice(e.bookedType, s.bookings.types);
+  return p && p.amount > 0 ? { ...p, source: 'list' } : null;
+}
+
+/** Weeks until a client is usually due back after this treatment: the type's own interval, or the clinic's general one. */
+export function rebookWeeksFor(bookedType: string | undefined, s: Pick<CaptureSettings, 'bookings' | 'automations'>): number {
+  const t = bookedType ? s.bookings.types.find((x) => sameName(x.name, bookedType)) : undefined;
+  if (t?.rebookWeeks && t.rebookWeeks > 0) return t.rebookWeeks;
+  const days = s.automations?.rebook?.steps?.rebook?.wait ?? 42;
+  return Math.max(1, Math.round(days / 7));
+}
 export interface PackSection { title: string; lines: string[] }
 export interface ReceptionistPack { greeting: string; sections: PackSection[]; text: string }
 
@@ -48,6 +91,16 @@ export function greetingFor(s: Pick<CaptureSettings, 'business' | 'calls'>, now 
   return g.replace(/\s+/g, ' ').trim();
 }
 
+/**
+ * The booking the receptionist can really make. Until Gainora has connected the diary (or when the diary is
+ * on paper) she can't see free times, so she takes details and the owner calls back, whatever was chosen.
+ */
+export function effectiveBookingMode(bk: Pick<Bookings, 'mode' | 'status' | 'system'>): BookingMode {
+  if (bk.mode === 'callback') return 'callback';
+  if (/paper/i.test(bk.system || '')) return 'callback';
+  return bk.status === 'connected' ? bk.mode : 'callback';
+}
+
 /** The script and knowledge for the receptionist. Plain text, so it pastes into any platform. */
 export function packFromSettings(s: CaptureSettings): ReceptionistPack {
   const b = s.business;
@@ -63,7 +116,7 @@ export function packFromSettings(s: CaptureSettings): ReceptionistPack {
   const bk = s.bookings;
   const types = (bk.types || []).filter((t) => clean(t.name));
   const staff = lines(bk.staff);
-  const mode = bk.mode;
+  const mode = effectiveBookingMode(bk);
   const who = beauty ? 'client' : appts ? 'patient or client' : 'customer';
 
   const sections: PackSection[] = [
@@ -150,7 +203,8 @@ export function packFromSettings(s: CaptureSettings): ReceptionistPack {
 /** The calls a beauty and aesthetics clinic gets, and how each one is handled. */
 function beautyCalls(s: CaptureSettings, team: string): string[] {
   const bk = s.bookings;
-  const book = bk.mode === 'book' ? 'book it' : bk.mode === 'offer' ? `offer two times and say ${team} will confirm by text` : `take the details and say ${team} will call back to arrange it`;
+  const mode = effectiveBookingMode(bk);
+  const book = mode === 'book' ? 'book it' : mode === 'offer' ? `offer two times and say ${team} will confirm by text` : `take the details and say ${team} will call back to arrange it`;
   return [
     `New client wanting a treatment: find out what they're after and why (for example a wedding or holiday date), check they're happy with the price, then ${book}.`,
     'Injectables (anti-wrinkle, fillers, skin boosters): clients must be 18 or over, so check their age before booking. A new client books a consultation first, unless the clinic’s list says otherwise. Never say whether a treatment is right for them: the practitioner decides at the consultation.',
@@ -181,6 +235,18 @@ function beautyCalls(s: CaptureSettings, team: string): string[] {
 /* ---------- Enquiries from any source ---------- */
 
 export type Channel = 'call' | 'form' | 'email' | 'text';
+
+/** What the receptionist worked out on the call (Retell's post-call analysis), when the platform sends it. */
+export interface CallFacts {
+  callType: string;            // one of the call_type choices in shared/retell.ts, lower case, or ''
+  newOrReturning: 'new' | 'returning' | '';
+  appointmentType: string;     // in the business's own words, from its list
+  preferredTimes: string;
+  booked: boolean;             // a specific day and time was agreed on the call
+  bookedFor: string | null;    // ISO time of that booking, only when it parsed and looks sane
+  bookedWith: string;
+}
+
 export interface Enquiry {
   channel: Channel;
   externalId: string | null;
@@ -192,7 +258,11 @@ export interface Enquiry {
   transcript: string;
   recordingUrl: string;
   receivedAt: string;
+  facts: CallFacts;
 }
+
+const NO_FACTS: CallFacts = { callType: '', newOrReturning: '', appointmentType: '', preferredTimes: '', booked: false, bookedFor: null, bookedWith: '' };
+const truthy = (v: unknown) => v === true || v === 'true' || v === 'yes';
 
 const pick = (o: any, keys: string[]): string => {
   for (const k of keys) {
@@ -242,8 +312,17 @@ export function normaliseEnquiry(raw: any, hint?: Channel, now = new Date()): En
   const custom = analysis.custom_analysis_data || {};
 
   const transcript = transcriptText(layers.map((l) => l.transcript ?? l.transcript_object ?? l.messages).find((t) => t != null)).slice(0, 20000);
-  const urgentFlag = custom.urgent_concern === true || custom.urgent_concern === 'true';
-  const summary = `${urgentFlag ? 'Urgent concern raised on the call. ' : ''}${pick(analysis, ['call_summary', 'summary']) || get(['summary', 'call_summary', 'message', 'notes', 'enquiry', 'description', 'body', 'text'])}`.slice(0, 2000);
+  const urgentFlag = truthy(custom.urgent_concern);
+  const facts = callFacts(custom, now);
+  let summary = `${urgentFlag ? 'Urgent concern raised on the call. ' : ''}${pick(analysis, ['call_summary', 'summary']) || get(['summary', 'call_summary', 'message', 'notes', 'enquiry', 'description', 'body', 'text'])}`;
+  // What the receptionist found out, added to the summary when it isn't already there.
+  const has = (w: string) => summary.toLowerCase().includes(w.toLowerCase());
+  const extra: string[] = [];
+  if (facts.newOrReturning && !has(facts.newOrReturning)) extra.push(facts.newOrReturning === 'new' ? 'New client.' : 'Returning client.');
+  if (facts.appointmentType && !has(facts.appointmentType)) extra.push(`Wants: ${facts.appointmentType}.`);
+  if (facts.preferredTimes && !has(facts.preferredTimes)) extra.push(`Prefers: ${facts.preferredTimes}.`);
+  if (extra.length) summary = `${summary.trim()}${summary.trim() ? ' ' : ''}${extra.join(' ')}`;
+  summary = summary.slice(0, 2000);
   const name = (pick(custom, ['caller_name', 'name', 'customer_name']) || get(['caller_name', 'customer_name', 'contact_name', 'name', 'full_name', 'from_name'])).slice(0, 120);
   const phone = normPhone(pick(custom, ['callback_number', 'phone']) || get(['from_number', 'caller_number', 'phone', 'phone_number', 'from', 'callback_number', 'mobile']));
   const emailRaw = (pick(custom, ['email']) || get(['email', 'email_address', 'from_email', 'reply_to'])).toLowerCase();
@@ -261,6 +340,33 @@ export function normaliseEnquiry(raw: any, hint?: Channel, now = new Date()): En
     summary, transcript,
     recordingUrl: /^https:\/\//.test(get(['recording_url'])) ? get(['recording_url']).slice(0, 500) : '',
     receivedAt: Number.isNaN(when.getTime()) ? now.toISOString() : when.toISOString(),
+    facts,
+  };
+}
+
+/**
+ * The receptionist's own analysis of the call. A booking time is only believed when it was marked as booked,
+ * parses as a date, and falls between an hour from now and a year ahead: a wrong confirmation text is worse than none.
+ */
+function callFacts(custom: any, now: Date): CallFacts {
+  if (!custom || typeof custom !== 'object') return NO_FACTS;
+  const str = (k: string, max = 120) => clean(typeof custom[k] === 'string' ? custom[k] : '', max);
+  const nr = str('new_or_returning').toLowerCase();
+  const booked = truthy(custom.booked);
+  let bookedFor: string | null = null;
+  const rawWhen = str('booked_for', 60);
+  if (booked && rawWhen) {
+    const d = new Date(rawWhen);
+    const t = d.getTime();
+    if (!Number.isNaN(t) && t > now.getTime() + 3_600_000 && t < now.getTime() + 366 * 864e5) bookedFor = d.toISOString();
+  }
+  return {
+    callType: str('call_type', 60).toLowerCase(),
+    newOrReturning: nr === 'new' || nr === 'returning' ? nr : '',
+    appointmentType: str('appointment_type', 80),
+    preferredTimes: str('preferred_times', 160),
+    booked, bookedFor,
+    bookedWith: str('booked_with', 60),
   };
 }
 
@@ -276,26 +382,37 @@ const REACTION = /\b(urgent concern raised on the call|(lip|lips|face|cheek|eye|
 const URGENT = /\b(urgent(ly)?|asap|as soon as possible|today|tonight|emergency|right away|leak(ing)?|dripping|not working|broken down|stopped working)\b/i;
 const VULNERABLE = /\b(elderly|baby|newborn|disabled|pregnant|vulnerable|poorly|oxygen)\b/i;
 const COMPLAINT = /\b(complain|complaint|not happy|unhappy|disappointed|refund|still broken|came back|botched|shoddy)\b/i;
-const SPAM = /\b(seo|backlinks?|google ranking|marketing agency|business loan|merchant (services|account)|crypto|we can get you more (leads|customers))\b/i;
+const SPAM = /\b(seo|backlinks?|google ranking|(marketing|advertising|lead generation|social media|instagram|facebook|tiktok) (agency|offer|services?|package|campaign|marketing|ads?)|business (loan|funding|grant)|merchant (services|account)|card (machine|terminal) (fees|rates)|crypto|energy (broker|tariff|supplier)|we can get you more (leads|customers|clients|bookings|reviews)|sales call|cold call|offered (seo|marketing|cheaper|a discount on))\b/i;
 const QUOTE = /\b(quote|price|how much|cost|estimate)\b/i;
 const BOOK = /\b(book(ed|ing)?|appointment|consultation|come out|visit|available|slot|service (my|the))\b/i;
 const CALLBACK = /\b(call (me )?back|ring (me )?back|callback)\b/i;
+const TIME_SENSITIVE = /\b(running late|on my way|cancel(ling)? (today|tomorrow|my appointment)|move (my|the) appointment|reschedule)\b/i;
 
-export function triage(text: string): Triage {
+/** What the receptionist said the call was about, when the platform sends it (shared/retell.ts call_type). */
+export interface TriageHints { callType?: string; booked?: boolean }
+
+export function triage(text: string, hints: TriageHints = {}): Triage {
   const t = String(text || '');
+  const ct = (hints.callType || '').toLowerCase();
   const reasons: string[] = [];
   const gas = GAS.test(t);
   let urgency: Urgency = 'normal';
   if (gas) { urgency = 'emergency'; reasons.push('Caller mentioned a gas smell or leak'); }
   else if (EMERGENCY.test(t)) { urgency = 'emergency'; reasons.push(`Mentions: ${t.match(EMERGENCY)![0].toLowerCase()}`); }
   else if (REACTION.test(t)) { urgency = 'emergency'; reasons.push(`Possible reaction after a treatment: ${t.match(REACTION)![0].toLowerCase()}`); }
+  else if (ct === 'concern after treatment') { urgency = 'emergency'; reasons.push('Your receptionist flagged a concern after a treatment'); }
+  else if (ct === 'urgent') { urgency = 'urgent'; reasons.push('Your receptionist flagged the call as urgent'); }
   else if (URGENT.test(t)) { urgency = 'urgent'; reasons.push(`Mentions: ${t.match(URGENT)![0].toLowerCase()}`); }
+  else if (ct === 'running late' || TIME_SENSITIVE.test(t)) { urgency = 'urgent'; reasons.push(ct === 'running late' ? 'Running late for an appointment' : `Time-sensitive: ${t.match(TIME_SENSITIVE)![0].toLowerCase()}`); }
+  else if (ct === 'aftercare question' || ct === 'complaint') { urgency = 'urgent'; reasons.push(ct === 'complaint' ? 'A complaint: best handled by you, today' : 'An aftercare question: they want to hear from you today'); }
   if (VULNERABLE.test(t) && urgency !== 'emergency') { urgency = 'urgent'; reasons.push('Someone vulnerable may be affected'); }
   if (VULNERABLE.test(t) && urgency === 'emergency') reasons.push('Someone vulnerable may be affected');
 
-  const kind: EnquiryKind = SPAM.test(t) && urgency === 'normal' ? 'spam'
-    : COMPLAINT.test(t) ? 'complaint'
-    : QUOTE.test(t) ? 'quote'
+  const kind: EnquiryKind = (ct === 'sales call' || ct === 'wrong number' || SPAM.test(t)) && urgency === 'normal' ? 'spam'
+    : ct === 'complaint' || COMPLAINT.test(t) ? 'complaint'
+    : hints.booked || /booking|consultation|patch test/.test(ct) ? 'booking'
+    : ct === 'price or treatment question' || QUOTE.test(t) ? 'quote'
+    : ct === 'message for the team' || ct === 'waiting list' ? 'callback'
     : BOOK.test(t) ? 'booking'
     : CALLBACK.test(t) ? 'callback'
     : 'other';
@@ -544,7 +661,14 @@ export interface EnquiryPatch {
   notes?: string;
   kind?: EnquiryKind;
   name?: string; phone?: string; email?: string; postcode?: string;
+  /** With status "lost": why. A no-show or late cancellation is counted in the report. */
+  lostReason?: LostReason;
 }
+
+export type LostReason = 'noshow' | 'late_cancel' | 'cancelled' | 'other';
+export const LOST_LABEL: Record<LostReason, string> = { noshow: 'Didn’t turn up', late_cancel: 'Cancelled late', cancelled: 'Cancelled', other: 'Didn’t go ahead' };
+/** A history line that marks a no-show or late cancellation, so the report can count them without a new column. */
+export const isNoShow = (h: HistoryItem) => /^(Didn’t turn up|Cancelled late)/.test(h.text);
 
 /** The words that change between a trade and an appointment business. */
 export function words(kind?: BusinessKind) {
@@ -588,7 +712,7 @@ export function applyPatch(e: EnquiryRecord, p: EnquiryPatch, settings: (Pick<Ca
       if (!next.invoiceDue && next.jobValue) next.invoiceDue = addDays(at, settings?.followUps.paymentDays ?? 14).slice(0, 10);
       log(`${W.won}${money(next.jobValue)}`);
     }
-    else if (p.status === 'lost') log('Didn’t go ahead');
+    else if (p.status === 'lost') log(p.lostReason && p.lostReason !== 'other' ? `${LOST_LABEL[p.lostReason]}${next.bookedFor ? ` for ${new Date(next.bookedFor).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}` : ''}` : 'Didn’t go ahead');
     else if (p.status === 'spam') log('Filed as spam');
     else log(`Moved to ${STATUS_LABEL[p.status].toLowerCase()}`);
   } else if (p.status === 'won' && p.jobValue !== undefined) log(`${W.value} set${money(next.jobValue)}`);
@@ -641,13 +765,18 @@ export interface Report {
   caught: number; afterHours: number; emergencies: number; spam: number;
   replied: number; medianReplyMins: number | null; within1h: number;
   quotes: number; quotedValue: number; booked: number; won: number; wonValue: number; paidValue: number; outstanding: number;
+  /** Bookings and attended appointments valued from the owner's own figures: entered values, or the list price of what was booked. */
+  bookedValue: number; bookedValueFrom: boolean; bookedValued: number;
+  afterHoursBooked: number; afterHoursValue: number;
+  noShows: number; unanswered: number;
   byChannel: Record<Channel, number>;
   byWeek: { weekOf: string; inHours: number; afterHours: number }[];
+  byDay: number[];   // enquiries by day of week, Monday first
 }
 
 const mondayIso = (iso: string) => { const d = new Date(iso); const day = (d.getUTCDay() + 6) % 7; d.setUTCDate(d.getUTCDate() - day); return d.toISOString().slice(0, 10); };
 
-export function report(list: EnquiryRecord[], from: Date, to: Date): Report {
+export function report(list: EnquiryRecord[], from: Date, to: Date, settings?: Pick<CaptureSettings, 'bookings'>, now = new Date()): Report {
   const inRange = list.filter((e) => !e.isTest && new Date(e.receivedAt) >= from && new Date(e.receivedAt) < to);
   const real = inRange.filter((e) => e.status !== 'spam');
   const replyMins = real.filter((e) => e.repliedAt).map((e) => Math.max(0, (new Date(e.repliedAt!).getTime() - new Date(e.receivedAt).getTime()) / 60000)).sort((a, b) => a - b);
@@ -658,16 +787,27 @@ export function report(list: EnquiryRecord[], from: Date, to: Date): Report {
   const weeks = new Map<string, { inHours: number; afterHours: number }>();
   for (let t = new Date(mondayIso(from.toISOString())).getTime(); t < to.getTime(); t += 7 * DAY_MS) weeks.set(new Date(t).toISOString().slice(0, 10), { inHours: 0, afterHours: 0 });
   for (const e of real) { const w = weeks.get(mondayIso(e.receivedAt)); if (w) e.afterHours ? w.afterHours++ : w.inHours++; }
+  const byDay = [0, 0, 0, 0, 0, 0, 0];
+  for (const e of real) byDay[londonClock(e.receivedAt).day - 1]++;
+  const bookedList = real.filter((e) => e.status === 'booked' || e.status === 'won');
+  const values = bookedList.map((e) => (settings ? enquiryValue(e, settings) : (e.jobValue ? { amount: e.jobValue, from: false, source: 'entered' as const } : null)));
+  const valued = values.filter((v): v is NonNullable<typeof v> => !!v);
+  const afterHoursBooked = bookedList.filter((e) => e.afterHours);
   return {
     caught: real.length, afterHours: real.filter((e) => e.afterHours).length, emergencies: real.filter((e) => e.urgency === 'emergency').length,
     spam: inRange.length - real.length,
     replied: replyMins.length, medianReplyMins: median == null ? null : Math.round(median), within1h: replyMins.filter((m) => m <= 60).length,
     quotes: real.filter((e) => e.quotedAt).length, quotedValue: real.reduce((a, e) => a + (e.quotedAt && e.quoteAmount ? e.quoteAmount : 0), 0),
-    booked: real.filter((e) => e.status === 'booked' || e.status === 'won').length,
+    booked: bookedList.length,
     won: won.length, wonValue: won.reduce((a, e) => a + (e.jobValue ?? 0), 0),
     paidValue: won.filter((e) => e.paidAt).reduce((a, e) => a + (e.jobValue ?? 0), 0),
     outstanding: won.filter((e) => !e.paidAt && e.invoiceDue).reduce((a, e) => a + (e.jobValue ?? 0), 0),
-    byChannel, byWeek: [...weeks.entries()].map(([weekOf, v]) => ({ weekOf, ...v })),
+    bookedValue: valued.reduce((a, v) => a + v.amount, 0), bookedValueFrom: valued.some((v) => v.from), bookedValued: valued.length,
+    afterHoursBooked: afterHoursBooked.length,
+    afterHoursValue: afterHoursBooked.reduce((a, e) => a + (settings ? enquiryValue(e, settings)?.amount ?? 0 : e.jobValue ?? 0), 0),
+    noShows: inRange.filter((e) => e.history.some(isNoShow)).length,
+    unanswered: real.filter((e) => e.status === 'new' && now.getTime() - new Date(e.receivedAt).getTime() > DAY_MS).length,
+    byChannel, byWeek: [...weeks.entries()].map(([weekOf, v]) => ({ weekOf, ...v })), byDay,
   };
 }
 

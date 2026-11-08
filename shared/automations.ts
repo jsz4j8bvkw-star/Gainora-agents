@@ -3,7 +3,7 @@
 //
 // The owner doesn't build flows. Gainora ships a fixed set of well-made workflows; the owner switches
 // each one on or off, edits the wording and timing, and marks any step "ask me first".
-import { applyPatch, findPostcode, normPhone, type BusinessKind, type CaptureSettings, type EnquiryPatch, type EnquiryRecord } from './capture';
+import { applyPatch, findPostcode, normPhone, rebookWeeksFor, type BusinessKind, type CaptureSettings, type EnquiryPatch, type EnquiryRecord } from './capture';
 
 export type WorkflowId = 'ack' | 'booking' | 'quote' | 'payment' | 'review' | 'aftercare' | 'rebook';
 export type StepId = 'ack' | 'confirm' | 'reminder' | 'chase1' | 'chase2' | 'pay1' | 'pay2' | 'pay3' | 'review' | 'checkin' | 'rebook';
@@ -295,7 +295,8 @@ export function schedule(e: EnquiryRecord, s: CaptureSettings): Due[] {
     const attended = lastHistory(e, /^(Job done|Attended)/) ?? e.receivedAt;
     const wc = s.automations?.aftercare?.steps?.checkin?.wait ?? 1;
     out.push({ wf: 'aftercare', step: 'checkin', key: `checkin@${attended.slice(0, 10)}`, anchor: attended, sendAt: new Date(new Date(attended).getTime() + wc * dayMs).toISOString(), patch: null });
-    const wr = s.automations?.rebook?.steps?.rebook?.wait ?? 42;
+    // "Time to rebook" follows the treatment's own interval when the owner set one, else the step's general wait.
+    const wr = rebookWeeksFor(e.bookedType, s) * 7;
     out.push({ wf: 'rebook', step: 'rebook', key: `rebook@${attended.slice(0, 10)}`, anchor: attended, sendAt: new Date(new Date(attended).getTime() + wr * dayMs).toISOString(), patch: null });
   }
   if (e.status === 'won' && !e.reviewAskedAt && (e.paidAt || !e.invoiceDue)) {
