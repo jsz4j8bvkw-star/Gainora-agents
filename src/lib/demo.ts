@@ -379,7 +379,7 @@ export function createDemoApi(): Api {
     for (const e0 of s.enquiries) {
       if (only && !only.includes(e0.id)) continue;
       let e = e0;
-      for (const d of dueNow(e, settings, s.messages.map(lite), s.optOuts.includes(e.phone))) {
+      for (const d of dueNow(e, settings, s.messages.map(lite), s.optOuts.includes(e.phone), new Date(), s.enquiries)) {
         const ok = d.channel === 'email' || texting;
         s.messages.unshift(msg({ enquiryId: e.id, direction: 'out', channel: d.channel, to: d.to, subject: d.subject, body: d.body, createdAt: new Date().toISOString(), automatic: true, workflow: d.workflow, step: d.step, key: d.key, status: d.ask ? 'awaiting_approval' : ok ? 'sent' : 'failed', error: ok ? null : 'Texting isn’t switched on yet.' }));
         if (!d.ask && ok && d.patch) e = afterSend(e, d, settings);

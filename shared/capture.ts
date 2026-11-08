@@ -74,7 +74,7 @@ export function packFromSettings(s: CaptureSettings): ReceptionistPack {
         ? 'You are an AI assistant, and you say so in your greeting.'
         : 'You do not need to say you are an AI unless asked. Never claim to be a person. If anyone asks whether they are speaking to a real person, a robot or an AI, always answer honestly that you are the ' + name + ' AI assistant, and offer to pass a message to ' + team + '.',
     ] },
-    { title: 'Opening line', lines: [greeting, 'Use good morning, good afternoon or good evening to match the time.'] },
+    { title: 'Opening line', lines: [greeting, 'Use good morning, good afternoon or good evening to match the time, or a warm hello.'] },
     { title: appts ? 'What we offer' : 'What we do', lines: [...services, ...(notDone.length ? [`We don't do: ${notDone.join(', ')}. Say so kindly and don't recommend anyone else.`] : [])] },
     { title: 'Where and when', lines: [
       ...(appts
@@ -123,6 +123,7 @@ export function packFromSettings(s: CaptureSettings): ReceptionistPack {
       ...(s.calls.gasWork ? [`If the caller can smell gas or thinks there's a gas leak: tell them to call the National Gas Emergency number, ${GAS_EMERGENCY}, now, and to leave the property if they feel unsafe. Don't give any other safety advice.`] : []),
       'If anyone is in danger or hurt, tell them to call 999.',
     ] },
+    ...(beauty ? [{ title: 'Every kind of call, and what to do', lines: beautyCalls(s, team) }] : []),
     { title: 'Prices', lines: [
       appts
         ? (s.calls.quotePolicy === 'never' ? `Don't give prices. Say ${team} will confirm the fee.` : `You may give the prices listed for each appointment type${s.calls.priceNotes ? `, and: ${clean(s.calls.priceNotes)}` : ''}.`)
@@ -144,6 +145,37 @@ export function packFromSettings(s: CaptureSettings): ReceptionistPack {
 
   const text = [`# Receptionist for ${name}`, ...sections.map((x) => `## ${x.title}\n${x.lines.map((l) => `- ${l}`).join('\n')}`)].join('\n\n');
   return { greeting, sections, text };
+}
+
+/** The calls a beauty and aesthetics clinic gets, and how each one is handled. */
+function beautyCalls(s: CaptureSettings, team: string): string[] {
+  const bk = s.bookings;
+  const book = bk.mode === 'book' ? 'book it' : bk.mode === 'offer' ? `offer two times and say ${team} will confirm by text` : `take the details and say ${team} will call back to arrange it`;
+  return [
+    `New client wanting a treatment: find out what they're after and why (for example a wedding or holiday date), check they're happy with the price, then ${book}.`,
+    'Injectables (anti-wrinkle, fillers, skin boosters): clients must be 18 or over, so check their age before booking. A new client books a consultation first, unless the clinic’s list says otherwise. Never say whether a treatment is right for them: the practitioner decides at the consultation.',
+    'Lashes, brows and tints, and laser: new clients need a patch test at least 48 hours before. Book the patch test first, then the treatment.',
+    `Returning client: ask what they'd like and whether they want the same person as last time, then ${book}. For top-ups, don't comment on timing: say the practitioner will check it at the appointment.`,
+    'Moving an appointment: find the booking by name and date, offer two new times, confirm the new day, date and time, and mention the cancellation policy if it applies.',
+    `Cancelling: take the name and appointment, mention the cancellation policy kindly${bk.cancellation ? ` (${clean(bk.cancellation, 160)})` : ''}, offer to rebook, and say ${team} will confirm.`,
+    `Running late: thank them for letting you know, take their name, appointment time and how late they'll be, and say you'll let ${team} know straight away. Don't promise the appointment can go ahead in full.`,
+    'Prices and what a treatment involves: answer from the list of treatments and prices. If it isn’t on the list, say the team will confirm.',
+    `Medical questions (pregnancy, breastfeeding, medication, allergies, skin conditions, whether a treatment is suitable): don't answer or guess. Say it's a really good question for the practitioner, take their details and say ${team} will call back.`,
+    `Aftercare questions: don't give advice. If what they describe is on the safety list, follow the safety steps straight away. Otherwise take the details and say ${team} will call back today.`,
+    `Unhappy with a result, or a complaint: listen, be kind and say sorry they feel that way. Don't argue, explain or offer refunds, discounts or free treatment. Take their name, number, the treatment and date, and say ${team} will call them back personally, today if possible.`,
+    `Gift vouchers: take the buyer's name, number, the amount or treatment, and who it's for. Say ${team} will send a payment link. Never take card details.`,
+    'Deposits and payments: never take card details. Say a secure payment link will come by text.',
+    'Group bookings (bridal parties, birthdays): take the date, how many people, the treatments and a contact number. Say the team will put a plan together and call back.',
+    `Fully booked: offer the next free time. If nothing suits, add them to the call-back list with the days and times that work, and say ${team} will be in touch if a space comes up.`,
+    'Asking for a particular person: book with them if they have a free time. If not, offer their next free time or someone else, and let the caller choose.',
+    `Wants to speak to someone: say the team are with clients at the moment, take a message with their name, number and what it's about, and say someone will call back.${s.calls.transferTo ? ` If it's urgent: ${clean(s.calls.transferTo, 120)}.` : ''}`,
+    'Opening hours, the address, parking and directions: answer from what you know. If unsure, say the team will text the details.',
+    'Job applicants, suppliers and deliveries: take their name, company, number and what it’s about, and say the right person will get back to them.',
+    'Sales calls, marketing offers and surveys: say politely that the clinic isn’t interested, thank them and end the call.',
+    'Wrong number: be friendly, tell them which business they’ve reached, and end the call.',
+    'Hard to hear, or English isn’t their first language: slow down, use simple words, repeat key details and spell them out.',
+    'Rude or abusive callers: stay calm, say you’ll pass a message to the team, and end the call if it carries on.',
+  ];
 }
 
 /* ---------- Enquiries from any source ---------- */
@@ -210,9 +242,10 @@ export function normaliseEnquiry(raw: any, hint?: Channel, now = new Date()): En
   const custom = analysis.custom_analysis_data || {};
 
   const transcript = transcriptText(layers.map((l) => l.transcript ?? l.transcript_object ?? l.messages).find((t) => t != null)).slice(0, 20000);
-  const summary = (pick(analysis, ['call_summary', 'summary']) || get(['summary', 'call_summary', 'message', 'notes', 'enquiry', 'description', 'body', 'text'])).slice(0, 2000);
+  const urgentFlag = custom.urgent_concern === true || custom.urgent_concern === 'true';
+  const summary = `${urgentFlag ? 'Urgent concern raised on the call. ' : ''}${pick(analysis, ['call_summary', 'summary']) || get(['summary', 'call_summary', 'message', 'notes', 'enquiry', 'description', 'body', 'text'])}`.slice(0, 2000);
   const name = (pick(custom, ['caller_name', 'name', 'customer_name']) || get(['caller_name', 'customer_name', 'contact_name', 'name', 'full_name', 'from_name'])).slice(0, 120);
-  const phone = normPhone(pick(custom, ['phone', 'callback_number']) || get(['from_number', 'caller_number', 'phone', 'phone_number', 'from', 'callback_number', 'mobile']));
+  const phone = normPhone(pick(custom, ['callback_number', 'phone']) || get(['from_number', 'caller_number', 'phone', 'phone_number', 'from', 'callback_number', 'mobile']));
   const emailRaw = (pick(custom, ['email']) || get(['email', 'email_address', 'from_email', 'reply_to'])).toLowerCase();
   const email = EMAIL.test(emailRaw) ? emailRaw.slice(0, 200) : '';
   if (!summary && !transcript && !phone && !email) return null;
@@ -239,7 +272,7 @@ export interface Triage { urgency: Urgency; kind: EnquiryKind; gas: boolean; rea
 
 const GAS = /\b(smell(s|ing)? (of )?gas|gas (leak|smell|escape)|leaking gas)\b/i;
 const EMERGENCY = /\b(chest pain|can'?t breathe|difficulty breathing|(lost|losing|no) control of (my |his |her |their |the )?(bladder|bowels?)|numb(ness)? (around|in) (my |his |her |their |the )?(groin|bottom|genitals)|flood(ed|ing)?|burst|water (pouring|everywhere|coming through)|no (heating|heat|hot water|power|electric(ity)?)|sparking|smoke|fire|carbon monoxide|co alarm|locked out|break[- ]?in|broken (lock|window|door)|ceiling (collaps|coming down)|sewage|overflowing)\b/i;
-const REACTION = /\b((lip|lips|face|cheek|eye|eyes|tongue|throat) (is |are |has |have )?(very |really )?(swollen|swelling|blistered|burn(ed|t|ing)?)|(swollen|swelling of (my |the )?)(lips?|tongue|throat|face)|(turned|turning|gone|going|looks?) (white|grey|gray|blue|blotchy|mottled)|(blurr(ed|y)|lost|losing|changes? (to|in)|problems? with) (my )?(vision|eyesight|sight)|(vision|eyesight|sight) (is |has gone |went |going )?(blurr(ed|y)|funny|strange|double|dark)|blister(s|ed|ing)?|(burn|burnt|burned) (after|from)|reaction (after|to) (the |my )?(filler|botox|treatment|injection|peel|laser))\b/i;
+const REACTION = /\b(urgent concern raised on the call|(lip|lips|face|cheek|eye|eyes|tongue|throat) (is |are |has |have )?(very |really )?(swollen|swelling|blistered|burn(ed|t|ing)?)|(swollen|swelling of (my |the )?)(lips?|tongue|throat|face)|(turned|turning|gone|going|looks?) (white|grey|gray|blue|blotchy|mottled)|(blurr(ed|y)|lost|losing|changes? (to|in)|problems? with) (my )?(vision|eyesight|sight)|(vision|eyesight|sight) (is |has gone |went |going )?(blurr(ed|y)|funny|strange|double|dark)|blister(s|ed|ing)?|(burn|burnt|burned) (after|from)|reaction (after|to) (the |my )?(filler|botox|treatment|injection|peel|laser))\b/i;
 const URGENT = /\b(urgent(ly)?|asap|as soon as possible|today|tonight|emergency|right away|leak(ing)?|dripping|not working|broken down|stopped working)\b/i;
 const VULNERABLE = /\b(elderly|baby|newborn|disabled|pregnant|vulnerable|poorly|oxygen)\b/i;
 const COMPLAINT = /\b(complain|complaint|not happy|unhappy|disappointed|refund|still broken|came back|botched|shoddy)\b/i;

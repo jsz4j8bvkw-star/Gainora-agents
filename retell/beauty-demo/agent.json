@@ -1,0 +1,136 @@
+{
+  "agent_name": "Willow Skin & Beauty receptionist (demo)",
+  "response_engine": {
+    "type": "retell-llm",
+    "llm_id": "FILLED_IN_AFTER_CREATING_THE_LLM"
+  },
+  "voice_id": "CHOOSE_IN_DASHBOARD",
+  "language": "en-GB",
+  "voice_temperature": 1.1,
+  "voice_speed": 1,
+  "responsiveness": 0.9,
+  "interruption_sensitivity": 0.8,
+  "enable_backchannel": true,
+  "backchannel_frequency": 0.6,
+  "backchannel_words": [
+    "mm-hmm",
+    "yes",
+    "of course",
+    "okay"
+  ],
+  "boosted_keywords": [
+    "Willow Skin & Beauty",
+    "Free consultation",
+    "Anti-wrinkle treatment",
+    "Lip filler",
+    "HydraFacial",
+    "Laser hair removal",
+    "Lash lift and tint",
+    "Gel nails",
+    "Amy",
+    "Leah",
+    "Jess"
+  ],
+  "ambient_sound": null,
+  "end_call_after_silence_ms": 30000,
+  "max_call_duration_ms": 900000,
+  "data_storage_setting": "everything",
+  "post_call_analysis_data": [
+    {
+      "type": "system-presets",
+      "name": "call_summary"
+    },
+    {
+      "type": "string",
+      "name": "caller_name",
+      "description": "The caller’s full name, as they spelled it.",
+      "examples": [
+        "Chloe Martin"
+      ],
+      "required": false
+    },
+    {
+      "type": "string",
+      "name": "callback_number",
+      "description": "The best number to call the caller back on, if different from the number they called from.",
+      "required": false
+    },
+    {
+      "type": "string",
+      "name": "email",
+      "description": "The caller’s email address, only if they gave one.",
+      "required": false
+    },
+    {
+      "type": "enum",
+      "name": "new_or_returning",
+      "description": "Whether the caller is a new or returning client.",
+      "choices": [
+        "new",
+        "returning",
+        "unknown"
+      ],
+      "required": false
+    },
+    {
+      "type": "string",
+      "name": "appointment_type",
+      "description": "What they wanted to book, using the business's appointment names: Free consultation, Anti-wrinkle treatment, Lip filler, HydraFacial, Laser hair removal, Lash lift and tint, Gel nails.",
+      "required": false
+    },
+    {
+      "type": "string",
+      "name": "preferred_times",
+      "description": "The days and times that suit them, in their words.",
+      "required": false
+    },
+    {
+      "type": "enum",
+      "name": "call_type",
+      "description": "The main reason for the call.",
+      "choices": [
+        "new booking",
+        "consultation",
+        "patch test",
+        "returning client booking",
+        "move appointment",
+        "cancel appointment",
+        "running late",
+        "price or treatment question",
+        "medical question",
+        "aftercare question",
+        "concern after treatment",
+        "complaint",
+        "gift voucher",
+        "group booking",
+        "waiting list",
+        "message for the team",
+        "opening hours or directions",
+        "job, supplier or delivery",
+        "sales call",
+        "wrong number",
+        "other"
+      ],
+      "required": false
+    },
+    {
+      "type": "boolean",
+      "name": "booked",
+      "description": "True only if a specific day and time was agreed on the call.",
+      "required": false
+    },
+    {
+      "type": "boolean",
+      "name": "urgent_concern",
+      "description": "True if the caller described any concern after a treatment from the safety list.",
+      "required": false
+    },
+    {
+      "type": "boolean",
+      "name": "demo_lead",
+      "description": "True if the caller asked about getting this receptionist for their own business.",
+      "required": false
+    }
+  ],
+  "voicemail_option": null
+}

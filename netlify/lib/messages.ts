@@ -57,7 +57,7 @@ export async function runAutomations(userId: string, only?: string[], now = new 
   const [srow] = await db<any[]>(`capture_settings?select=data,completed_at&user_id=eq.${userId}`);
   const s = withDefaults({ ...(srow?.data ?? {}), completedAt: srow?.completed_at ?? srow?.data?.completedAt });
   if (!s.completedAt) return 0;
-  const since = new Date(now.getTime() - 60 * 86_400_000).toISOString();
+  const since = new Date(now.getTime() - 140 * 86_400_000).toISOString();   // long enough for “time to rebook” at up to 16 weeks
   const filter = only?.length ? `id=in.(${only.join(',')})` : `status=in.(new,replied,booked,quoted,won)&received_at=gte.${since}`;
   const rows = await db<any[]>(`enquiries?select=*&user_id=eq.${userId}&is_test=eq.false&${filter}&limit=500`);
   if (!rows.length) return 0;
@@ -65,9 +65,10 @@ export async function runAutomations(userId: string, only?: string[], now = new 
   const msgs = (await db<any[]>(`messages?select=enquiry_id,direction,key,status,created_at,automatic&user_id=eq.${userId}&enquiry_id=in.(${ids.join(',')})`)).map(toLite);
   const optOuts = new Set((await db<any[]>(`opt_outs?select=phone&user_id=eq.${userId}`)).map((o) => o.phone));
   let count = 0;
+  const all = rows.map(toRecord);
   for (const row of rows) {
     let e: EnquiryRecord = toRecord(row);
-    const drafts = dueNow(e, s, msgs, optOuts.has(normPhone(e.phone)), now);
+    const drafts = dueNow(e, s, msgs, optOuts.has(normPhone(e.phone)), now, all);
     let changed = false;
     for (const d of drafts) {
       const made = await queue(userId, s, d);

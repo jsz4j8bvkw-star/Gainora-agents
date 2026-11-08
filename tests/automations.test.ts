@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { applyPatch, withDefaults, type EnquiryRecord } from '../shared/capture';
-import { dueNow, keyword, outOfQuietHours, ownerAlert, render, smsParts, upcoming, type MessageLite } from '../shared/automations';
+import { defaultAutomations, dueNow, keyword, outOfQuietHours, ownerAlert, render, smsParts, upcoming, type MessageLite } from '../shared/automations';
 import { CLINIC_SETTINGS, DEMO_SETTINGS } from '../src/lib/demo';
 
 const clinic = withDefaults(structuredClone(CLINIC_SETTINGS));
@@ -91,4 +91,24 @@ test('wording, owner alerts and keywords', () => {
   assert.equal(dueNow(rec({ urgency: 'emergency' }), clinic, [], false, new Date('2026-11-08T09:00:10Z')).length, 0);
   // Test enquiries and spam never get messages.
   assert.equal(dueNow(rec({ isTest: true }), trade, [], false, new Date('2026-11-08T09:00:10Z')).length, 0);
+});
+
+test('aftercare check-in and rebook: after an attended appointment, never if they already came back', async () => {
+  const { BEAUTY_SETTINGS } = await import('../src/lib/demo');
+  const { applyPatch } = await import('../shared/capture');
+  const s = structuredClone(BEAUTY_SETTINGS);
+  s.automations = defaultAutomations('appointments', '2026-01-01T00:00:00Z');
+  const base: any = { id: 'e1', name: 'Rosie Turner', phone: '+447700900419', email: '', channel: 'call', status: 'new', urgency: 'normal', kind: 'booking', receivedAt: '2026-09-01T10:00:00Z', history: [], summary: 'Lip filler', transcript: '', postcode: '', reasons: [], afterHours: false, notes: '', isTest: false, chasersSent: 0, paymentRemindersSent: 0, quoteAmount: null, quotedAt: null, bookedFor: null, jobValue: null, invoiceDue: null, paidAt: null, reviewAskedAt: null, repliedAt: null, externalId: null, recordingUrl: '', bookedType: 'Lip filler', bookedWith: 'Amy' };
+  let e = applyPatch(base, { status: 'booked', bookedFor: '2026-09-03T11:00:00Z', bookedType: 'Lip filler', bookedWith: 'Amy' }, s, new Date('2026-09-01T10:05:00Z'));
+  e = applyPatch(e, { status: 'won', jobValue: 250 }, s, new Date('2026-09-03T12:00:00Z'));
+  const day1 = dueNow(e, s, [], false, new Date('2026-09-04T12:30:00Z'));
+  assert.ok(day1.some((d) => d.workflow === 'aftercare' && /checking in after your lip filler appointment/.test(d.body)));
+  assert.ok(!dueNow(e, s, [], false, new Date('2026-09-20T12:00:00Z')).some((d) => d.workflow === 'aftercare'), 'no late check-in');
+  const sixWeeks = new Date('2026-10-15T12:00:00Z');
+  const r = dueNow(e, s, [], false, sixWeeks);
+  assert.ok(r.some((d) => d.workflow === 'rebook' && /Reply STOP/.test(d.body)), 'rebook goes out with opt-out');
+  const back: any = { ...base, id: 'e2', receivedAt: '2026-10-01T09:00:00Z' };
+  assert.ok(!dueNow(e, s, [], false, sixWeeks, [e, back]).some((d) => d.workflow === 'rebook'), 'no rebook if they came back');
+  const trade = structuredClone(s); trade.business.kind = 'trade';
+  assert.ok(!dueNow({ ...e }, trade, [], false, sixWeeks).some((d) => d.workflow === 'rebook' || d.workflow === 'aftercare'), 'not for trades');
 });

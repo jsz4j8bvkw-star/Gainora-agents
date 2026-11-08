@@ -5,8 +5,8 @@
 // each one on or off, edits the wording and timing, and marks any step "ask me first".
 import { applyPatch, findPostcode, normPhone, type BusinessKind, type CaptureSettings, type EnquiryPatch, type EnquiryRecord } from './capture';
 
-export type WorkflowId = 'ack' | 'booking' | 'quote' | 'payment' | 'review';
-export type StepId = 'ack' | 'confirm' | 'reminder' | 'chase1' | 'chase2' | 'pay1' | 'pay2' | 'pay3' | 'review';
+export type WorkflowId = 'ack' | 'booking' | 'quote' | 'payment' | 'review' | 'aftercare' | 'rebook';
+export type StepId = 'ack' | 'confirm' | 'reminder' | 'chase1' | 'chase2' | 'pay1' | 'pay2' | 'pay3' | 'review' | 'checkin' | 'rebook';
 export type MsgChannel = 'text' | 'email' | 'both';
 
 export interface StepSetting { on: boolean; channel: MsgChannel; ask: boolean; text: string; subject: string; wait: number }
@@ -25,7 +25,7 @@ export interface StepDef {
   text: (kind: BusinessKind) => string;
   subject: (kind: BusinessKind) => string;
 }
-export interface WorkflowDef { id: WorkflowId; title: (k: BusinessKind) => string; blurb: (k: BusinessKind) => string; defaultOn: (k: BusinessKind) => boolean; steps: StepDef[] }
+export interface WorkflowDef { id: WorkflowId; title: (k: BusinessKind) => string; blurb: (k: BusinessKind) => string; defaultOn: (k: BusinessKind) => boolean; steps: StepDef[]; /** Shown only for this kind of business. */ only?: BusinessKind }
 
 export const OPT_OUT_LINE = 'Reply STOP to stop these messages.';
 export const QUIET_FROM = 20;   // 8pm
@@ -34,6 +34,7 @@ export const WEEKLY_CAP = 4;    // automatic messages per customer in 7 days, no
 
 const appt = (k: BusinessKind) => k === 'appointments';
 const NOW_ONLY: WaitOption[] = [{ value: 0, label: 'Straight away' }];
+const weeks = (...w: number[]): WaitOption[] => w.map((n) => ({ value: n * 7, label: `${n} weeks after` }));
 const days = (...d: number[]): WaitOption[] => d.map((n) => ({ value: n, label: n === 0 ? 'On the day' : `${n} ${n === 1 ? 'day' : 'days'}` }));
 
 export const WORKFLOWS: WorkflowDef[] = [
@@ -110,6 +111,26 @@ export const WORKFLOWS: WorkflowDef[] = [
         ? 'Hi {first name}, thank you for visiting {business}. We hope you’re feeling the benefit.[ If you have a minute, a Google review really helps us: {review link}]'
         : 'Hi {first name}, thanks for choosing {business}. I hope everything’s working well.[ If you have a minute, a Google review really helps a small business like ours: {review link}] {owner}',
       subject: () => 'Thank you from {business}',
+    }],
+  },
+  {
+    id: 'aftercare', title: () => 'Checking in after a treatment', only: 'appointments',
+    blurb: () => 'A short, caring message a day or two after the appointment. If anything doesn’t feel right, they reply and it comes straight to you.',
+    defaultOn: () => true,
+    steps: [{
+      id: 'checkin', title: 'Aftercare check-in', waits: days(1, 2, 3), defaultWait: 1,
+      text: () => 'Hi {first name}, just checking in after your [{appointment} ]appointment at {business}. We hope you’re happy! If anything doesn’t feel quite right, reply here[ or call us on {phone}] and we’ll help.',
+      subject: () => 'How are you getting on?',
+    }],
+  },
+  {
+    id: 'rebook', title: () => 'Inviting them back', only: 'appointments',
+    blurb: () => 'A friendly nudge when it’s time for their next appointment. Never sent if they’ve already booked again, and it stops if they reply.',
+    defaultOn: () => true,
+    steps: [{
+      id: 'rebook', title: 'Time to rebook', waits: weeks(4, 6, 8, 12, 16), defaultWait: 42, marketing: true,
+      text: () => 'Hi {first name}, it’s been a little while since your [{appointment} ]appointment at {business}. Would you like to book your next one? Just reply here[ or call us on {phone}].',
+      subject: () => 'Time for your next appointment?',
     }],
   },
 ];
@@ -270,6 +291,13 @@ export function schedule(e: EnquiryRecord, s: CaptureSettings): Due[] {
       out.push({ wf: 'payment', step: st, key: `${st}@${e.invoiceDue.slice(0, 10)}`, anchor, sendAt: new Date(due + w * dayMs).toISOString(), patch: { paymentReminderSent: true } });
     }
   }
+  if (e.status === 'won' && kind === 'appointments') {
+    const attended = lastHistory(e, /^(Job done|Attended)/) ?? e.receivedAt;
+    const wc = s.automations?.aftercare?.steps?.checkin?.wait ?? 1;
+    out.push({ wf: 'aftercare', step: 'checkin', key: `checkin@${attended.slice(0, 10)}`, anchor: attended, sendAt: new Date(new Date(attended).getTime() + wc * dayMs).toISOString(), patch: null });
+    const wr = s.automations?.rebook?.steps?.rebook?.wait ?? 42;
+    out.push({ wf: 'rebook', step: 'rebook', key: `rebook@${attended.slice(0, 10)}`, anchor: attended, sendAt: new Date(new Date(attended).getTime() + wr * dayMs).toISOString(), patch: null });
+  }
   if (e.status === 'won' && !e.reviewAskedAt && (e.paidAt || !e.invoiceDue)) {
     const anchor = e.paidAt ?? lastHistory(e, /^(Job done|Attended)/) ?? e.receivedAt;
     const w = s.automations?.review?.steps?.review?.wait ?? 1;
@@ -284,7 +312,7 @@ export function schedule(e: EnquiryRecord, s: CaptureSettings): Due[] {
  * sent already; no texts to someone who replied STOP; chasers, payment and review messages pause once the
  * customer has replied; quiet hours (except instant replies); at most WEEKLY_CAP automatic messages a week.
  */
-export function dueNow(e: EnquiryRecord, s: CaptureSettings, msgs: MessageLite[], optedOut: boolean, now = new Date()): Draft[] {
+export function dueNow(e: EnquiryRecord, s: CaptureSettings, msgs: MessageLite[], optedOut: boolean, now = new Date(), others: EnquiryRecord[] = []): Draft[] {
   const auto = s.automations;
   if (!auto) return [];
   const mine = msgs.filter((m) => m.enquiryId === e.id);
@@ -307,7 +335,14 @@ export function dueNow(e: EnquiryRecord, s: CaptureSettings, msgs: MessageLite[]
     // Don't send something that's out of date: a confirmation more than a day late, a reminder after the booking.
     if (def.immediate && now.getTime() - new Date(d.sendAt).getTime() > 86_400_000) continue;
     if (d.step === 'reminder' && e.bookedFor && new Date(e.bookedFor).getTime() < now.getTime()) continue;
-    if (['quote', 'payment', 'review'].includes(d.wf) && lastIn && new Date(lastIn) > new Date(d.anchor)) continue;
+    if (['quote', 'payment', 'review', 'rebook'].includes(d.wf) && lastIn && new Date(lastIn) > new Date(d.anchor)) continue;
+    // No "time to rebook" for someone who has already been back in touch since.
+    if (d.wf === 'rebook') {
+      const me = normPhone(e.phone);
+      if (others.some((o) => o.id !== e.id && ((me && normPhone(o.phone) === me) || (e.email && o.email === e.email)) && new Date(o.receivedAt) > new Date(d.anchor))) continue;
+      if (now.getTime() - new Date(d.sendAt).getTime() > 21 * 86_400_000) continue;   // too late to be useful
+    }
+    if (d.wf === 'aftercare' && now.getTime() - new Date(d.sendAt).getTime() > 2 * 86_400_000) continue;   // a check-in a week late isn't caring
     if (!/^(confirm|reminder)$/.test(d.step) && recent >= WEEKLY_CAP) continue;
     const phone = normPhone(e.phone);
     const channels: ('text' | 'email')[] = st.channel === 'both' ? ['text', 'email'] : [st.channel];

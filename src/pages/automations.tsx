@@ -89,7 +89,7 @@ function Messages() {
 
       <OwnerAlerts save={save} />
 
-      {WORKFLOWS.map((w) => <WorkflowCard key={w.id} def={w} save={save} />)}
+      {WORKFLOWS.filter((w) => !w.only || w.only === settings.business.kind).map((w) => <WorkflowCard key={w.id} def={w} save={save} />)}
     </div>
   );
 }
