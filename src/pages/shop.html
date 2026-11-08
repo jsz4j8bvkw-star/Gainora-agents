@@ -1,0 +1,142 @@
+<!--meta {"title": "Shop: course, AI agents and digital products | {brand}", "description": "The AI for Business course, specialist AI agents and ready-to-use business tools. See prices, join the pilot or get early access.", "path": "/shop/", "nav": "shop"} -->
+<header class="page-head shop-head">
+  <div class="container">
+    <h1>The {{brand.name}} shop</h1>
+    <p class="lede">Training, AI agents and ready-made tools for fixing problems yourself. Pick what you need, see the price and get started.</p>
+    <nav class="shop-jump" aria-label="Shop sections">
+      <a href="#course">Course</a>
+      <a href="#agents">AI agents</a>
+      <a href="#products">Digital products</a>
+      <a href="#services">Done for you</a>
+    </nav>
+  </div>
+</header>
+
+<section class="section shop-section" id="course" aria-labelledby="course-title">
+  <div class="container">
+    <div class="shop-section-head">
+      <h2 id="course-title">Course</h2>
+      <p class="muted">Learn to use AI tools properly at work, with practical exercises instead of theory.</p>
+    </div>
+    <div class="course-feature">
+      {{{shopHtml.course}}}
+      <div class="course-modules">
+        <h3>What's inside</h3>
+        <ol class="curriculum curriculum-compact">
+          <li>What AI can and cannot do</li>
+          <li>Using ChatGPT, Claude and similar tools</li>
+          <li>Giving AI effective instructions</li>
+          <li>Business research with AI</li>
+          <li>Writing and administrative work</li>
+          <li>AI for internal workflows</li>
+          <li>Practical automation</li>
+          <li>Analysing business information</li>
+          <li>Data privacy and responsible use</li>
+          <li>Creating your AI improvement plan</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section section-deep shop-section" id="agents" aria-labelledby="agents-title">
+  <div class="container">
+    <div class="shop-section-head">
+      <h2 id="agents-title">AI agents</h2>
+      <p class="muted">Specialist agents that each do one job well, on a monthly plan. Early-access members lock in the founding price.</p>
+    </div>
+    {{{shopHtml.agents}}}
+  </div>
+</section>
+
+<section class="section shop-section" id="products" aria-labelledby="products-title">
+  <div class="container">
+    <div class="shop-section-head">
+      <h2 id="products-title">Digital products</h2>
+      <p class="muted">Ready-to-use systems and templates for the problems we see most often. Pay once, keep them.</p>
+    </div>
+    {{{shopHtml.products}}}
+  </div>
+</section>
+
+<section class="section section-deep shop-section" id="services" aria-labelledby="services-title">
+  <div class="container">
+    <div class="shop-section-head">
+      <h2 id="services-title">Rather we did it for you?</h2>
+      <p class="muted">Our services are scoped around your business, so you request them and we confirm the price before anything starts.</p>
+    </div>
+    <div class="shop-grid">
+      <article class="shop-card shop-services">
+        <div class="shop-card-top"><span class="shop-cat">Service</span><span class="status status-available">Available now</span></div>
+        <h3 class="shop-name">Business Diagnosis</h3>
+        <p class="shop-tagline">Find out what isn't working and get a clear, prioritised plan to fix it.</p>
+        <p class="shop-price"><span class="from">from</span><span class="amount">{{prices.diagnosis}}</span></p>
+        <ul class="shop-features"><li>Investigation of one business area</li><li>Findings with evidence</li><li>Priorities and recommendations</li><li>Walkthrough of your report</li></ul>
+        <div class="shop-actions"><a class="button button-primary shop-button" href="/contact/">Request a diagnosis</a><a class="text-link" href="/diagnosis/">Details</a></div>
+      </article>
+      <article class="shop-card shop-services">
+        <div class="shop-card-top"><span class="shop-cat">Service</span><span class="status status-available">Available now</span></div>
+        <h3 class="shop-name">Website improvements</h3>
+        <p class="shop-tagline">Fix the parts of your website that get in the way of customers.</p>
+        <p class="shop-price"><span class="from">from</span><span class="amount">{{prices.website}}</span></p>
+        <ul class="shop-features"><li>Agreed pages or journeys</li><li>Better enquiry forms</li><li>Mobile and speed fixes</li><li>Tested on a preview first</li></ul>
+        <div class="shop-actions"><a class="button button-primary shop-button" href="/contact/?type=website">Request a quote</a><a class="text-link" href="/solutions/#website">Details</a></div>
+      </article>
+      <article class="shop-card shop-services">
+        <div class="shop-card-top"><span class="shop-cat">Service</span><span class="status status-available">Available now</span></div>
+        <h3 class="shop-name">Business automation</h3>
+        <p class="shop-tagline">Take repetitive admin off your team and stop work falling through the gaps.</p>
+        <p class="shop-price"><span class="from">from</span><span class="amount">{{prices.automation}}</span></p>
+        <ul class="shop-features"><li>Enquiry tracking and reminders</li><li>Onboarding and handoffs</li><li>Connecting your existing tools</li><li>Documented and tested with you</li></ul>
+        <div class="shop-actions"><a class="button button-primary shop-button" href="/contact/?type=automation">Request a quote</a><a class="text-link" href="/solutions/#automation">Details</a></div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section class="section shop-join" id="join" aria-labelledby="join-title">
+  <div class="container form-layout">
+    <div class="form-aside">
+      <h2 id="join-title">Join the list</h2>
+      <p class="muted">Choose what you'd like and leave your email. Joining is free: we'll email you the details and the price before asking you to pay anything.</p>
+      <ul class="shop-assurances">
+        <li>No payment to join</li>
+        <li>One email when it's ready, nothing else unless you ask</li>
+        <li>Remove your details any time</li>
+      </ul>
+    </div>
+    <div class="form-main">
+      <form class="form js-form" name="shop-signup" method="POST" action="/thanks/" data-netlify="true" netlify-honeypot="bot-field" novalidate>
+        <input type="hidden" name="form-name" value="shop-signup">
+        <p class="honeypot" aria-hidden="true"><label>Leave this empty <input name="bot-field" tabindex="-1" autocomplete="off"></label></p>
+        <div class="field">
+          <label for="join-item">What would you like?</label>
+          <select id="join-item" name="item" required aria-describedby="join-item-error">
+            <option value="">Choose one</option>
+            {{{shopHtml.joinOptions}}}
+          </select>
+          <span class="field-error" id="join-item-error"></span>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="join-name">Your name</label>
+            <input id="join-name" name="name" autocomplete="name" required maxlength="120" aria-describedby="join-name-error">
+            <span class="field-error" id="join-name-error"></span>
+          </div>
+          <div class="field">
+            <label for="join-email">Email</label>
+            <input id="join-email" name="email" type="email" autocomplete="email" required maxlength="200" aria-describedby="join-email-error">
+            <span class="field-error" id="join-email-error"></span>
+          </div>
+        </div>
+        <div class="check-field">
+          <input id="join-consent" name="consent" type="checkbox" value="yes" required aria-describedby="join-consent-error">
+          <label for="join-consent">Email me about this. See our <a href="/privacy/">privacy policy</a>.</label>
+        </div>
+        <span class="field-error" id="join-consent-error"></span>
+        <div class="form-status" role="status" aria-live="polite"></div>
+        <div><button class="button button-primary" type="submit">Join the list</button></div>
+      </form>
+    </div>
+  </div>
+</section>
