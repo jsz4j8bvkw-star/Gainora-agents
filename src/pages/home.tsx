@@ -67,7 +67,7 @@ export function Home() {
           <h1 className="display">{greeting()}, {firstName}.</h1>
           <p className="lede"><span className="lede-date">{longDate()}. </span>Here’s where {profile.business.name} stands and what to do first.</p>
         </div>
-        <Link to="/ask" className="btn btn-secondary"><Icon name="ask" />Ask a question</Link>
+        <Link to="/ask" className="btn btn-secondary hide-phone"><Icon name="ask" />Ask a question</Link>
       </div>
 
       <section className="today" aria-labelledby="today-h">

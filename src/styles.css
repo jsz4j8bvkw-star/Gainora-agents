@@ -201,7 +201,7 @@ p { margin: 0; }
 .topbar { display: none; }
 .tabbar { display: none; }
 .lede-date { display: none; }
-@media (max-width: 900px) { .lede-date { display: inline; } }
+@media (max-width: 900px) { .lede-date { display: inline; } .hide-phone { display: none !important; } }
 
 .demo-flag {
   display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap;

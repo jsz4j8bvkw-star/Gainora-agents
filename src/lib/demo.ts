@@ -215,10 +215,10 @@ function seed(s: DemoState) {
   const query = p.goals.focus === 'Find new wholesale or B2B clients'
     ? 'Independent shops that could stock our products'
     : `Businesses near ${town} that could refer customers to us`;
-  const results = makeResults(41, 10).map((x, i) => ({ ...x, saved: i < 3 }));
+  const results = makeResults(41, 10, ['the linen cupboard']).map((x, i) => ({ ...x, saved: i < 3 })); // The Linen Cupboard is already a won lead
   s.scout = [{
     id: uid('s_'), query, area: 'South West England', createdAt: iso(now - DAY), status: 'ready', kind: 'customers',
-    summary: 'Ten businesses matched. Five are a strong fit: they already stock independent makers and have a public way to contact the buyer.',
+    summary: 'Nine businesses matched. Five are a strong fit: they already stock independent makers and have a public way to contact the buyer.',
     results,
   }];
   const today9 = new Date(); today9.setHours(9, 0, 0, 0);
