@@ -271,7 +271,7 @@ function Reviews({ data, setData }: { data: WatcherState; setData: (w: WatcherSt
       {reply && (
         <Modal title={`Reply to ${reply.review.author}`} onClose={() => setReply(null)}
           footer={reply.text && <>
-            <a className="btn btn-secondary" href={rv.mapsUrl} target="_blank" rel="noreferrer">Open Google listing</a>
+            <a className="btn btn-secondary" href={rv.mapsUrl} target="_blank" rel="noreferrer">Open my listing</a>
             <Button icon="copy" onClick={async () => toast((await copyText(reply.text!)) ? 'Copied. Paste it as your reply on Google.' : 'Select the text and copy it manually.')}>Copy reply</Button>
           </>}>
           {reply.text ? <pre>{reply.text}</pre> : <Loading label={`Writing a reply to ${reply.review.author.split(' ')[0]}`} />}

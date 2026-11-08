@@ -61,7 +61,7 @@ Run `supabase/migrations/20261107_gainora_agents_v2.sql` in the SQL Editor (it o
 npm install
 npm run build:demo   # demo with sample data in dist-demo/
 npm run build        # production build in dist/
-npm test             # 33 tests: page parsing and diffing, Brief maths, validation, Stripe signatures, Scout filtering and learning,
+npm test             # 40 tests: page parsing and diffing, Brief maths and priorities, the ranked Today list, Ask sources, validation, Stripe signatures, Scout filtering and learning,
                      # results maths, speed-test parsing, contract parsing and matching, price checks, follow-up dates,
                      # review tracking, a real crawl against a local site, the webhook, and the lead pipeline end to end
 npm run typecheck
