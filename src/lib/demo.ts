@@ -3,7 +3,7 @@
 import type { Api } from './api';
 import type { CaptureSettings, EnquiryRecord, MessageRecord, Source, User } from './types';
 import { afterSend, defaultAutomations, dueNow, fieldsFor, ownerAlert, patchForStep, render, stepDef, type MessageLite, type StepId, type WorkflowId } from '../../shared/automations';
-import { applyPatch, DEFAULT_BEAUTY_SAFETY, DEFAULT_GREETING, DEFAULT_SAFETY, greetingFor, isAfterHours, isBeauty, lines, normaliseEnquiry, rebookWeeksFor, triage } from '../../shared/capture';
+import { applyPatch, bookedOnCall, DEFAULT_BEAUTY_SAFETY, DEFAULT_GREETING, DEFAULT_SAFETY, greetingFor, isAfterHours, isBeauty, lines, normaliseEnquiry, rebookWeeksFor, triage } from '../../shared/capture';
 import { suggestReply } from '../../shared/insight';
 import { uid } from './format';
 
@@ -328,11 +328,10 @@ function seedMessages(list: EnquiryRecord[], s: CaptureSettings, sample: Sample)
   };
   for (const e of list) {
     if (e.status === 'spam' || e.isTest) continue;
-    const bookedOnCall = e.history.some((h) => /^Booked in/.test(h.text) && new Date(h.at).getTime() - new Date(e.receivedAt).getTime() < 15 * 60_000);
     if (e.urgency !== 'normal' && s.calls.alertText !== 'off' && (s.calls.alertText === 'urgent' || e.urgency === 'emergency')) {
       out.push(msg({ enquiryId: e.id, direction: 'out', audience: 'owner', channel: 'text', to: s.business.alertMobile, body: ownerAlert(e, s), createdAt: later(e.receivedAt, 8), automatic: true, workflow: 'owner_alert', key: 'owner-alert' }));
     }
-    if (!bookedOnCall && !(e.urgency === 'emergency' && s.business.kind === 'appointments')) auto(e, 'ack', 'ack', 'ack', later(e.receivedAt, 20));
+    if (!bookedOnCall(e) && !(e.urgency === 'emergency' && s.business.kind === 'appointments')) auto(e, 'ack', 'ack', 'ack', later(e.receivedAt, 20));
     for (const h of e.history) {
       if (/^Booked in/.test(h.text) && e.bookedFor) {
         auto(e, 'booking', 'confirm', `confirm@${e.bookedFor}`, later(h.at, 20));

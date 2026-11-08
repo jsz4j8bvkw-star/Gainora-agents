@@ -3,7 +3,7 @@
 //
 // The owner doesn't build flows. Gainora ships a fixed set of well-made workflows; the owner switches
 // each one on or off, edits the wording and timing, and marks any step "ask me first".
-import { applyPatch, findPostcode, normPhone, rebookWeeksFor, type BusinessKind, type CaptureSettings, type EnquiryPatch, type EnquiryRecord } from './capture';
+import { applyPatch, bookedOnCall, findPostcode, normPhone, rebookWeeksFor, type BusinessKind, type CaptureSettings, type EnquiryPatch, type EnquiryRecord } from './capture';
 
 export type WorkflowId = 'ack' | 'booking' | 'quote' | 'payment' | 'review' | 'aftercare' | 'rebook';
 export type StepId = 'ack' | 'confirm' | 'reminder' | 'chase1' | 'chase2' | 'pay1' | 'pay2' | 'pay3' | 'review' | 'checkin' | 'rebook';
@@ -261,9 +261,8 @@ export function schedule(e: EnquiryRecord, s: CaptureSettings): Due[] {
   if (e.isTest || e.status === 'spam' || e.kind === 'spam') return out;
   // Thank-you: for enquiries not booked on the call, not logged by the owner, and not clinic emergencies
   // (those callers have been told to get urgent help, not "we'll find you an appointment").
-  const bookedOnCall = e.history.some((h) => /^Booked in/.test(h.text) && new Date(h.at).getTime() - new Date(e.receivedAt).getTime() < 15 * 60_000);
   const loggedByOwner = e.history.some((h) => h.text === 'Logged by you');
-  if (!bookedOnCall && !loggedByOwner && !(e.urgency === 'emergency' && kind === 'appointments')) {
+  if (!bookedOnCall(e) && !loggedByOwner && !(e.urgency === 'emergency' && kind === 'appointments')) {
     out.push({ wf: 'ack', step: 'ack', key: 'ack', anchor: e.receivedAt, sendAt: e.receivedAt, patch: null });
   }
   if (e.status === 'booked' && e.bookedFor) {

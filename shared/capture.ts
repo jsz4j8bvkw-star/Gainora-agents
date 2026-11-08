@@ -727,6 +727,10 @@ export function applyPatch(e: EnquiryRecord, p: EnquiryPatch, settings: (Pick<Ca
   return next;
 }
 
+/** Booked by the receptionist during the call itself (or within minutes of it), rather than by the owner later. */
+export const bookedOnCall = (e: Pick<EnquiryRecord, 'history' | 'receivedAt'>) =>
+  e.history.some((h) => /^Booked in/.test(h.text) && new Date(h.at).getTime() - new Date(e.receivedAt).getTime() < 15 * 60_000);
+
 /* ---------- The follow-up queue ---------- */
 
 export type FollowKind = 'quote' | 'payment' | 'review';
@@ -770,6 +774,8 @@ export interface Report {
   bookedValue: number; bookedValueFrom: boolean; bookedValued: number;
   afterHoursBooked: number; afterHoursValue: number;
   noShows: number; unanswered: number;
+  /** Bookings the receptionist made on the call itself. Left out of the owner's reply-time figures. */
+  onCall: number;
   byChannel: Record<Channel, number>;
   byWeek: { weekOf: string; inHours: number; afterHours: number }[];
   byDay: number[];   // enquiries by day of week, Monday first
@@ -780,7 +786,9 @@ const mondayIso = (iso: string) => { const d = new Date(iso); const day = (d.get
 export function report(list: EnquiryRecord[], from: Date, to: Date, settings?: Pick<CaptureSettings, 'bookings'>, now = new Date()): Report {
   const inRange = list.filter((e) => !e.isTest && new Date(e.receivedAt) >= from && new Date(e.receivedAt) < to);
   const real = inRange.filter((e) => e.status !== 'spam');
-  const replyMins = real.filter((e) => e.repliedAt).map((e) => Math.max(0, (new Date(e.repliedAt!).getTime() - new Date(e.receivedAt).getTime()) / 60000)).sort((a, b) => a - b);
+  const onCall = real.filter(bookedOnCall);
+  // Reply time measures the owner, so calls the receptionist settled herself are left out.
+  const replyMins = real.filter((e) => e.repliedAt && !bookedOnCall(e)).map((e) => Math.max(0, (new Date(e.repliedAt!).getTime() - new Date(e.receivedAt).getTime()) / 60000)).sort((a, b) => a - b);
   const median = replyMins.length ? replyMins[Math.floor((replyMins.length - 1) / 2)] : null;
   const won = real.filter((e) => e.status === 'won');
   const byChannel = { call: 0, form: 0, email: 0, text: 0 } as Record<Channel, number>;
@@ -808,6 +816,7 @@ export function report(list: EnquiryRecord[], from: Date, to: Date, settings?: P
     afterHoursValue: afterHoursBooked.reduce((a, e) => a + (settings ? enquiryValue(e, settings)?.amount ?? 0 : e.jobValue ?? 0), 0),
     noShows: inRange.filter((e) => e.history.some(isNoShow)).length,
     unanswered: real.filter((e) => e.status === 'new' && now.getTime() - new Date(e.receivedAt).getTime() > DAY_MS).length,
+    onCall: onCall.length,
     byChannel, byWeek: [...weeks.entries()].map(([weekOf, v]) => ({ weekOf, ...v })), byDay,
   };
 }

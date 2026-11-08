@@ -70,7 +70,7 @@ export function ReportPage() {
           <div className="stat"><span className="stat-label">Enquiries caught</span><span className="stat-value">{r.caught}</span><span className="stat-note">{r.spam ? `${plural(r.spam, 'spam call', 'spam calls')} kept out` : 'Spam is left out'}</span></div>
           <div className="stat"><span className="stat-label">While you were closed</span><span className="stat-value">{r.afterHours}</span><span className="stat-note">{r.caught ? `${Math.round((r.afterHours / r.caught) * 100)}% of all enquiries` : '–'}</span></div>
           <div className="stat"><span className="stat-label">Emergencies flagged</span><span className="stat-value">{r.emergencies}</span><span className="stat-note">Sent to you straight away</span></div>
-          <div className="stat"><span className="stat-label">Typical reply time</span><span className="stat-value">{replyTime(r.medianReplyMins)}</span><span className="stat-note">{r.replied ? `${Math.round((r.within1h / r.replied) * 100)}% within an hour` : 'Not enough replies yet'}</span></div>
+          <div className="stat"><span className="stat-label">Your typical reply time</span><span className="stat-value">{replyTime(r.medianReplyMins)}</span><span className="stat-note">{r.replied ? `${Math.round((r.within1h / r.replied) * 100)}% within an hour` : 'Not enough replies yet'}{r.onCall ? ` · ${r.onCall} settled on the call` : ''}</span></div>
         </div>
         <div className="stats" style={{ borderTop: '1px solid var(--line)' }}>
           {appts ? <>
