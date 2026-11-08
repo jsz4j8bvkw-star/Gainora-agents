@@ -41,7 +41,7 @@ No migration. Everything new lives in `watcher_state.state.competitors` (JSON) a
 | --- | --- |
 | `445e5f1` | Shared competitor logic, Google nearby search and coordinates, Instagram Business Discovery parsing, the server-side Meta token, the daily reach check, wiring into the Watcher run |
 | `28ca59f` | Competitors tab, owner actions (`/api/competitors`), Today/Brief/Ask hooks, optional competitors in the questionnaire, demo data, 16 tests |
-| (this commit) | Recent Instagram posts on the card, README, `.env.example`, `META-SETUP.md`, this file |
+| `1fb572f` | Recent Instagram posts on the card, README, `.env.example`, `META-SETUP.md`, this file |
 
 ## What you must do
 
