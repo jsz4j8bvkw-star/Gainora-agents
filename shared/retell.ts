@@ -143,6 +143,8 @@ export function retellSetup(s: CaptureSettings, o: RetellOptions = {}): RetellSe
       ? ['new booking', 'consultation', 'patch test', 'returning client booking', 'move appointment', 'cancel appointment', 'running late', 'price or treatment question', 'medical question', 'aftercare question', 'concern after treatment', 'complaint', 'gift voucher', 'group booking', 'waiting list', 'message for the team', 'opening hours or directions', 'job, supplier or delivery', 'sales call', 'wrong number', 'other']
       : ['new enquiry', 'booking', 'move or cancel', 'question', 'urgent', 'complaint', 'message', 'sales call', 'wrong number', 'other'], required: false },
     { type: 'boolean', name: 'booked', description: 'True only if a specific day and time was agreed on the call.', required: false },
+    { type: 'string', name: 'booked_for', description: 'If booked: the agreed date and time as ISO 8601 with the UK offset, for example 2026-11-14T10:00:00+00:00. Leave empty if no exact time was agreed.', required: false },
+    { type: 'string', name: 'booked_with', description: 'If booked: the first name of the team member the appointment is with, if one was agreed.', required: false },
     { type: 'boolean', name: 'urgent_concern', description: beauty ? 'True if the caller described any concern after a treatment from the safety list.' : 'True if the call was urgent or an emergency.', required: false },
     ...(o.demo ? [{ type: 'boolean', name: 'demo_lead', description: `True if the caller asked about getting this receptionist for their own business.`, required: false }] : []),
   ];
@@ -173,7 +175,7 @@ export function retellSetup(s: CaptureSettings, o: RetellOptions = {}): RetellSe
   if (!o.voiceId) todo.push('Voice: a British woman’s voice. Audition the British female voices in the dashboard (the expressive, conversational ones, not the newsreader ones) with the test calls, and pick the one that sounds most like a friendly receptionist. Keep the speed at 1, or just under if she sounds rushed.');
   if (!o.webhookUrl) todo.push('Webhook: paste the enquiry link from the app’s Receptionist → Connect tab into the agent’s webhook URL, with only the call_analyzed event, so every call lands in the inbox.');
   if (!s.calls.recording) todo.push('Recording is off for this client: check the data storage setting in the dashboard matches.');
-  if (!o.demo && appts && s.bookings.mode !== 'callback') todo.push(`Diary: connect ${s.bookings.system || 'the booking system'} so the receptionist can see free times${s.bookings.mode === 'book' ? ' and book them' : ''}. Until it's connected, set booking to “Take details, I call back” in the app so it never offers times it can't see.`);
+  if (!o.demo && appts && s.bookings.mode !== 'callback' && s.bookings.status !== 'connected') todo.push(`Diary: connect ${s.bookings.system || 'the booking system'} and mark it connected in the app, so the receptionist can see free times${s.bookings.mode === 'book' ? ' and book them' : ''}. Until then the script makes her take details for a call back, so she never offers times she can't see.`);
   todo.push('Phone number: buy or connect a UK number in Retell and attach this agent to it for inbound calls.');
 
   return { llm, agent, todo };

@@ -120,6 +120,18 @@
       "required": false
     },
     {
+      "type": "string",
+      "name": "booked_for",
+      "description": "If booked: the agreed date and time as ISO 8601 with the UK offset, for example 2026-11-14T10:00:00+00:00. Leave empty if no exact time was agreed.",
+      "required": false
+    },
+    {
+      "type": "string",
+      "name": "booked_with",
+      "description": "If booked: the first name of the team member the appointment is with, if one was agreed.",
+      "required": false
+    },
+    {
       "type": "boolean",
       "name": "urgent_concern",
       "description": "True if the caller described any concern after a treatment from the safety list.",

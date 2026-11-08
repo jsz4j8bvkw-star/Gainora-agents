@@ -141,5 +141,25 @@ test('a booked call gets its confirmation, replies come back in, STOP stops text
     assert.match(texts.at(-1)!.Body, /^EMERGENCY for Lemon Street Physio/);
     // …and the red-flag caller is not sent "we'll find you an appointment".
     assert.ok(!texts.some((x) => x.To === '+447700900312'));
+
+    // The receptionist booked Tom on the call and said when: it lands as a booking and the confirmation goes out,
+    // with no thank-you text on top. The owner has nothing to re-type.
+    const t1 = texts.length;
+    const slot = new Date(Date.now() + 4 * 86_400_000); slot.setUTCHours(16, 30, 0, 0);
+    await enquiryIn(new Request(`http://x/api/enquiry-in/${token}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ event: 'call_analyzed', call: { call_id: 'c10', from_number: '+447700900314', call_analysis: { call_summary: 'Knee rehab follow-up.', custom_analysis_data: { caller_name: 'Tom Baker', call_type: 'booking', booked: true, booked_for: slot.toISOString(), appointment_type: 'Follow-up', booked_with: 'James', new_or_returning: 'returning' } } } }) }));
+    const tom = db.enquiries.find((e) => e.name === 'Tom Baker')!;
+    assert.equal(tom.status, 'booked'); assert.equal(tom.booked_type, 'Follow-up'); assert.equal(tom.booked_with, 'James');
+    assert.equal(tom.summary, 'Knee rehab follow-up. Returning client.');
+    assert.match(tom.history[1].text, /^Booked in on the call for /);
+    assert.equal(texts.length, t1 + 1);
+    assert.match(texts.at(-1)!.Body, /thank you for booking with Lemon Street Physio\. Your follow-up appointment is on .+ at 4:30pm with James/);
+    // His question comes in; the drafted reply answers it from the clinic's own arrival notes, no AI key needed.
+    await twilioPost(smsIn, { From: '+447700900314', To: '+447700900600', Body: 'Great, what should I wear?', MessageSid: 'SMin3' });
+    const draft = await owner(enquiries, { op: 'draft', id: tom.id });
+    assert.match(draft.body.text, /^Hi Tom, good question\. Please wear loose, comfortable clothing and arrive 5 minutes early\. Free parking behind the clinic\. See you on .+ at 4:30pm with James\. Sarah$/);
+    // A no-show is recorded with its reason.
+    const lost = await owner(enquiries, { op: 'update', id: tom.id, status: 'lost', lostReason: 'noshow' });
+    assert.match(lost.body.history.at(-1).text, /^Didn’t turn up for /);
+    assert.equal((await owner(enquiries, { op: 'update', id: tom.id, status: 'lost', lostReason: 'vanished' })).status, 400);
   } finally { console.log = log; globalThis.fetch = realFetch; server.close(); }
 });

@@ -18,6 +18,7 @@ import { applyPatch, ENQUIRY_STATUSES, type EnquiryPatch } from '../../shared/ca
 const STATUS_IDS = new Set<string>(ENQUIRY_STATUSES.map((s) => s.id));
 const KINDS = new Set(['quote', 'booking', 'callback', 'complaint', 'spam', 'other']);
 const CHANNELS = new Set(['call', 'form', 'email', 'text']);
+const LOST = new Set(['noshow', 'late_cancel', 'cancelled', 'other']);
 
 const money = (v: unknown, label: string): number | null => {
   if (v === null || v === '') return null;
@@ -117,6 +118,7 @@ export default handler(async (req) => {
     for (const k of ['paid'] as const) if (typeof b[k] === 'boolean') p[k] = b[k];
     for (const k of ['chaserSent', 'paymentReminderSent', 'reviewAsked', 'replied'] as const) if (b[k] === true) p[k] = true;
     for (const k of ['notes', 'name', 'phone', 'email', 'postcode', 'bookedType', 'bookedWith'] as const) if (typeof b[k] === 'string') p[k] = b[k];
+    if (b.lostReason !== undefined) { if (!LOST.has(b.lostReason)) throw new HttpError(400, 'That reason is not valid.'); p.lostReason = b.lostReason; }
     const before = toRecord(row);
     if (p.chaserSent && (p.status ?? before.status) !== 'quoted') throw new HttpError(400, 'Chasers are for quotes waiting on an answer.');
     if (p.paymentReminderSent && before.status !== 'won') throw new HttpError(400, 'Payment reminders are for finished jobs.');
@@ -132,7 +134,9 @@ export default handler(async (req) => {
   if (b.op === 'draft') {
     const s = withDefaults(await getSettings(user.id));
     if (!s.business.name) throw new HttpError(400, 'Finish your setup first.');
-    return json({ text: await draftEnquiryReply(user.id, s, toRecord(row)) });
+    // The draft answers the client's latest text, if there is one.
+    const [last] = await db<any[]>(`messages?select=body,created_at&enquiry_id=eq.${row.id}&user_id=eq.${user.id}&direction=eq.in&order=created_at.desc&limit=1`).catch(() => [] as any[]);
+    return json({ text: await draftEnquiryReply(user.id, s, toRecord(row), last ? { body: String(last.body || ''), at: last.created_at } : null) });
   }
 
   if (b.op === 'reply') {
