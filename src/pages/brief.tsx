@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '../lib/api';
 import { Locked, useApp } from '../app';
 import { Button, ErrorNote, Field, Loading, Sparkline, Tabs, copyText, useLoad, useToast } from '../components/ui';
 import { metricsFor, analyseWeeks, isGood } from '../../shared/metrics';
 import { money, mondayOf, num, pct, shortDate } from '../lib/format';
+import { queryParam } from '../lib/router';
 import type { BriefReport, MetricDef, WeekNumbers, WinbackDrafts } from '../lib/types';
 import type { MetricChange } from '../../shared/metrics';
 
@@ -156,6 +157,7 @@ function Winback({ changes }: { changes: MetricChange[] }) {
   const [busy, setBusy] = useState(false);
   const [tab, setTab] = useState<'email' | 'text' | 'social'>('email');
   const toast = useToast();
+  const ref = useRef<HTMLElement | null>(null);
   const dip = changes.find((c) => (c.metric.id === 'orders' || c.metric.id === 'revenue') && c.direction === 'down' && (c.changePct ?? 0) <= -10);
 
   const write = async () => {
@@ -164,18 +166,26 @@ function Winback({ changes }: { changes: MetricChange[] }) {
     catch (e: any) { toast(e?.message || 'Couldn’t write the messages. Try again.'); }
     finally { setBusy(false); }
   };
+  // Opened from Home ("Write my messages"): start writing straight away and bring the section into view.
+  useEffect(() => {
+    if (queryParam('open') !== 'winback') return;
+    ref.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    write();
+  }, []);
   const text = drafts ? drafts[tab] : '';
 
   return (
-    <section className="section" aria-labelledby="wb-h">
+    <section className="section" aria-labelledby="wb-h" ref={ref}>
       <div className="section-head"><h2 className="heading" id="wb-h">Win back past customers</h2></div>
-      <div className="panel winback">
+      <div className={`panel winback ${drafts || busy ? '' : 'winback-closed'}`}>
         <div className="winback-intro">
           <p className="voice">{dip
             ? `${dip.metric.label} fell ${Math.abs(dip.changePct ?? 0)}% this week. A short, personal note to people who have bought before is usually the quickest way to bring sales back.`
             : 'People who have bought from you before are the easiest sales you will make. A short, personal note every few weeks keeps you in mind.'}</p>
           {!drafts && <Button className="mt-16" busy={busy} icon="send" onClick={write}>{busy ? 'Writing your messages' : 'Write my messages'}</Button>}
+          {!drafts && <p className="small faint mt-16">An email, a text and a social post, written from your business details. You read them, make them yours and send them; Gainora never sends anything for you.</p>}
         </div>
+        {busy && !drafts && <div className="winback-drafts"><Loading label="Writing your messages" /></div>}
         {drafts && (
           <div className="winback-drafts">
             <Tabs label="Message type" value={tab} onChange={setTab} tabs={[{ id: 'email', label: 'Email' }, { id: 'text', label: 'Text message' }, { id: 'social', label: 'Social post' }]} />

@@ -2,7 +2,9 @@
 import { addActions, addAlert, addNote, addValue, db, enc, HttpError, insert, learnedFor, upsert } from './core';
 import { ai, extractJson, hasBanned, HOUSE_STYLE, profileContext } from './ai';
 import { analyseWeeks, findUnsupportedNumbers, metricsFor, type MetricChange } from '../../shared/metrics';
-import { writeBrief } from '../../shared/brief-writer';
+import { writeBrief, type BriefContext } from '../../shared/brief-writer';
+import { isDue } from '../../shared/leads';
+import { daysLeft } from '../../shared/tenders';
 import { fallbackReply, type ReviewItem } from '../../shared/reviews';
 import type { Learned } from '../../shared/learning';
 
@@ -179,24 +181,77 @@ export async function draftWinback(userId: string, profile: any, changes: Metric
 }
 
 /* ---------- The Brief ---------- */
+const DAY_MS = 86_400_000;
+
+/** What the other agents found this week, so the Brief's priorities name real leads, contracts and fixes. */
+export async function briefContext(userId: string, profile: any, now = new Date()): Promise<BriefContext> {
+  const [leads, matches, ws, searches] = await Promise.all([
+    db<any[]>(`leads?select=name,stage,next_follow_up_at,value_gbp&user_id=eq.${userId}&order=updated_at.desc&limit=200`).catch(() => []),
+    db<any[]>(`tender_matches?select=fit,status,tenders(title,value,deadline)&user_id=eq.${userId}&status=in.(new,saved)&order=created_at.desc&limit=20`).catch(() => []),
+    db<any[]>(`watcher_state?select=state&user_id=eq.${userId}`).catch(() => []),
+    db<any[]>(`scout_searches?select=results&user_id=eq.${userId}&status=eq.ready&order=created_at.desc&limit=3`).catch(() => []),
+  ]);
+  const w = ws[0]?.state;
+  const leadNames = new Set(leads.map((l) => String(l.name).toLowerCase()));
+  const strong = new Set<string>();
+  for (const s of searches) for (const r of s.results || []) if (r.fit === 'strong' && !r.dismissed && !leadNames.has(String(r.name).toLowerCase())) strong.add(String(r.name).toLowerCase());
+  const tenders = matches.filter((m) => m.tenders).map((m) => ({ title: String(m.tenders.title), value: m.tenders.value != null ? Number(m.tenders.value) : null, deadline: m.tenders.deadline as string | null, fit: m.fit }))
+    .map((t) => ({ title: t.title, value: t.value, daysLeft: daysLeft(t.deadline, now), fit: t.fit }))
+    .filter((t) => t.daysLeft == null || t.daysLeft > 0)
+    .sort((a, b) => (a.fit === b.fit ? (b.value ?? 0) - (a.value ?? 0) : a.fit === 'strong' ? -1 : 1));
+  const low = (w?.reviews?.reviews || []).filter((r: any) => r.isNew && r.rating <= 3).sort((a: any, b: any) => a.rating - b.rating)[0];
+  const urgent = (w?.issues || []).find((i: any) => i.level === 'urgent');
+  const topFix = (w?.speed?.fixes || []).find((f: any) => !f.done && f.impact === 'High');
+  const started = profile?.completedAt ? new Date(profile.completedAt).getTime() : null;
+  return {
+    dueFollowUps: leads.filter((l) => l.stage === 'contacted' && isDue(l.next_follow_up_at, now)).map((l) => l.name),
+    leadsToContact: leads.filter((l) => l.stage === 'to_contact').map((l) => l.name),
+    strongLeads: strong.size,
+    wonLeads: leads.filter((l) => l.stage === 'won').length,
+    inConversation: leads.filter((l) => ['contacted', 'replied', 'meeting'].includes(l.stage)).length,
+    tenders: tenders.slice(0, 3).map(({ title, value, daysLeft }) => ({ title, value, daysLeft })),
+    urgentIssue: urgent?.title ?? null,
+    lowReview: low ? { author: low.author, rating: low.rating } : null,
+    topFix: topFix ? { title: topFix.title, who: topFix.who } : null,
+    weeksLeft: started ? Math.max(0, Math.ceil((started + 90 * DAY_MS - now.getTime()) / (7 * DAY_MS))) : null,
+  };
+}
+
+/** The same context as plain lines for the model, with the figures it is allowed to repeat. */
+export function briefContextLines(ctx: BriefContext): { text: string; numbers: number[] } {
+  const lines: string[] = []; const numbers: number[] = [];
+  if (ctx.urgentIssue) lines.push(`Website (The Watcher): urgent issue: ${ctx.urgentIssue}.`);
+  if (ctx.lowReview) { lines.push(`Google reviews (The Watcher): a new ${ctx.lowReview.rating}-star review from ${ctx.lowReview.author} is waiting for a reply; a reply is drafted.`); numbers.push(ctx.lowReview.rating); }
+  if (ctx.topFix) lines.push(`Website speed (The Watcher): biggest fix is "${ctx.topFix.title}" (${ctx.topFix.who === 'You' ? 'the owner can do it' : 'needs their web person'}).`);
+  if (ctx.dueFollowUps?.length) lines.push(`Leads (The Scout): follow-ups due now with ${ctx.dueFollowUps.join(', ')}; the notes are drafted.`);
+  if (ctx.leadsToContact?.length) { lines.push(`Leads (The Scout): ${ctx.leadsToContact.length} not yet contacted: ${ctx.leadsToContact.slice(0, 5).join(', ')}; introductions are drafted.`); numbers.push(ctx.leadsToContact.length); }
+  if (ctx.strongLeads) { lines.push(`Research (The Scout): ${ctx.strongLeads} strong-fit matches not yet added to leads.`); numbers.push(ctx.strongLeads); }
+  if (ctx.wonLeads != null || ctx.inConversation != null) { lines.push(`Pipeline: ${ctx.wonLeads ?? 0} won, ${ctx.inConversation ?? 0} in conversation.`); numbers.push(ctx.wonLeads ?? 0, ctx.inConversation ?? 0); }
+  for (const t of ctx.tenders ?? []) { lines.push(`Public contract (The Scout): "${t.title}"${t.value ? `, published value £${t.value}` : ''}${t.daysLeft != null ? `, closes in ${t.daysLeft} days` : ''}.`); if (t.value) numbers.push(t.value); if (t.daysLeft != null) numbers.push(t.daysLeft); }
+  if (ctx.weeksLeft != null) { lines.push(`${ctx.weeksLeft} weeks left of the 90-day goal.`); numbers.push(ctx.weeksLeft); }
+  return { text: lines.join('\n'), numbers };
+}
+
 export async function runBrief(userId: string, profile: any, weekOf: string) {
   const rows = await db<any[]>(`week_numbers?select=week_of,values,note&user_id=eq.${userId}&order=week_of.asc&limit=26`);
   const weeks = rows.map((r) => ({ weekOf: r.week_of, values: r.values }));
   const metrics = metricsFor(profile.numbers?.track || []);
   const changes = analyseWeeks(weeks, metrics);
-  let brief = writeBrief(changes, profile);
+  const ctx = await briefContext(userId, profile).catch(() => ({} as BriefContext));
+  let brief = writeBrief(changes, profile, ctx);
 
   if (weeks.length >= 2) {
     const facts = changes.filter((c) => c.current != null).map((c) =>
       `${c.metric.label} (${c.metric.unit}): this week ${c.current}, last week ${c.previous ?? 'n/a'}, change ${c.change ?? 'n/a'} (${c.changePct ?? 'n/a'}%), 4-week average ${c.average4 ?? 'n/a'} (${c.vsAveragePct ?? 'n/a'}% vs average)`).join('\n');
     const note = rows[rows.length - 1]?.note;
-    const allowed = changes.flatMap((c) => [c.current, c.previous, c.change, c.changePct, c.average4, c.vsAveragePct].filter((n): n is number => n != null));
+    const found = briefContextLines(ctx);
+    const allowed = [...found.numbers, ...changes.flatMap((c) => [c.current, c.previous, c.change, c.changePct, c.average4, c.vsAveragePct].filter((n): n is number => n != null))];
     for (const m of String(profile.goals?.target || '').match(/\d+(\.\d+)?/g) || []) allowed.push(Number(m));
     try {
       const r = await ai({
         userId, agent: 'brief', maxTokens: 900, fast: true,
-        system: `${HOUSE_STYLE}\nYou are The Brief. Explain the week's numbers to the owner and set three priorities linked to their 90-day goal. Use ONLY the numbers provided; do not calculate new figures. Return JSON only: {"headline": "one sentence", "paragraphs": ["2 or 3 short paragraphs"], "actions": ["3 specific actions for this week"]}`,
-        messages: [{ role: 'user', content: `${profileContext(profile)}\n\nThis week's figures:\n${facts}\n${note ? `Owner's note: ${note}` : ''}` }],
+        system: `${HOUSE_STYLE}\nYou are The Brief. Explain the week's numbers to the owner: what moved against last week and the four-week average, what it most likely means for this business, and where it leaves their 90-day goal. Then set three priorities for the week. Each priority must be one concrete thing the owner can do this week, naming the real lead, contract, review or fix from "What your other agents found" where one applies, and must serve the 90-day goal. No generic advice such as "review your marketing". Use ONLY the numbers provided; do not calculate new figures. Return JSON only: {"headline": "one sentence", "paragraphs": ["2 or 3 short paragraphs"], "actions": ["3 specific actions for this week"]}`,
+        messages: [{ role: 'user', content: `${profileContext(profile)}\n\nThis week's figures:\n${facts}\n${note ? `Owner's note: ${note}\n` : ''}${found.text ? `\nWhat your other agents found this week:\n${found.text}` : ''}` }],
       });
       const j = extractJson(r.text);
       const text = [j.headline, ...(j.paragraphs || []), ...(j.actions || [])].join(' ');

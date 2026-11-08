@@ -5,7 +5,9 @@ import type {
 } from './types';
 import { emptyProfile } from './questions';
 import { metricsFor, analyseWeeks } from '../../shared/metrics';
-import { writeBrief } from '../../shared/brief-writer';
+import { writeBrief, type BriefContext } from '../../shared/brief-writer';
+import { isDue } from '../../shared/leads';
+import { daysLeft } from '../../shared/tenders';
 import { fallbackReply } from '../../shared/reviews';
 import { followUpSent, moveLead } from '../../shared/leads';
 import { hostOf } from '../../shared/learning';
@@ -115,6 +117,28 @@ function localResults(town: string): ScoutResult[] {
 
 function ev(kind: ValueKind, agent: ValueEvent['agent'], title: string, at: number, amount?: number): ValueEvent {
   return { id: uid('v_'), kind, agent, title, at: iso(at), amount: amount ?? null };
+}
+
+/** What the other agents found, for the Brief's priorities (mirrors briefContext on the server). */
+function briefContextOf(s: DemoState): BriefContext {
+  const w = s.watcher;
+  const leadNames = new Set(s.leads.map((l) => l.name.toLowerCase()));
+  const strong = new Set(s.scout.flatMap((x) => x.results).filter((r) => r.fit === 'strong' && !r.dismissed && !leadNames.has(r.name.toLowerCase())).map((r) => r.name));
+  const low = w?.reviews?.reviews.filter((r) => r.isNew && r.rating <= 3).sort((a, b) => a.rating - b.rating)[0];
+  const fix = w?.speed?.fixes.find((f) => !f.done && f.impact === 'High');
+  const started = new Date(s.profile?.completedAt || Date.now()).getTime();
+  return {
+    dueFollowUps: s.leads.filter((l) => l.stage === 'contacted' && isDue(l.nextFollowUp)).map((l) => l.name),
+    leadsToContact: s.leads.filter((l) => l.stage === 'to_contact').map((l) => l.name),
+    strongLeads: strong.size,
+    wonLeads: s.leads.filter((l) => l.stage === 'won').length,
+    inConversation: s.leads.filter((l) => l.stage === 'contacted' || l.stage === 'replied' || l.stage === 'meeting').length,
+    tenders: s.tenders.filter((t) => t.status === 'new' || t.status === 'saved').map((t) => ({ title: t.title, value: t.value, daysLeft: daysLeft(t.deadline), fit: t.fit })).sort((a, b) => (a.fit === b.fit ? (b.value ?? 0) - (a.value ?? 0) : a.fit === 'strong' ? -1 : 1)).slice(0, 3),
+    urgentIssue: w?.issues.find((i) => i.level === 'urgent')?.title ?? null,
+    lowReview: low ? { author: low.author, rating: low.rating } : null,
+    topFix: fix ? { title: fix.title, who: fix.who } : null,
+    weeksLeft: Math.max(0, Math.ceil((started + 90 * DAY - Date.now()) / (7 * DAY))),
+  };
 }
 
 function seed(s: DemoState) {
@@ -238,7 +262,7 @@ function seed(s: DemoState) {
     }
     return { weekOf: w, values };
   });
-  const b = writeBrief(analyseWeeks(s.numbers, metrics), p);
+  const b = writeBrief(analyseWeeks(s.numbers, metrics), p, briefContextOf(s));
   s.briefs = [{ id: uid('b_'), weekOf: s.numbers[5].weekOf, createdAt: iso(now - 6 * 3_600_000), ...b }];
 
   // Home
@@ -439,7 +463,7 @@ export function createDemoApi(): Api {
     async saveNumbers(w) {
       await wait(1200);
       s.numbers = [...s.numbers.filter((x) => x.weekOf !== w.weekOf), w].sort((a, b) => a.weekOf.localeCompare(b.weekOf));
-      const b = writeBrief(analyseWeeks(s.numbers, metricsFor(s.profile!.numbers.track)), s.profile!);
+      const b = writeBrief(analyseWeeks(s.numbers, metricsFor(s.profile!.numbers.track)), s.profile!, briefContextOf(s));
       const report: BriefReport = { id: uid('b_'), weekOf: w.weekOf, createdAt: new Date().toISOString(), ...b };
       s.briefs = [report, ...s.briefs.filter((x) => x.weekOf !== w.weekOf)];
       addValue('brief_written', 'brief', 'Weekly Brief written');

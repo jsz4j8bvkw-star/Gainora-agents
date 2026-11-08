@@ -686,7 +686,9 @@ tr:last-child td { border-bottom: 0; }
 .winback-drafts { padding: 20px 28px 24px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 .winback-drafts .tabs { margin-bottom: 0; }
 .draft-text { margin: 0; white-space: pre-wrap; font-family: var(--serif); font-weight: 500; font-size: 1.1875rem; line-height: 1.5; background: var(--canvas); border-radius: var(--r-md); padding: 18px 20px; max-height: 360px; overflow: auto; }
-@media (max-width: 900px) { .winback { grid-template-columns: 1fr; } .winback-intro { border-right: 0; border-bottom: 1px solid var(--line); } }
+.winback-closed { grid-template-columns: 1fr; }
+.winback-closed .winback-intro { border-right: 0; max-width: 70ch; }
+@media (max-width: 900px) { .winback { grid-template-columns: 1fr; } .winback-intro { border-right: 0; border-bottom: 1px solid var(--line); } .winback-closed .winback-intro { border-bottom: 0; } }
 
 /* What the agents learned */
 .learn-rules { margin: 0; padding-left: 20px; display: grid; gap: 6px; font-size: var(--t-sm); }

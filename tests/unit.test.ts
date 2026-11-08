@@ -68,6 +68,39 @@ test('writeBrief explains a fall in orders and gives three actions', () => {
   assert.ok(b.paragraphs.some((p) => p.includes('For every 100 enquiries')));
   const empty = writeBrief([], SAMPLE_PROFILE);
   assert.match(empty.headline, /Add this week/);
+  // Week-on-week and the four-week average are both stated, in one readable bracket.
+  assert.match(b.paragraphs[0], /Orders fell from 20 to 14 \(down 30% on last week\)\./);
+});
+
+test('writeBrief ties its priorities to the goal and to what the other agents found', () => {
+  const m = metricsFor(['Orders or sales', 'Enquiries', 'Revenue']);
+  const weeks = [
+    { weekOf: '2026-10-12', values: { orders: 40, enquiries: 30, revenue: 1500 } },
+    { weekOf: '2026-10-19', values: { orders: 42, enquiries: 28, revenue: 1532 } },
+    { weekOf: '2026-10-26', values: { orders: 35, enquiries: 42, revenue: 1230 } },
+  ];
+  const b = writeBrief(analyseWeeks(weeks, m), SAMPLE_PROFILE, {
+    dueFollowUps: ['The Driftwood Room'], leadsToContact: ['The Quay Pantry', 'Kittiwake & Co', 'Fern & Flint'], wonLeads: 1, inConversation: 2,
+    tenders: [{ title: 'Locally made gifts and homeware for visitor centre shops', value: 18000, daysLeft: 21 }],
+    urgentIssue: 'Your contact page needs attention', weeksLeft: 13,
+  });
+  // The goal line uses the pipeline, since the goal is wholesale stockists.
+  assert.ok(b.paragraphs.some((p) => /Against your goal of 6 new wholesale stockists by the end of February \(13 weeks left\), you have 1 stockist won and 2 in conversation\./.test(p)), b.paragraphs.join(' | '));
+  assert.equal(b.actions.length, 3);
+  assert.match(b.actions[0], /^Your contact page needs attention: fix it first/);
+  assert.match(b.actions[1], /Follow up with The Driftwood Room/);
+  assert.match(b.actions[2], /Send your introduction to The Quay Pantry and Kittiwake & Co and 1 more/);
+  // Without findings, the numbers still drive sensible priorities and the contract is offered when there is one.
+  const plain = writeBrief(analyseWeeks(weeks, m), SAMPLE_PROFILE, { tenders: [{ title: 'Café crockery', value: 14000, daysLeft: 30 }] });
+  assert.match(plain.actions[0], /Decide whether to bid for “Café crockery” \(published value £14,000\), which closes in 30 days/);
+  assert.ok(plain.actions.some((a) => /Reply to every open enquiry/.test(a)));
+  // A contract closing in two days is not pushed: too late to bid well.
+  const late = writeBrief(analyseWeeks(weeks, m), SAMPLE_PROFILE, { tenders: [{ title: 'Café crockery', value: 14000, daysLeft: 2 }] });
+  assert.ok(!late.actions.some((a) => /Café crockery/.test(a)));
+  // A metric goal reports this week's figure against the target.
+  const enq = { ...SAMPLE_PROFILE, goals: { ...SAMPLE_PROFILE.goals, focus: 'More enquiries', target: '50 enquiries a week' } };
+  const g = writeBrief(analyseWeeks(weeks, m), enq, { weeksLeft: 8 });
+  assert.ok(g.paragraphs.some((p) => /Against your goal of 50 enquiries a week \(8 weeks left\), this week’s enquiries came in at 42\./.test(p)), g.paragraphs.join(' | '));
 });
 
 test('questionnaire validation catches missing and malformed answers', () => {
