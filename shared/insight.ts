@@ -31,6 +31,8 @@ export interface Context { unreadReply?: { body: string; at: string } | null; aw
 export type Action = 'call' | 'reply' | 'book' | 'attended' | 'pay' | 'review' | 'rebook' | 'open' | 'none';
 export interface Step { action: Action; title: string; detail?: string }
 
+const TIMES = /\b(morning|afternoon|evening|lunch|weekday|weekend|saturday|sunday|monday|tuesday|wednesday|thursday|friday|after \d|before \d|\d\s?(am|pm)|o'?clock|next week|this week)\b/i;
+
 /** Hours since something happened, never negative. */
 const hoursSince = (iso: string, now: Date) => Math.max(0, (now.getTime() - new Date(iso).getTime()) / 3_600_000);
 const waited = (h: number) => (h < 1 ? 'just now' : h < 24 ? `${Math.round(h)} h ago` : `${Math.round(h / 24)} ${Math.round(h / 24) === 1 ? 'day' : 'days'} ago`);
@@ -52,7 +54,11 @@ export function nextStep(e: EnquiryRecord, s: CaptureSettings, ctx: Context = {}
   }
   if (r) {
     const q = /\?|can i|is it ok|do i|should i|what time|how (much|long|many)/i.test(r.body);
-    return { action: 'reply', title: q ? `${name} asked a question. Reply so they're not left waiting.` : `${name} replied. Read it and reply if it needs one.`, detail: `“${clean(r.body, 140)}” · ${waited(hoursSince(r.at, now))}` };
+    const when = TIMES.test(r.body) && e.status !== 'booked';
+    return { action: when && appts ? 'book' : 'reply', title: when ? `${name} said when suits. ${appts ? 'Find a time and book them in.' : 'Reply and get it booked.'}` : q ? `${name} asked a question. Reply so they're not left waiting.` : `${name} replied. Read it and reply if it needs one.`, detail: `“${clean(r.body, 140)}” · ${waited(hoursSince(r.at, now))}` };
+  }
+  if (e.urgency === 'emergency' && e.status === 'replied') {
+    return { action: 'open', title: `You've been in touch with ${name}.`, detail: 'Add a note of what happened, then mark it booked, attended or didn’t go ahead.' };
   }
   if (e.status === 'new') {
     const h = hoursSince(e.receivedAt, now);
@@ -98,7 +104,7 @@ export function priority(e: EnquiryRecord, s: CaptureSettings, ctx: Context = {}
   let score = 0;
   const why: string[] = [];
   if (e.status === 'spam' || e.isTest) return { score: -1, why: '', step };
-  if (e.urgency === 'emergency') { score += e.status === 'new' ? 1000 : 300; why.push(e.reasons[0] || 'Emergency'); }
+  if (e.urgency === 'emergency') { score += e.status === 'new' ? 1000 : 150; why.push(e.reasons[0] || 'Emergency'); }
   else if (e.urgency === 'urgent' && e.status === 'new') { score += 500; why.push(e.reasons[0] || 'Urgent'); }
   if (ctx.unreadReply) { score += 400 + Math.min(100, hoursSince(ctx.unreadReply.at, now) * 4); why.push(`Replied ${waited(hoursSince(ctx.unreadReply.at, now))}`); }
   if (e.status === 'new') {
@@ -120,7 +126,6 @@ export function priority(e: EnquiryRecord, s: CaptureSettings, ctx: Context = {}
 
 const MEDICAL = /\b(pain|painful|swell|swollen|rash|blister|bleed|infect|allerg|react|pregnan|breastfeed|medication|antibiotic|lump|bruis|numb|burn|itch|hot|pus|fever|temperature|dizzy|sick|unwell|worried about (my|the))\b/i;
 const PREP = /\b(make-?up|mascara|wear|arrive|early|parking|park|bring|prepare|prep|shave|fake tan|sunbed|alcohol|eat|drink|clean|wash)\b/i;
-const TIMES = /\b(morning|afternoon|evening|lunch|weekday|weekend|saturday|sunday|monday|tuesday|wednesday|thursday|friday|after \d|before \d|\d\s?(am|pm)|o'?clock|next week|this week)\b/i;
 
 /** The treatment or service the enquiry is about, in the owner's own words from their list, or ''. */
 export function topicOf(e: Pick<EnquiryRecord, 'summary' | 'bookedType'>, s: CaptureSettings): string {

@@ -735,13 +735,30 @@ tr:last-child td { border-bottom: 0; }
 .start-steps .done .num { background: var(--forest); border-color: var(--forest); color: var(--sage); }
 .start-steps .done strong { color: var(--ink-faint); text-decoration: line-through; text-decoration-color: var(--line-strong); }
 .start { margin-bottom: 28px; }
-.needs-panel { border-color: #E9C9BF; box-shadow: inset 3px 0 0 var(--danger); }
+.needs-panel { box-shadow: inset 3px 0 0 var(--sage); }
+.needs-panel.hot { border-color: #E9C9BF; box-shadow: inset 3px 0 0 var(--danger); }
 .needs-row { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; gap: 16px; align-items: start; padding: 18px 22px; }
+.needs-row.urg-emergency { background: #FDF7F5; }
 .needs-mark { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--danger-tint); color: var(--danger); }
 .needs-mark.urgent { background: var(--brass-tint); color: var(--brass); }
+.needs-mark.reply { background: var(--brass-tint); color: var(--brass); }
+.needs-mark.plain { background: var(--forest-tint); color: var(--forest); }
 .needs-mark svg { width: 18px; height: 18px; }
-.needs-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
-@media (max-width: 640px) { .needs-row { grid-template-columns: 36px minmax(0, 1fr); } .needs-actions { grid-column: 2; justify-content: flex-start; } }
+.needs-name { font-weight: 700; color: inherit; text-decoration: none; }
+.needs-name:hover { text-decoration: underline; }
+.needs-step { font-family: var(--serif); font-size: 1.1875rem; line-height: 1.3; font-weight: 500; }
+.needs-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; align-items: center; }
+.today-head { align-items: center; }
+@media (max-width: 640px) {
+  .needs-row { grid-template-columns: 32px minmax(0, 1fr); gap: 12px; padding: 16px 16px; }
+  .needs-mark { width: 32px; height: 32px; }
+  .needs-mark svg { width: 16px; height: 16px; }
+  .needs-actions { grid-column: 2; justify-content: flex-start; }
+  .needs-step { font-size: 1.0625rem; }
+  .today-head { align-items: flex-start; flex-direction: column; gap: 12px; }
+  .today-head .display { font-size: 2.125rem; }
+  .demo-flag { padding: 6px 14px; gap: 8px; font-size: 12px; }
+}
 .due-card { display: block; text-decoration: none; transition: transform .2s var(--ease); }
 .due-card:hover { color: #E9E5DD; transform: translateY(-1px); }
 .due-card .goal-figure { display: block; margin-top: 14px; }

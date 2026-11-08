@@ -98,6 +98,7 @@ test('aftercare check-in and rebook: after an attended appointment, never if the
   const { applyPatch } = await import('../shared/capture');
   const s = structuredClone(BEAUTY_SETTINGS);
   s.automations = defaultAutomations('appointments', '2026-01-01T00:00:00Z');
+  s.bookings.types = s.bookings.types.map((t) => ({ ...t, rebookWeeks: undefined }));   // the general six-week nudge
   const base: any = { id: 'e1', name: 'Rosie Turner', phone: '+447700900419', email: '', channel: 'call', status: 'new', urgency: 'normal', kind: 'booking', receivedAt: '2026-09-01T10:00:00Z', history: [], summary: 'Lip filler', transcript: '', postcode: '', reasons: [], afterHours: false, notes: '', isTest: false, chasersSent: 0, paymentRemindersSent: 0, quoteAmount: null, quotedAt: null, bookedFor: null, jobValue: null, invoiceDue: null, paidAt: null, reviewAskedAt: null, repliedAt: null, externalId: null, recordingUrl: '', bookedType: 'Lip filler', bookedWith: 'Amy' };
   let e = applyPatch(base, { status: 'booked', bookedFor: '2026-09-03T11:00:00Z', bookedType: 'Lip filler', bookedWith: 'Amy' }, s, new Date('2026-09-01T10:05:00Z'));
   e = applyPatch(e, { status: 'won', jobValue: 250 }, s, new Date('2026-09-03T12:00:00Z'));

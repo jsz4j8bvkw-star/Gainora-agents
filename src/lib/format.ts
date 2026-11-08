@@ -33,6 +33,11 @@ export function relative(d: Date | string, now = Date.now()): string {
   return future ? `in ${s}` : `${s} ago`;
 }
 
+/** "11am", "4:30pm": the way people say appointment times. */
+export function time12(d: Date | string): string {
+  return new Date(d).toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit', hour12: true }).replace(':00', '').replace(/\s/g, '').toLowerCase();
+}
+
 export function money(n: number | null | undefined): string {
   if (n == null || Number.isNaN(n)) return '–';
   return '£' + n.toLocaleString('en-GB', { maximumFractionDigits: n < 100 ? 2 : 0 });

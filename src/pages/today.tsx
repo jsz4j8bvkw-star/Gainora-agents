@@ -1,17 +1,22 @@
 import { useMemo, useState } from 'react';
 import { api } from '../lib/api';
 import { useApp } from '../app';
-import { Link, navigate } from '../lib/router';
+import { Link, navigate, setIntent } from '../lib/router';
 import { Button, ErrorNote, Icon, Loading, useLoad, useToast } from '../components/ui';
 import { EnquiryRow, who } from '../components/enquiry';
-import { greeting, money, relative } from '../lib/format';
-import { followUps, report, words } from '../../shared/capture';
+import { greeting, money, time12 } from '../lib/format';
+import { followUps, isBeauty, report, words } from '../../shared/capture';
+import { priority, rebookDue, type Priority } from '../../shared/insight';
+import type { EnquiryRecord } from '../lib/types';
 
 export function Today() {
   const { settings, enquiries, enquiriesError, reloadEnquiries, putEnquiry, messages } = useApp();
   const sources = useLoad(() => api.listSources());
   const [testing, setTesting] = useState(false);
   const toast = useToast();
+  const appts = settings.business.kind === 'appointments';
+  const beauty = isBeauty(settings.business);
+  const W = words(settings.business.kind);
 
   const data = useMemo(() => {
     if (!enquiries) return null;
@@ -19,22 +24,25 @@ export function Today() {
     const weekAgo = new Date(now.getTime() - 7 * 86_400_000);
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const real = enquiries.filter((e) => !e.isTest);
+    const unread = new Map<string, { body: string; at: string }>();
+    for (const m of [...messages].sort((a, b) => a.createdAt.localeCompare(b.createdAt))) if (m.direction === 'in' && !m.read && m.enquiryId) unread.set(m.enquiryId, { body: m.body, at: m.createdAt });
+    const waitingOk = messages.filter((m) => m.status === 'awaiting_approval');
+    const okFor = (id: string) => waitingOk.filter((m) => m.enquiryId === id).length;
+    const ranked: { e: EnquiryRecord; p: Priority }[] = real
+      .filter((e) => e.status !== 'spam' && e.status !== 'lost')
+      .map((e) => ({ e, p: priority(e, settings, { now, unreadReply: unread.get(e.id) ?? null, awaitingOk: okFor(e.id) }) }))
+      .filter((x) => x.p.score >= 200 || (x.p.score > 0 && x.p.step.action !== 'none' && x.p.step.action !== 'open'))
+      .sort((a, b) => b.p.score - a.p.score);
     return {
-      now: real.filter((e) => e.status === 'new' && e.urgency !== 'normal'),
-      waiting: real.filter((e) => e.status === 'new' && e.urgency === 'normal'),
-      week: report(real, weekAgo, new Date(now.getTime() + 60_000)),
-      month: report(real, monthStart, new Date(now.getTime() + 60_000)),
+      ranked, unread, waitingOk,
+      week: report(real, weekAgo, new Date(now.getTime() + 60_000), settings, now),
+      month: report(real, monthStart, new Date(now.getTime() + 60_000), settings, now),
       due: followUps(real, now).filter((f) => f.due),
-      latest: enquiries.filter((e) => e.status !== 'spam').slice(0, 6),
-      upcoming: real.filter((e) => e.status === 'booked' && e.bookedFor && new Date(e.bookedFor) >= new Date(now.toDateString())).sort((a, b) => a.bookedFor!.localeCompare(b.bookedFor!)).slice(0, 4),
+      back: rebookDue(real, settings, now),
+      latest: enquiries.filter((e) => e.status !== 'spam').slice(0, 5),
+      upcoming: real.filter((e) => e.status === 'booked' && e.bookedFor && new Date(e.bookedFor) >= new Date(now.toDateString())).sort((a, b) => a.bookedFor!.localeCompare(b.bookedFor!)).slice(0, 5),
     };
-  }, [enquiries]);
-
-  const replies = useMemo(() => {
-    const seen = new Set<string>();
-    return messages.filter((m) => m.direction === 'in' && !m.read && m.enquiryId && !seen.has(m.enquiryId) && seen.add(m.enquiryId));
-  }, [messages]);
-  const waitingOk = messages.filter((m) => m.status === 'awaiting_approval');
+  }, [enquiries, messages, settings]);
 
   if (enquiriesError && !enquiries) return <div className="page"><ErrorNote message={enquiriesError} retry={reloadEnquiries} /></div>;
   if (!data) return <Loading />;
@@ -47,19 +55,26 @@ export function Today() {
     catch (e: any) { toast(e?.message || 'The test didn’t go through. Try again.'); }
     finally { setTesting(false); }
   };
+  const now = data.ranked.slice(0, 6);
+  const nNow = data.ranked.length + (data.waitingOk.length ? 1 : 0);
+  const emergencies = data.ranked.filter((x) => x.e.urgency === 'emergency' && x.e.status === 'new').length;
+  const lede = emergencies
+    ? `${emergencies === 1 ? 'One emergency needs' : `${emergencies} emergencies need`} you now.`
+    : nNow ? `${nNow === 1 ? 'One thing needs' : `${nNow} things need`} you. ${data.week.afterHours ? `Your receptionist caught ${data.week.afterHours} ${data.week.afterHours === 1 ? 'enquiry' : 'enquiries'} while you were closed this week.` : ''}`.trim()
+    : `Everything’s answered. ${data.week.afterHours ? `Your receptionist caught ${data.week.afterHours} ${data.week.afterHours === 1 ? 'enquiry' : 'enquiries'} while you were closed this week.` : 'Nice work.'}`;
+  const reply = (e: EnquiryRecord) => { setIntent('reply'); navigate(`/enquiries/${e.id}`); };
+  const caughtNote = data.week.afterHoursValue > 0
+    ? `${data.week.bookedValueFrom ? 'At least ' : ''}${money(data.week.afterHoursValue)} booked, by your prices`
+    : data.week.afterHoursBooked ? `${data.week.afterHoursBooked} booked` : 'Calls you’d have missed';
 
   return (
     <div className="page">
-      <div className="page-head">
+      <div className="page-head today-head">
         <div>
           <h1 className="display">{greeting()}, {settings.business.ownerName}.</h1>
-          <p className="lede">{data.now.length
-            ? `${data.now.length === 1 ? 'One enquiry needs' : `${data.now.length} enquiries need`} you now.`
-            : data.waiting.length
-              ? `${data.waiting.length} ${data.waiting.length === 1 ? 'enquiry is' : 'enquiries are'} waiting for a reply.`
-              : 'Every enquiry has been answered. Nice work.'}</p>
+          <p className="lede">{lede}</p>
         </div>
-        <Link to="/enquiries/new" className="btn btn-secondary"><Icon name="plus" />Log a call</Link>
+        <Link to="/enquiries/new" className="btn btn-secondary btn-small"><Icon name="plus" />Log a call</Link>
       </div>
 
       {!anyReal && (
@@ -74,70 +89,80 @@ export function Today() {
         </section>
       )}
 
-      {data.now.length > 0 && (
-        <section className="needs section-tight" aria-labelledby="now-h">
-          <div className="section-head"><h2 className="heading" id="now-h">Needs you now</h2></div>
-          <div className="panel rows needs-panel">
-            {data.now.map((e) => (
-              <div className="needs-row" key={e.id}>
-                <span className={`needs-mark ${e.urgency}`} aria-hidden="true"><Icon name="alert" /></span>
-                <div className="stack gap-4" style={{ minWidth: 0 }}>
-                  <div className="row gap-8 wrap"><strong>{who(e)}</strong>{e.postcode && <span className="small faint">{e.postcode}</span>}<span className="small faint">{relative(e.receivedAt)}</span></div>
-                  <p className="small">{e.summary}</p>
-                  {e.reasons[0] && <p className="xsmall faint">{e.reasons.join('. ')}</p>}
-                </div>
-                <div className="needs-actions">
-                  {e.phone && <a className="btn btn-primary btn-small" href={`tel:${e.phone}`}><Icon name="phone" />Call back</a>}
-                  <Button kind="secondary" small onClick={() => navigate(`/enquiries/${e.id}`)}>Open</Button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {(replies.length > 0 || waitingOk.length > 0) && (
-        <section className={`section-tight ${data.now.length ? 'section' : ''}`} aria-labelledby="replies-h">
-          <div className="section-head"><h2 className="heading" id="replies-h">Messages for you</h2><Link to="/automations" className="btn btn-quiet btn-small">Automations<Icon name="chevron" /></Link></div>
-          <div className="panel rows">
-            {replies.map((m) => {
-              const e = enquiries?.find((x) => x.id === m.enquiryId);
+      {(now.length > 0 || data.waitingOk.length > 0) && (
+        <section className="section-tight" aria-labelledby="now-h">
+          <div className="section-head"><h2 className="heading" id="now-h">Needs you now</h2>{data.ranked.length > 6 && <Link to="/enquiries" className="btn btn-quiet btn-small">All {data.ranked.length}<Icon name="chevron" /></Link>}</div>
+          <div className={`panel rows needs-panel ${emergencies ? 'hot' : ''}`}>
+            {now.map(({ e, p }) => {
+              const act = p.step.action;
               return (
-                <Link key={m.id} to={`/enquiries/${m.enquiryId}`} className="mini-row reply-row">
-                  <span className="enq-ico"><Icon name="message" /></span>
-                  <span className="stack" style={{ minWidth: 0 }}><span className="small"><strong>{e?.name || 'A customer'}</strong> replied {relative(m.createdAt)}</span><span className="small muted enq-summary">“{m.body}”</span></span>
-                </Link>
+                <div className={`needs-row urg-${e.urgency}`} key={e.id}>
+                  <span className={`needs-mark ${e.urgency === 'emergency' ? 'emergency' : e.urgency === 'urgent' ? 'urgent' : data.unread.has(e.id) ? 'reply' : 'plain'}`} aria-hidden="true"><Icon name={e.urgency !== 'normal' ? 'alert' : data.unread.has(e.id) ? 'message' : e.channel === 'call' ? 'phone' : e.channel === 'form' ? 'form' : 'mail'} /></span>
+                  <div className="stack gap-4" style={{ minWidth: 0 }}>
+                    <div className="row gap-8 wrap"><Link to={`/enquiries/${e.id}`} className="needs-name">{who(e)}</Link><span className="small faint">{p.why}</span></div>
+                    <p className="needs-step">{p.step.title}</p>
+                    <p className="small muted enq-summary">{data.unread.get(e.id) ? `“${data.unread.get(e.id)!.body}”` : e.summary}</p>
+                  </div>
+                  <div className="needs-actions">
+                    {act === 'call' && e.phone && <a className="btn btn-primary btn-small" href={`tel:${e.phone}`}><Icon name="phone" />Call back</a>}
+                    {(act === 'reply' || act === 'book') && (e.phone || e.email) && <Button small onClick={() => reply(e)} icon="send">{act === 'book' ? 'Reply and book' : 'Reply'}</Button>}
+                    {act === 'attended' && <Button small kind="secondary" onClick={() => navigate(`/enquiries/${e.id}`)} icon="check">{appts ? 'Attended?' : 'Done?'}</Button>}
+                    {act === 'pay' && <Button small kind="secondary" onClick={() => navigate(`/enquiries/${e.id}`)} icon="pound">Payment</Button>}
+                    {act === 'review' && <Button small kind="secondary" onClick={() => navigate(`/enquiries/${e.id}`)} icon="star">Ask for a review</Button>}
+                    {act !== 'call' && e.phone && <a className="btn btn-quiet btn-small" href={`tel:${e.phone}`}><Icon name="phone" /><span className="sr-only">Call {who(e)}</span></a>}
+                    <Button kind="quiet" small onClick={() => navigate(`/enquiries/${e.id}`)}>Open</Button>
+                  </div>
+                </div>
               );
             })}
-            {waitingOk.length > 0 && (
+            {data.waitingOk.length > 0 && (
               <Link to="/automations" className="mini-row reply-row">
                 <span className="enq-ico"><Icon name="bolt" /></span>
-                <span className="stack"><span className="small"><strong>{waitingOk.length} {waitingOk.length === 1 ? 'message is' : 'messages are'} waiting for your OK</strong></span><span className="small muted">Read them, then send or skip.</span></span>
+                <span className="stack"><span className="small"><strong>{data.waitingOk.length} {data.waitingOk.length === 1 ? 'message is' : 'messages are'} waiting for your OK</strong></span><span className="small muted">Read them, then send or skip. Nothing goes until you say.</span></span>
               </Link>
             )}
           </div>
         </section>
       )}
 
-      <section className={`panel ${data.now.length || replies.length || waitingOk.length ? 'section' : ''}`} aria-label="The last 7 days">
+      <section className={`panel ${now.length || data.waitingOk.length ? 'section' : ''}`} aria-label="The last 7 days">
         <div className="stats">
-          <div className="stat"><span className="stat-label">Enquiries, last 7 days</span><span className="stat-value">{data.week.caught}</span><span className="stat-note">{data.week.byChannel.call} by phone</span></div>
-          <div className="stat"><span className="stat-label">Caught out of hours</span><span className="stat-value">{data.week.afterHours}</span><span className="stat-note">Calls you’d have missed</span></div>
-          <div className="stat"><span className="stat-label">Waiting for a reply</span><span className="stat-value" style={{ color: data.waiting.length + data.now.length ? 'var(--brass)' : undefined }}>{data.waiting.length + data.now.length}</span><span className="stat-note">{data.week.medianReplyMins != null ? `Typical reply in ${data.week.medianReplyMins < 60 ? `${data.week.medianReplyMins} min` : `${Math.round(data.week.medianReplyMins / 60)} h`}` : 'Reply fast to win the job'}</span></div>
-          <div className="stat"><span className="stat-label">{settings.business.kind === 'appointments' ? 'Attended this month' : 'Won this month'}</span><span className="stat-value">{money(data.month.wonValue)}</span><span className="stat-note">{data.month.won} {data.month.won === 1 ? words(settings.business.kind).job : words(settings.business.kind).jobs}</span></div>
+          <div className="stat"><span className="stat-label">Enquiries, last 7 days</span><span className="stat-value">{data.week.caught}</span><span className="stat-note">{data.week.byChannel.call} by phone{data.week.spam ? `, ${data.week.spam} spam kept out` : ''}</span></div>
+          <div className="stat"><span className="stat-label">Caught while you were closed</span><span className="stat-value">{data.week.afterHours}</span><span className="stat-note">{caughtNote}</span></div>
+          <div className="stat"><span className="stat-label">Waiting for a reply</span><span className="stat-value" style={{ color: data.ranked.length ? 'var(--brass)' : undefined }}>{data.ranked.filter((x) => x.e.status === 'new' || data.unread.has(x.e.id)).length}</span><span className="stat-note">{data.week.medianReplyMins != null ? `Typical reply in ${data.week.medianReplyMins < 60 ? `${data.week.medianReplyMins} min` : `${Math.round(data.week.medianReplyMins / 60)} h`}` : appts ? 'A quick text holds the booking' : 'Reply fast to win the job'}</span></div>
+          <div className="stat"><span className="stat-label">{appts ? 'Booked this month' : 'Won this month'}</span><span className="stat-value">{money(appts ? data.month.bookedValue : data.month.wonValue)}</span><span className="stat-note">{appts ? `${data.month.booked} ${data.month.booked === 1 ? 'appointment' : 'appointments'}${data.month.bookedValueFrom ? ', at least' : ''}, by your prices` : `${data.month.won} ${data.month.won === 1 ? W.job : W.jobs}`}</span></div>
         </div>
       </section>
 
       <div className="grid-2 section">
-        <section aria-labelledby="latest-h">
-          <div className="section-head"><h2 className="heading" id="latest-h">Latest enquiries</h2><Link to="/enquiries" className="btn btn-quiet btn-small">See all<Icon name="chevron" /></Link></div>
-          <div className="panel rows">
-            {data.latest.length === 0 && <div className="empty"><p className="muted">No enquiries yet. They’ll appear here the moment your receptionist takes a call.</p></div>}
-            {data.latest.map((e) => <EnquiryRow key={e.id} e={e} compact />)}
+        <section className="panel" aria-labelledby="booked-h">
+          <div className="panel-head"><h2 className="subhead" id="booked-h">Coming up</h2><Icon name="calendar" className="faint-ico" /></div>
+          <div className="rows">
+            {data.upcoming.length === 0 && <p className="small muted" style={{ padding: '16px 22px' }}>{appts ? 'No appointments booked from enquiries yet. Mark an enquiry “Booked in” and it appears here, and the client gets a confirmation text.' : 'No visits booked from enquiries yet.'}</p>}
+            {data.upcoming.map((e) => (
+              <Link key={e.id} to={`/enquiries/${e.id}`} className="mini-row">
+                <span className="date-chip"><strong>{new Date(e.bookedFor!).toLocaleDateString('en-GB', { day: 'numeric' })}</strong>{new Date(e.bookedFor!).toLocaleDateString('en-GB', { month: 'short' })}</span>
+                <span className="stack" style={{ minWidth: 0 }}>
+                  <span className="small" style={{ fontWeight: 600 }}>{who(e)}{data.unread.has(e.id) && <span className="tag tag-brass" style={{ marginLeft: 8 }}><Icon name="message" className="tag-ico" />Replied</span>}</span>
+                  <span className="xsmall faint enq-summary">{time12(e.bookedFor!)}{e.bookedType ? ` · ${e.bookedType}` : ''}{e.bookedWith ? ` with ${e.bookedWith}` : ''}</span>
+                </span>
+              </Link>
+            ))}
           </div>
         </section>
 
-        <div className="stack gap-16">
+        {appts ? (
+          <Link to="/follow-ups" className="goal due-card">
+            <span className="label">Due back</span>
+            <span className="goal-figure tabular">{data.back.length}<small>{data.back.length === 1 ? 'client to invite back' : 'clients to invite back'}</small></span>
+            <span className="due-list">
+              {data.back.slice(0, 3).map((b) => <span key={b.enquiry.id}>{who(b.enquiry)}: {b.type}, {b.overdueDays > 0 ? `due ${b.overdueDays === 1 ? 'yesterday' : `${b.overdueDays} days ago`}` : b.overdueDays === 0 ? 'due today' : `due in ${-b.overdueDays} days`}</span>)}
+              {data.back.length === 0 && <span>{beauty ? 'Nobody’s due yet. Set how many weeks each treatment lasts in Settings → Bookings, and clients appear here when it’s time.' : 'Nobody’s due yet. Set how many weeks between appointments in Settings → Bookings, and clients appear here when it’s time.'}</span>}
+              {data.due.length > 0 && <span>{data.due.length} other {data.due.length === 1 ? 'follow-up' : 'follow-ups'} due</span>}
+            </span>
+            <span className="due-cta">{data.back.length ? 'Texts drafted and ready' : 'See follow-ups'}<Icon name="chevron" /></span>
+          </Link>
+        ) : (
           <Link to="/follow-ups" className="goal due-card">
             <span className="label">Follow-ups due</span>
             <span className="goal-figure tabular">{data.due.length}<small>{data.due.length === 1 ? 'message to send' : 'messages to send'}</small></span>
@@ -147,21 +172,18 @@ export function Today() {
             </span>
             {data.due.length > 0 && <span className="due-cta">Drafted and ready<Icon name="chevron" /></span>}
           </Link>
-
-          <section className="panel" aria-labelledby="booked-h">
-            <div className="panel-head"><h2 className="subhead" id="booked-h">Coming up</h2><Icon name="calendar" className="faint-ico" /></div>
-            <div className="rows">
-              {data.upcoming.length === 0 && <p className="small muted panel-pad" style={{ padding: '16px 22px' }}>No visits booked from enquiries yet.</p>}
-              {data.upcoming.map((e) => (
-                <Link key={e.id} to={`/enquiries/${e.id}`} className="mini-row">
-                  <span className="date-chip"><strong>{new Date(e.bookedFor!).toLocaleDateString('en-GB', { day: 'numeric' })}</strong>{new Date(e.bookedFor!).toLocaleDateString('en-GB', { month: 'short' })}</span>
-                  <span className="stack" style={{ minWidth: 0 }}><span className="small" style={{ fontWeight: 600 }}>{who(e)}</span><span className="xsmall faint enq-summary">{e.summary}</span></span>
-                </Link>
-              ))}
-            </div>
-          </section>
-        </div>
+        )}
       </div>
+
+      {now.length < 3 && (
+        <section className="section" aria-labelledby="latest-h">
+          <div className="section-head"><h2 className="heading" id="latest-h">Latest enquiries</h2><Link to="/enquiries" className="btn btn-quiet btn-small">See all<Icon name="chevron" /></Link></div>
+          <div className="panel rows">
+            {data.latest.length === 0 && <div className="empty"><p className="muted">No enquiries yet. They’ll appear here the moment your receptionist takes a call.</p></div>}
+            {data.latest.map((e) => <EnquiryRow key={e.id} e={e} compact />)}
+          </div>
+        </section>
+      )}
     </div>
   );
 }

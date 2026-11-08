@@ -35,7 +35,9 @@ test('prices come only from the owner’s list, and "from" prices are marked as 
 });
 
 test('rebook interval: per treatment when set, otherwise the clinic’s general one', () => {
-  const s = structuredClone(beauty);
+  const plain = structuredClone(beauty);
+  plain.bookings.types = plain.bookings.types.map((t) => ({ ...t, rebookWeeks: undefined }));
+  const s = structuredClone(plain);
   s.bookings.types = s.bookings.types.map((t) => (t.name === 'Gel nails' ? { ...t, rebookWeeks: 3 } : t));
   assert.equal(rebookWeeksFor('Gel nails', s), 3);
   assert.equal(rebookWeeksFor('HydraFacial', s), 6);   // 42 days
@@ -46,7 +48,7 @@ test('rebook interval: per treatment when set, otherwise the clinic’s general 
   e = applyPatch(e, { paid: true, reviewAsked: true }, s, new Date('2026-09-03T12:10:00Z'));
   const at3w = new Date('2026-09-24T12:30:00Z');
   assert.ok(dueNow(e, s, [], false, at3w).some((d) => d.workflow === 'rebook'), 'gel nails rebook at 3 weeks');
-  assert.ok(!dueNow(e, beauty, [], false, at3w).some((d) => d.workflow === 'rebook'), 'not before 6 weeks without an interval');
+  assert.ok(!dueNow(e, plain, [], false, at3w).some((d) => d.workflow === 'rebook'), 'not before 6 weeks without an interval');
 });
 
 test('clients due back: by interval, skipping anyone who came back, with the owner’s wording', () => {

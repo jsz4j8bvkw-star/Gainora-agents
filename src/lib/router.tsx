@@ -36,6 +36,11 @@ export function usePath(): string {
   return path;
 }
 
+/** A one-shot hint for the next page ("open the reply box"), set just before navigating and taken once on arrival. */
+let pending: string | null = null;
+export const setIntent = (i: string) => { pending = i; };
+export const takeIntent = (): string | null => { const i = pending; pending = null; return i; };
+
 export function href(to: string): string {
   return memory ? '#' : to;
 }

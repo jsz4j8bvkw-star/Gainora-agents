@@ -3,10 +3,11 @@
 import type { Api } from './api';
 import type { CaptureSettings, EnquiryRecord, MessageRecord, Source, User } from './types';
 import { afterSend, defaultAutomations, dueNow, fieldsFor, ownerAlert, patchForStep, render, stepDef, type MessageLite, type StepId, type WorkflowId } from '../../shared/automations';
-import { applyPatch, DEFAULT_BEAUTY_SAFETY, DEFAULT_GREETING, DEFAULT_SAFETY, firstReply, greetingFor, isAfterHours, isBeauty, lines, normaliseEnquiry, triage } from '../../shared/capture';
+import { applyPatch, DEFAULT_BEAUTY_SAFETY, DEFAULT_GREETING, DEFAULT_SAFETY, greetingFor, isAfterHours, isBeauty, lines, normaliseEnquiry, triage } from '../../shared/capture';
+import { suggestReply } from '../../shared/insight';
 import { uid } from './format';
 
-const KEY = 'gainora.capture.demo.v2';
+const KEY = 'gainora.capture.demo.v3';
 const DAY = 86_400_000;
 
 export type Sample = 'trade' | 'clinic' | 'beauty';
@@ -76,12 +77,12 @@ export const BEAUTY_SETTINGS: CaptureSettings = {
     arrival: 'Please arrive 5 minutes early with clean skin and no make-up on the area being treated. Pay-and-display parking on Arwenack Street.',
     types: [
       { name: 'Free consultation', minutes: 30, price: 'Free', who: 'Amy' },
-      { name: 'Anti-wrinkle treatment', minutes: 30, price: 'from £180', who: 'Amy' },
-      { name: 'Lip filler', minutes: 45, price: '£250', who: 'Amy' },
-      { name: 'HydraFacial', minutes: 60, price: '£120', who: 'Leah' },
-      { name: 'Laser hair removal', minutes: 30, price: 'from £60', who: 'Leah' },
-      { name: 'Lash lift and tint', minutes: 45, price: '£55', who: 'Jess' },
-      { name: 'Gel nails', minutes: 60, price: '£35', who: 'Jess' },
+      { name: 'Anti-wrinkle treatment', minutes: 30, price: 'from £180', who: 'Amy', rebookWeeks: 12 },
+      { name: 'Lip filler', minutes: 45, price: '£250', who: 'Amy', rebookWeeks: 26 },
+      { name: 'HydraFacial', minutes: 60, price: '£120', who: 'Leah', rebookWeeks: 4 },
+      { name: 'Laser hair removal', minutes: 30, price: 'from £60', who: 'Leah', rebookWeeks: 4 },
+      { name: 'Lash lift and tint', minutes: 45, price: '£55', who: 'Jess', rebookWeeks: 6 },
+      { name: 'Gel nails', minutes: 60, price: '£35', who: 'Jess', rebookWeeks: 3 },
     ],
     staff: 'Amy Carter\nLeah Price\nJess Morgan', noticeHours: 2, aheadWeeks: 8, cancellation: 'Please give 48 hours’ notice to cancel or move, or the deposit is kept.', status: 'connected',
   },
@@ -95,6 +96,7 @@ const SAMPLE_SETTINGS: Record<Sample, CaptureSettings> = { trade: DEMO_SETTINGS,
 
 interface Seed {
   name: string; phone?: string; email?: string; channel: EnquiryRecord['channel']; summary: string;
+  callType?: string;       // what the receptionist reported the call was about
   days: number; hour: number; min?: number;
   ago?: number;            // hours ago, for the newest few, so they're never in the future
   then?: (e: EnquiryRecord, at: (d: number, h?: number) => Date) => EnquiryRecord;
@@ -155,7 +157,7 @@ function seed(settings: CaptureSettings): EnquiryRecord[] {
   return S.map((x) => {
     const when = x.ago != null ? new Date(now - x.ago * 3_600_000) : at(x.days, Math.floor(x.hour), x.min ?? Math.round((x.hour % 1) * 60));
     const e = normaliseEnquiry({ name: x.name, phone: x.phone, email: x.email, summary: x.summary }, x.channel, when)!;
-    const t = triage(e.summary);
+    const t = triage(e.summary, { callType: x.callType });
     const after = isAfterHours(e.receivedAt, settings.calls);
     const history = [{ at: e.receivedAt, text: `${x.channel === 'call' ? 'Call answered by your receptionist' : x.channel === 'form' ? 'Website form received' : 'Email received'}${after ? ' (out of hours)' : ''}` }];
     if (t.urgency !== 'normal') history.push({ at: e.receivedAt, text: `${t.urgency === 'emergency' ? 'Flagged as an emergency' : 'Flagged as urgent'}: ${t.reasons.join('; ')}` });
@@ -192,7 +194,11 @@ function beautySeeds(step: Step, now: number): Seed[] {
       then: (e) => ({ ...step(e, new Date(new Date(e.receivedAt).getTime() + 6 * 60_000), { replied: true }), notes: 'Amy saw her at the clinic within the hour and treated it. Follow-up call booked for tomorrow.' }) },
     { name: 'Megan Hall', phone: '07700 900412', channel: 'call', days: 0, hour: 0, ago: 3.1, summary: 'Called during a treatment. Wants gel nails and a lash lift together on Saturday morning. Booked with Jess.', then: booked('Gel nails', 'Jess', 6 - new Date(now).getDay() || 7, 10) },
     { name: 'Laura Bennett', email: 'laura.bennett@example.com', phone: '07700 900413', channel: 'form', days: 1, hour: 22, min: 5, summary: 'Asked how many laser hair removal sessions she would need for underarms and whether she needs a patch test first.' },
-    { name: 'Glow Leads Ltd', phone: '02079 460222', channel: 'call', days: 1, hour: 11, summary: 'Caller offered Instagram marketing and more Google reviews for the clinic.' },
+    { name: 'Glow Leads Ltd', phone: '02079 460222', channel: 'call', days: 1, hour: 11, summary: 'Caller offered Instagram marketing and more Google reviews for the clinic. Receptionist said no thank you and ended the call.', callType: 'sales call' },
+    { name: 'Nancy Bell', phone: '07700 900429', channel: 'call', days: 1, hour: 16, min: 25, summary: 'Running about 15 minutes late for her 4.30 appointment with Leah. Receptionist let the team know.', callType: 'running late',
+      then: (e, t) => step(e, t(1, 16.6), { replied: true }) },
+    { name: 'Tilly Dawson', phone: '07700 900430', channel: 'call', days: 3, hour: 14, summary: 'Gel nails, new client. Booked with Jess for yesterday morning.',
+      then: (e, t) => { let x = step(e, new Date(new Date(e.receivedAt).getTime() + 3 * 60_000), { status: 'booked', bookedFor: t(1, 10).toISOString(), bookedType: 'Gel nails', bookedWith: 'Jess' }); return step(x, t(1, 10.7), { status: 'lost', lostReason: 'noshow' }); } },
     { name: 'Hannah Price', phone: '07700 900414', channel: 'call', days: 2, hour: 19, min: 20, summary: 'Returning client. HydraFacial with Leah. Booked.', then: booked('HydraFacial', 'Leah', 3, 15) },
     { name: 'Zara Khan', phone: '07700 900415', channel: 'call', days: 4, hour: 13, min: 10, summary: 'Asked the price of lip filler and said she would think about it.', then: (e, t) => step(e, t(4, 13.5), { replied: true }) },
     { name: 'Ella Watson', phone: '07700 900416', channel: 'call', days: 6, hour: 18, min: 40, summary: 'Anti-wrinkle top-up, returning client. Booked with Amy.', then: attended(180, 'Anti-wrinkle treatment', 'Amy') },
@@ -208,6 +214,7 @@ function beautySeeds(step: Step, now: number): Seed[] {
     { name: 'Evie Clarke', phone: '07700 900426', channel: 'call', days: 28, hour: 20, min: 5, summary: 'Anti-wrinkle treatment, new client after a consultation. Booked.', then: attended(180, 'Anti-wrinkle treatment', 'Amy') },
     { name: 'Mia Lewis', phone: '07700 900427', channel: 'call', days: 31, hour: 10, summary: 'Gel nails. Booked.', then: attended(35, 'Gel nails', 'Jess') },
     { name: 'Ruby Adams', phone: '07700 900428', channel: 'call', days: 34, hour: 17, min: 30, summary: 'Laser hair removal course, booked the first session.', then: attended(90, 'Laser hair removal', 'Leah') },
+    { name: 'Holly Fraser', phone: '07700 900431', channel: 'call', days: 40, hour: 11, min: 10, summary: 'HydraFacial, returning client. Booked with Leah.', then: attended(120, 'HydraFacial', 'Leah') },
   ];
 }
 
@@ -422,7 +429,8 @@ export function createDemoApi(): Api {
     async draftReply(id) {
       await wait(700);
       const e = find(id);
-      return firstReply({ business: s.settings!.business.name, owner: s.settings!.business.ownerName, customer: e.name.split(' ')[0] || undefined }, e.kind, e.email && !e.phone ? 'email' : 'text');
+      const last = s.messages.filter((m) => m.enquiryId === id && m.direction === 'in').sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+      return suggestReply(e, s.settings!, { unreadReply: last ? { body: last.body, at: last.createdAt } : null });
     },
     async sendTest() {
       await wait(600);
