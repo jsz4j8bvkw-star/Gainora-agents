@@ -65,14 +65,14 @@ function usefulLines(text: string): string[] {
  * booking pages it links to. Fills `sources` (url → visible text) for the verbatim checks.
  */
 export async function readSite(site: string, sources: Record<string, string>, home?: Fetched): Promise<SiteRead> {
-  const h: Fetched = home ?? await fetchPage(site);
+  const h: Fetched = home ?? await fetchPage(site, 12_000);
   if (!okPage(h)) return { home: h.status ? h : null, pages: [], hashes: {}, bookingPages: [], socialLinks: [], htmls: [] };
   const links = extractLinks(h.html, h.finalUrl);
   const priceUrls = pricePageCandidates(links, 3).filter((u) => u !== h.finalUrl);
-  const extra = await pool(priceUrls, 3, (u) => fetchPage(u, 12_000));
+  const extra = await pool(priceUrls, 3, (u) => fetchPage(u, 10_000));
   const htmls = [h, ...extra.filter(okPage)];
   const booking = [...new Set(htmls.flatMap((p) => bookingLinks(p.html, p.finalUrl, 3)))].slice(0, 3);
-  const bookingPages = await pool(booking, 3, (u) => fetchPage(u, 15_000));
+  const bookingPages = await pool(booking, 3, (u) => fetchPage(u, 12_000));
   const pages: PageLines[] = []; const hashes: Record<string, string> = {};
   const take = (p: Fetched, isBooking: boolean) => {
     const text = visibleText(p.html);

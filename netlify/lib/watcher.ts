@@ -267,7 +267,7 @@ async function reachAlerts(userId: string, added: ReachEvent[], comps: Competito
   for (const e of important) {
     await addValue(userId, 'watcher', 'competitor_change', e.summary.slice(0, 200));
     const advice = comps.advice?.lines.find((l) => l.key === e.key);
-    await addAlert(userId, 'watcher', e.kind === 'new-nearby' ? 'notice' : 'notice', e.summary.slice(0, 160), `${e.detail ? `${e.detail} ` : ''}${advice ? advice.action : 'Details are on the Competitors tab.'}`.slice(0, 500), e.url);
+    await addAlert(userId, 'watcher', 'notice', e.summary.slice(0, 160), `${e.detail ? `${e.detail} ` : ''}${advice ? advice.action : 'Details are on the Competitors tab.'}`.slice(0, 500), e.url);
   }
   const actions: string[] = [];
   const surge = added.find((e) => e.kind === 'reviews');

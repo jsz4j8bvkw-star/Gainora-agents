@@ -2,7 +2,7 @@
 
 The client app for **Gainora Command Centre**: three AI agents in one installable web app at **app.gainora.co.uk**, sold as one subscription (£299 a month; founding price £199 a month for the first 10 clients, fixed for 12 months; no setup fee, cancel any time).
 
-- **The Watcher**: checks the client's website every morning (uptime, broken links, security certificate, contact page) and tracks up to five competitors for price, offer and page changes. It also reads the client's Google reviews daily and drafts replies, runs Google's speed test weekly and turns it into a ranked list of plain-English fixes, and builds a weekly price comparison with competitors (every price is checked against the page it came from).
+- **The Watcher**: checks the client's website every morning (uptime, broken links, security certificate, contact page). It finds the competition itself: the closest comparable businesses from Google around the client's location (refreshed monthly, so a new opening nearby gets an alert), alongside up to five the client names, and for each one follows the Google rating and review count over time (new reviews as a sign of how busy they look), reads their website and the public booking pages it links to (Fresha, Treatwell, Booksy and others) for services, prices and offers, records their Instagram and Facebook links, and, when Instagram reading is switched on (see `META-SETUP.md`), reads public Instagram professional accounts for followers, posting pace and offers in captions. Every service, price and offer must appear word for word on the page or caption it came from, with a link, or it is dropped. It also reads the client's Google reviews daily and drafts replies, runs Google's speed test weekly and turns it into a ranked list of plain-English fixes, and builds a weekly price comparison with competitors.
 - **The Scout**: researches public sources for prospects, stockists or partners, or for local opportunities (markets, fairs, awards, networking), and returns a sourced shortlist with a ready-to-edit introduction for each. Leads go into a pipeline with follow-up reminders on day 4 and day 9. Every morning it also matches new UK public contracts from Contracts Finder to the business.
 - **The Brief**: turns the client's weekly numbers into a short report with three priorities tied to their 90-day goal. When orders or revenue dip, it writes win-back messages (email, text and social post) for past customers.
 - **Ask**: a chat that answers from the client's business profile and everything their agents have found.
@@ -19,7 +19,8 @@ Every client starts with an onboarding questionnaire (7 sections, autosaved), wh
 | API | Netlify Functions, `netlify/functions` | Agent runs, chat, leads, feedback, Stripe webhook, billing portal, daily schedules. |
 | Data and login | Supabase (new project) | Magic-link sign-in, one row-level-secured table per kind of data. |
 | AI | Anthropic API (or OpenAI) | Research with web search (Scout), writing (Brief, Ask, replies, follow-ups, win-back), contract matching and price pairing. Cost logged per client, monthly cap. |
-| Google | Places API (New), PageSpeed Insights API | The client's public rating and reviews, competitors' ratings, and the weekly speed test. One API key. |
+| Google | Places API (New), PageSpeed Insights API | The client's public rating and reviews, the competitors nearby and their ratings, and the weekly speed test. One API key. |
+| Instagram | Meta Graph API, Business Discovery | Public professional accounts (the client's and competitors'), read with Gainora's own token. Optional; see `META-SETUP.md`. |
 | Public contracts | Contracts Finder (gov.uk) | Open tenders, fetched once a day for everyone (no key needed), then matched per client. |
 | Payments | Stripe | Payment Link → webhook → agent switched on, login created, welcome email. |
 | Email | Resend | Welcome email, the weekly summary on each client's report day, and the monthly results email. |
@@ -52,7 +53,9 @@ Run `supabase/migrations/20261107_gainora_agents_v2.sql` in the SQL Editor (it o
 - Netlify and Supabase: free tiers are enough for the first ~50 clients.
 - Resend: free up to 3,000 emails a month.
 - AI: logged per client in `ai_usage`. Each client is capped at `AI_MONTHLY_CAP_USD` (default $8), and the app stops AI work for that client until the 1st. Site checks are plain code; AI is used when a competitor page changes, for the weekly price comparison, for drafts the client asks for, and for the daily contract shortlist (at most 15 notices, on the fast model). A Scout search uses up to 8 web searches.
-- Google: the Watcher makes one Place Details request per client per day (rating and reviews), and up to four Text Search requests per client per week (competitors' ratings). Google gives each Places API a monthly free allowance and then charges per request, so check current prices on Google's pricing page and keep the budget alert on. The PageSpeed Insights API has no charge.
+- Google: the Watcher makes one Place Details request per client per day (rating and reviews). For the competition it uses the smallest field masks and counts every call: one or two Text Searches a month to find businesses nearby, one Text Search to match each competitor the client named (once), and one Place Details (rating and count only) per watched competitor per week. The total is capped per client per month by `PLACES_MONTHLY_CAP` (default 60; the count is kept in `watcher_state.state.competitors.placesCalls`). Google gives each Places API a monthly free allowance and then charges per request, so check current prices on Google's pricing page and keep the budget alert on. The PageSpeed Insights API has no charge.
+- Instagram: one Business Discovery call per account per day, capped by `META_DAILY_CAP` across all clients (default 150) and `META_PER_CLIENT_CAP` (default 10). Free.
+- AI for the competition: the fast model only, and only when a competitor's page text actually changed (hashes are kept per URL) or there are new Instagram posts; one short advice call a day when something changed, otherwise weekly.
 - Contracts Finder: free, no key. The app fetches once a day for all clients and backs off when asked to.
 
 ## Develop
@@ -61,9 +64,11 @@ Run `supabase/migrations/20261107_gainora_agents_v2.sql` in the SQL Editor (it o
 npm install
 npm run build:demo   # demo with sample data in dist-demo/
 npm run build        # production build in dist/
-npm test             # 40 tests: page parsing and diffing, Brief maths and priorities, the ranked Today list, Ask sources, validation, Stripe signatures, Scout filtering and learning,
+npm test             # 60 tests: page parsing and diffing, Brief maths and priorities, the ranked Today list, Ask sources, validation, Stripe signatures, Scout filtering and learning,
                      # results maths, speed-test parsing, contract parsing and matching, price checks, follow-up dates,
-                     # review tracking, a real crawl against a local site, the webhook, and the lead pipeline end to end
+                     # review tracking, a real crawl against a local site, the webhook, the lead pipeline end to end,
+                     # and the competition: nearby search, verbatim checks on services and offers, change events,
+                     # Instagram Business Discovery parsing, a full faked day of the reach check, and the owner's actions
 npm run typecheck
 ```
 
@@ -72,7 +77,8 @@ npm run typecheck
 - Gainora never sends emails, posts, replies to reviews or contacts anyone for the client. It drafts introductions, follow-ups, review replies and win-back messages; the client sends them.
 - Every first email and follow-up ends with an easy way to opt out, and the Scout stops at two follow-ups.
 - Review replies never offer discounts, refunds or gifts in exchange for changing a review.
-- The Watcher only reads public pages. It never submits forms. Prices in the comparison must appear on the page they came from, or they are dropped.
+- The Watcher only reads public pages. It never submits forms or logs in anywhere. Prices in the comparison, and every competitor service, price and offer, must appear word for word on the page (or Instagram caption) they came from, or they are dropped; each is shown with its link and the date seen.
+- Competitors' review counts are described as a sign of how busy they look, never as bookings or revenue. Gainora never contacts a competitor.
 - Scout results must cite a page the search actually returned; personal emails, phone numbers and LinkedIn profiles are dropped, as are the client's own site, listed competitors and anything the client marked "Not relevant".
 - The Brief may only use numbers the client entered; any AI text with an unsupported figure is replaced by the rule-based Brief.
 - Results only show money from real figures: deal values the client entered, and contracts' published values (labelled as such).

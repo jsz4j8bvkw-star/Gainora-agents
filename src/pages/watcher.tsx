@@ -4,7 +4,7 @@ import { Locked, useApp } from '../app';
 import { Button, ErrorNote, Field, Icon, Loading, Modal, Sparkline, Stars, Tabs, copyText, useLoad, useToast } from '../components/ui';
 import { Feedback } from '../components/feedback';
 import { hostOf, relative, shortDate } from '../lib/format';
-import { queryParam } from '../lib/router';
+import { Link, queryParam } from '../lib/router';
 import { priceValue } from '../../shared/prices';
 import { bookingPlatform, distanceLabel, reviewsSince } from '../../shared/competitors';
 import { socialLabel } from '../../shared/social';
@@ -606,7 +606,7 @@ function CompetitorCard({ c, you, busy, act }: { c: TrackedCompetitor; you: { ra
         </div>
         {c.source === 'found'
           ? <Button kind="quiet" small busy={busy === c.key + 'dismiss'} onClick={() => act('dismiss', c.key, undefined, `${c.name} removed. The Watcher won’t suggest them again.`)}>Not a competitor</Button>
-          : <a className="btn btn-quiet btn-small" href="/business">Edit</a>}
+          : <Link to="/business" className="btn btn-quiet btn-small">Edit</Link>}
       </div>
 
       <div className="comp-facts">
@@ -657,6 +657,17 @@ function CompetitorCard({ c, you, busy, act }: { c: TrackedCompetitor; you: { ra
         )}
         {(c.services.length > 5 || (ig && !ig.error && ig.findings.length > 2)) && <button type="button" className="link-btn small" onClick={() => setMore(!more)}>{more ? 'Show less' : `Show all ${c.services.length} services`}</button>}
       </div>
+
+      {ig && !ig.error && ig.posts.length > 0 && (
+        <details className="comp-posts">
+          <summary className="small">Recent Instagram posts ({ig.posts.length})</summary>
+          <ul className="comp-list-plain mt-8">
+            {ig.posts.slice(0, more ? 12 : 4).map((p) => (
+              <li key={p.id}><a href={p.url} target="_blank" rel="noreferrer">{p.caption ? `${p.caption.replace(/\s+/g, ' ').slice(0, 90)}${p.caption.length > 90 ? '…' : ''}` : `${p.type === 'VIDEO' ? 'Video' : 'Post'} without a caption`}</a><span className="xsmall faint"> · {shortDate(p.at)}{p.likes != null ? `, ${n(p.likes)} likes` : ''}{p.comments != null ? `, ${n(p.comments)} comments` : ''}</span></li>
+            ))}
+          </ul>
+        </details>
+      )}
 
       <div className="row gap-16 wrap comp-links">
         {c.url && <a className="small" href={c.url} target="_blank" rel="noreferrer">Website<span className="sr-only"> (opens in a new tab)</span></a>}
