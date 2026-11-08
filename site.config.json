@@ -2,7 +2,7 @@
  "_readme": "Edit this file to change the brand, prices, contact details, booking link and form handling. Then run: node build.js && node tests/check.js. Prices here are the only place prices live: every page reads them from here.",
  "brand": {
   "name": "Gainora",
-  "tagline": "Every call answered. Every enquiry followed up.",
+  "tagline": "More enquiries. None of them lost. A business that runs without you doing everything.",
   "legalName": "",
   "address": "",
   "companyNumber": ""
