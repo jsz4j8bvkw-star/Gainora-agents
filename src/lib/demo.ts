@@ -300,7 +300,9 @@ function demoReply(text: string, s: DemoState): ChatMessage {
     keys = ['prices'];
     const rows = cmp.rows.filter((r) => r.yours && r.listedBy).slice(0, 3);
     const gap = cmp.theyOfferYouDont[0];
-    reply = `Like for like, against the ${cmp.competitors.length} businesses the Watcher reads around ${p.business.location.split(',')[0]}:\n\n${rows.map((r) => `${r.label}: you ${r.yours!.price}, local average £${r.localAvg} (${r.position}).`).join('\n')}${gap ? `\n\n${gap.by.length} of them price ${gap.label.charAt(0).toLowerCase() + gap.label.slice(1)} (${gap.by.map((b) => `${b.name} ${b.price}`).join(', ')}) and your list doesn’t show it.` : ''}\n\nOne thing to do: where your prices are shown, say what each includes (the free two-week review, 45 minutes with a nurse prescriber). The Prices tab has every row with its source.`;
+    const gbp = (v: number) => `£${Number.isInteger(v) ? v : v.toFixed(2)}`;
+    const brand = (l: string) => (/^[A-Z][A-Z]|^(HydraFacial|HIFU|LED|IPL|BIAB|PRP|RF|Profhilo|Sculptra|Morpheus8)\b/.test(l) ? l : l.charAt(0).toLowerCase() + l.slice(1));
+    reply = `Like for like, against the ${cmp.competitors.length} businesses the Watcher reads around ${p.business.location.split(',')[0]}:\n\n${rows.map((r) => `${r.label}: you ${r.yours!.price}, local average ${gbp(r.localAvg!)} (${r.position}).`).join('\n')}${gap ? `\n\n${gap.by.length} of them price ${brand(gap.label)} (${gap.by.map((b) => `${b.name} ${b.price}`).join(', ')}) and your list doesn’t show it.` : ''}\n\nOne thing to do: where your prices are shown, say what each includes (the free two-week review, 45 minutes with a nurse prescriber). The Prices tab has every row with its source.`;
   } else if (/busiest|bigger|busy|size|team|followers|compare|vs|versus|them/.test(t) && comps?.list.length) {
     keys = ['competitors'];
     const glow = comps.list[0];
