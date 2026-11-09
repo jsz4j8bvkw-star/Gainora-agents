@@ -12,13 +12,19 @@ import type { ReviewPoint } from './reviews';
 import { extractPrices } from './pages';
 import { priceValue } from './prices';
 import { socialUrl } from './social';
+import type { VenueStats } from './booking';
 
 const DAY = 86_400_000;
 
 /* ---------- Types ---------- */
 export type CompetitorSource = 'typed' | 'found';
 
-export interface ServiceLine { name: string; price: string; url: string; seenAt: string }
+export interface ServiceLine {
+  name: string; price: string; url: string; seenAt: string;
+  /** Where the line came from: the page text via the AI (default), a structured booking page, schema.org data, or the owner's own list. */
+  via?: 'page' | 'fresha' | 'schema' | 'owner';
+  duration?: string;
+}
 export interface OfferLine { text: string; url: string; seenAt: string; from: 'website' | 'instagram' }
 
 export interface InstaPost { id: string; caption: string; at: string; likes: number | null; comments: number | null; url: string; type?: string }
@@ -67,6 +73,10 @@ export interface TrackedCompetitor {
   sourceHashes?: Record<string, string>;
   sourcesCheckedAt?: string;
   social?: InstagramSnapshot | null;
+  /** The public booking page (Fresha etc.) as a size signal: rating, reviews, team, number of treatments. */
+  venue?: VenueStats | null;
+  /** Booking pages that only render with JavaScript, so their prices could not be read. */
+  unreadable?: string[];
   firstSeenAt: string;
 }
 
@@ -87,6 +97,8 @@ export interface CompetitorsState {
     /** How the coordinates were worked out: the Google listing, the postcode, or the town centre. */
     locSource?: 'listing' | 'postcode' | 'town' | 'google-town';
     instagram?: InstagramSnapshot | null; services?: ServiceLine[]; offers?: OfferLine[]; sourceHashes?: Record<string, string>; sourcesCheckedAt?: string;
+    venue?: VenueStats | null;
+    unreadable?: string[];
   };
   /** How far the last nearby search reached (km) and what it was centred on, so the owner can see it and the app knows when to search again. */
   foundRadiusKm?: number | null;
@@ -438,7 +450,7 @@ export function mergeTracked(
       instagramSetBy: p?.instagramSetBy === 'owner' ? 'owner' : base.instagram && !p?.instagram ? 'listing' : p?.instagramSetBy,
       primaryType: base.primaryType ?? p?.primaryType, relevance: base.relevance ?? p?.relevance,
       services: p?.services ?? [], offers: p?.offers ?? [], bookingPages: [...new Set([...(p?.bookingPages ?? []), ...(base.bookingPages ?? [])])], pagesRead: p?.pagesRead, sourceHashes: p?.sourceHashes, sourcesCheckedAt: p?.sourcesCheckedAt,
-      social: p?.social ?? null, firstSeenAt: p?.firstSeenAt ?? stamp,
+      social: p?.social ?? null, venue: p?.venue ?? null, unreadable: p?.unreadable, firstSeenAt: p?.firstSeenAt ?? stamp,
     };
   };
   const isDismissed = (c: { name: string; url?: string; placeId?: string }) => dismissed.some((d) => d.key === competitorKey(c) || sameBusiness(d, c));

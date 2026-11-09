@@ -23,6 +23,7 @@ import {
   type CompetitorsState, type FoundPlace, type InstagramSnapshot, type OfferLine, type ReachAdvice, type ReachEvent, type SearchPlan, type ServiceLine, type TrackedCompetitor,
 } from '../../shared/competitors';
 import { extractLinks, extractOffers, hashText, visibleText } from '../../shared/pages';
+import { parsePriceList, readBookingPage, type VenueStats } from '../../shared/booking';
 import { priceLines, pricePageCandidates } from '../../shared/prices';
 import { mapsUrl, pickCompetitorPlace, type PlaceSummary, type ReviewPoint } from '../../shared/reviews';
 import { socialUrl } from '../../shared/social';
@@ -91,13 +92,33 @@ export async function findNearby(here: LatLng, plan: SearchPlan, budget: { can(n
 
 /* ---------- Reading a business's public pages ---------- */
 export interface PageLines { url: string; lines: string[]; booking?: boolean }
-export interface SiteRead { home: Fetched | null; pages: PageLines[]; hashes: Record<string, string>; bookingPages: string[]; socialLinks: string[]; htmls: string[] }
+export interface SiteRead {
+  home: Fetched | null; pages: PageLines[]; hashes: Record<string, string>; bookingPages: string[]; socialLinks: string[]; htmls: string[];
+  /** Services read from structured booking-page data (exact prices, no AI needed). */
+  structured: ServiceLine[];
+  /** The booking page's own stats: rating, reviews, team size, number of treatments. */
+  venue: VenueStats | null;
+  /** Booking pages that only render with JavaScript, whose prices could not be read. */
+  unreadable: string[];
+}
 
 const SOCIAL_HREF = /href\s*=\s*["']([^"']*(?:instagram\.com|instagr\.am|facebook\.com|fb\.com|fb\.me)[^"']*)["']/gi;
 export function socialLinksIn(htmls: string[]): string[] {
   const out = new Set<string>();
   for (const h of htmls) for (const m of (h || '').matchAll(SOCIAL_HREF)) out.add(m[1].replace(/&amp;/g, '&'));
   return [...out].slice(0, 40);
+}
+
+/** Service lines from several readers, first source wins on a repeated name (typed by the owner, then structured, then page text). */
+export function mergeServices(...lists: ServiceLine[][]): ServiceLine[] {
+  const out: ServiceLine[] = []; const names = new Set<string>();
+  for (const list of lists) for (const s of list) {
+    const k = s.name.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    if (!k || names.has(k)) continue;
+    names.add(k); out.push(s);
+    if (out.length >= 120) return out;
+  }
+  return out;
 }
 
 /** Price-bearing lines plus offer-looking lines from a page, which is all the AI needs to see. */
@@ -108,19 +129,28 @@ function usefulLines(text: string): string[] {
 }
 
 /**
- * Reads a website's home page, up to three pages likely to list prices, and up to three public
- * booking pages it links to. Fills `sources` (url → visible text) for the verbatim checks.
+ * Reads a business's public pages: the website's home page and up to three pages likely to list
+ * prices (when there is a website), and up to three public booking pages: the ones the website
+ * links to plus any known from elsewhere (the Google listing, the owner). Booking pages go through
+ * the structured readers first (Fresha's page data, schema.org offers); only pages with no
+ * structured data are left for the AI to read as text. Fills `sources` (url → text) for the
+ * verbatim checks. Works with no website at all.
  */
-export async function readSite(site: string, sources: Record<string, string>, home?: Fetched): Promise<SiteRead> {
-  const h: Fetched = home ?? await fetchPage(site, 12_000);
-  if (!okPage(h)) return { home: h.status ? h : null, pages: [], hashes: {}, bookingPages: [], socialLinks: [], htmls: [] };
-  const links = extractLinks(h.html, h.finalUrl);
-  const priceUrls = pricePageCandidates(links, 3).filter((u) => u !== h.finalUrl);
-  const extra = await pool(priceUrls, 3, (u) => fetchPage(u, 10_000));
-  const htmls = [h, ...extra.filter(okPage)];
-  const booking = [...new Set(htmls.flatMap((p) => bookingLinks(p.html, p.finalUrl, 3)))].slice(0, 3);
+export async function readSite(site: string, sources: Record<string, string>, home?: Fetched, knownBooking: string[] = [], at = new Date()): Promise<SiteRead> {
+  const h: Fetched | null = site ? (home ?? await fetchPage(site, 12_000)) : null;
+  const siteOk = !!h && okPage(h);
+  const htmls: Fetched[] = [];
+  if (h && siteOk) {
+    const links = extractLinks(h.html, h.finalUrl);
+    const priceUrls = pricePageCandidates(links, 3).filter((u) => u !== h.finalUrl);
+    const extra = await pool(priceUrls, 3, (u) => fetchPage(u, 10_000));
+    htmls.push(h, ...extra.filter(okPage));
+  }
+  const linked = htmls.flatMap((p) => bookingLinks(p.html, p.finalUrl, 3));
+  const booking = [...new Set([...linked, ...knownBooking.filter((u) => /^https?:\/\//i.test(u))])].slice(0, 3);
   const bookingPages = await pool(booking, 3, (u) => fetchPage(u, 12_000));
   const pages: PageLines[] = []; const hashes: Record<string, string> = {};
+  const structured: ServiceLine[] = []; let venue: VenueStats | null = null; const unreadable: string[] = [];
   const take = (p: Fetched, isBooking: boolean) => {
     const text = visibleText(p.html);
     if (!text) return;
@@ -131,8 +161,19 @@ export async function readSite(site: string, sources: Record<string, string>, ho
     pages.push({ url: p.finalUrl, lines, ...(isBooking ? { booking: true } : {}) });
   };
   for (const p of htmls) take(p, false);
-  for (const p of bookingPages.filter(okPage)) take(p, true);
-  return { home: h, pages, hashes, bookingPages: bookingPages.filter(okPage).map((p) => p.finalUrl), socialLinks: socialLinksIn(htmls.map((p) => p.html)), htmls: htmls.map((p) => p.html) };
+  for (const p of bookingPages.filter(okPage)) {
+    const read = readBookingPage(p.html, p.finalUrl, at);
+    if (read.venue && (!venue || read.platform === 'Fresha')) venue = read.venue;
+    if (read.services.length) {
+      // Structured data is the page: record it as the source text, so later checks see exactly what was read.
+      sources[p.finalUrl] = read.text;
+      hashes[p.finalUrl] = hashText(read.text);
+      const via = read.platform === 'Fresha' ? 'fresha' : 'schema';
+      for (const sv of read.services) structured.push({ name: sv.name, price: sv.price, url: p.finalUrl, seenAt: at.toISOString(), via, ...(sv.duration ? { duration: sv.duration } : {}) });
+    } else if (read.jsRendered) { unreadable.push(p.finalUrl); hashes[p.finalUrl] = 'js'; }
+    else take(p, true);
+  }
+  return { home: siteOk ? h : (h && h.status ? h : null), pages, hashes, bookingPages: bookingPages.filter(okPage).map((p) => p.finalUrl), socialLinks: socialLinksIn(htmls.map((p) => p.html)), htmls: htmls.map((p) => p.html), structured, venue, unreadable };
 }
 
 const changed = (prev: Record<string, string> | undefined, next: Record<string, string>) => {
@@ -334,24 +375,40 @@ export async function checkReach(input: ReachInput): Promise<ReachOutput> {
     catch (e: any) { console.error('[gainora] reach rating', c.name, e?.message); }
   }
 
-  // 5. Websites and public booking pages: services, prices, offers, social links.
-  if (ownSite) {
+  // 5. Websites and public booking pages: services, prices, offers, social links and booking-page
+  //    stats. Works for a business with no website: its Fresha page (from the Google listing or the
+  //    owner) is read on its own. The owner's own typed price list always counts as theirs.
+  type Readable = { services?: ServiceLine[]; offers?: OfferLine[]; sourceHashes?: Record<string, string>; sourcesCheckedAt?: string; venue?: VenueStats | null; unreadable?: string[] };
+  const applyRead = async (target: Readable, read: SiteRead, who: string, extra: ServiceLine[] = []) => {
+    const due = changed(target.sourceHashes, read.hashes) || !target.sourcesCheckedAt;
+    if (due) {
+      let fromAi: { services: ServiceLine[]; offers: OfferLine[] } | null = { services: [], offers: [] };
+      if (read.pages.length) fromAi = await extractServices(userId, who, read.pages, gathered.sources, at);
+      // No AI available: keep what the pages gave last time, but structured and typed lines are always fresh.
+      const pageLines = fromAi ? fromAi.services : (target.services ?? []).filter((x) => !x.via || x.via === 'page');
+      target.services = mergeServices(extra, read.structured, pageLines);
+      target.offers = fromAi ? fromAi.offers : (target.offers ?? []);
+      if (fromAi || !read.pages.length) { target.sourceHashes = read.hashes; target.sourcesCheckedAt = at; }
+    } else if (extra.length) target.services = mergeServices(extra, (target.services ?? []).filter((x) => x.via !== 'owner'));
+    target.venue = read.venue ?? (read.bookingPages.length ? null : target.venue ?? null);
+    target.unreadable = read.unreadable.length ? read.unreadable : undefined;
+  };
+  const ownBooking = [String(profile?.offer?.bookingUrl || '').trim()].filter((u) => /^https?:\/\//i.test(u));
+  const ownTyped: ServiceLine[] = parsePriceList(String(profile?.offer?.priceList || '')).map((x) => ({ name: x.name, price: x.price, url: ownBooking[0] || ownSite || '', seenAt: at, via: 'owner' as const, ...(x.duration ? { duration: x.duration } : {}) }));
+  if (ownSite || ownBooking.length || ownTyped.length) {
     try {
-      const read = await readSite(ownSite, gathered.sources);
+      const read = (ownSite || ownBooking.length) ? await readSite(ownSite, gathered.sources, undefined, ownBooking, now) : { home: null, pages: [], hashes: {}, bookingPages: [], socialLinks: [], htmls: [], structured: [], venue: null, unreadable: [] } satisfies SiteRead;
       if (read.home) gathered.homes.you = read.home;
       gathered.mine = read.pages;
       const you = state.you ?? {};
-      if (read.pages.length && (changed(you.sourceHashes, read.hashes) || !you.services)) {
-        const got = await extractServices(userId, `${ownName} (the owner's own business)`, read.pages, gathered.sources, at);
-        if (got) { you.services = got.services; you.offers = got.offers; you.sourceHashes = read.hashes; you.sourcesCheckedAt = at; }
-      } else if (!read.pages.length) { you.services = you.services ?? []; }
+      await applyRead(you, read, `${ownName} (the owner's own business)`, ownTyped);
       state.you = you;
     } catch (e: any) { console.error('[gainora] reach own site', e?.message); }
   }
   for (const c of state.list) {
-    if (!c.url) continue;
+    if (!c.url && !c.bookingPages.length) continue;
     try {
-      const read = await readSite(c.url, gathered.sources);
+      const read = await readSite(c.url, gathered.sources, undefined, c.bookingPages, now);
       if (read.home) gathered.homes[c.key] = read.home;
       gathered.theirs[c.key] = read.pages;
       if (read.socialLinks.length) {
@@ -360,12 +417,9 @@ export async function checkReach(input: ReachInput): Promise<ReachOutput> {
         if (ig && c.instagramSetBy !== 'owner') { c.instagram = ig; c.instagramSetBy = 'website'; }
         if (fb) c.facebook = fb;
       }
-      c.bookingPages = read.bookingPages;
+      c.bookingPages = [...new Set([...read.bookingPages, ...c.bookingPages])].slice(0, 4);
       c.pagesRead = Object.keys(read.hashes);
-      if (read.pages.length && (changed(c.sourceHashes, read.hashes) || !c.sourcesCheckedAt)) {
-        const got = await extractServices(userId, c.name, read.pages, gathered.sources, at);
-        if (got) { c.services = got.services; c.offers = got.offers; c.sourceHashes = read.hashes; c.sourcesCheckedAt = at; }
-      } else if (!read.pages.length && read.home) { c.services = []; c.offers = []; c.sourceHashes = read.hashes; c.sourcesCheckedAt = at; }
+      await applyRead(c, read, c.name);
     } catch (e: any) { console.error('[gainora] reach site', c.name, e?.message); }
   }
 

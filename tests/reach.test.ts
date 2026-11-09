@@ -10,6 +10,7 @@ import { writeBrief } from '../shared/brief-writer';
 import { analyseWeeks, metricsFor } from '../shared/metrics';
 import { emptyProfile, SECTIONS, validateSection } from '../src/lib/questions';
 import { SAMPLE_PROFILE } from '../src/lib/demo';
+import { FRESHA_PAGE } from './fixtures';
 
 const DAY = 86_400_000;
 const now = new Date('2026-11-08T06:00:00Z');
@@ -203,6 +204,8 @@ const SITES: Record<string, string> = {
   'https://www.fresha.com/a/glow-aesthetics-123': '<div>Glow Aesthetics</div><div>Profhilo 2 sessions £300</div><div>Skin booster £180</div><p>20% off lip filler in November</p>',
   'https://you.example/': '<title>You</title><a href="/treatments">Treatments</a><p>Lip filler 1ml £200</p><p>Dermaplaning £40</p>',
   'https://you.example/treatments': '<p>Lip filler 1ml £200</p><p>Dermaplaning £40</p>',
+  // Skin Studio has no website: Google's "website" for it is its Fresha page, which is read as structured data.
+  'https://www.fresha.com/a/skin-studio-falmouth-555': FRESHA_PAGE,
 };
 let glowPriceVersion = 0;
 
@@ -222,7 +225,7 @@ function fakeNetwork(log: { url: string; body?: any }[]) {
       return new Response(JSON.stringify({ places: [
         { id: 'ChIJ_you_place_0001', displayName: { text: 'Willow Skin' }, formattedAddress: 'Falmouth', rating: 4.6, userRatingCount: 60, websiteUri: 'https://you.example', location: { latitude: 50.153, longitude: -5.07 } },
         { id: 'ChIJ_glow_000000001', displayName: { text: 'Glow Aesthetics' }, formattedAddress: 'High St, Falmouth', rating: 4.9, userRatingCount: 210, websiteUri: 'https://glow.example', location: { latitude: 50.155, longitude: -5.072 }, primaryType: 'beauty_salon' },
-        { id: 'ChIJ_skin_000000002', displayName: { text: 'Skin Studio' }, formattedAddress: 'Church St, Falmouth', rating: 4.7, userRatingCount: 80, location: { latitude: 50.16, longitude: -5.08 }, primaryType: 'beauty_salon' },
+        { id: 'ChIJ_skin_000000002', displayName: { text: 'Skin Studio' }, formattedAddress: 'Church St, Falmouth', rating: 4.7, userRatingCount: 80, location: { latitude: 50.16, longitude: -5.08 }, primaryType: 'beauty_salon', websiteUri: 'https://www.fresha.com/a/skin-studio-falmouth-555' },
         { id: 'ChIJ_far_0000000003', displayName: { text: 'Truro Skin Clinic' }, formattedAddress: 'Truro', rating: 4.9, userRatingCount: 300, location: { latitude: 50.2632, longitude: -5.051 }, primaryType: 'skin_care_clinic' },
         { id: 'ChIJ_barber_00000004', displayName: { text: 'Falmouth Barbers' }, formattedAddress: 'Falmouth', rating: 4.9, userRatingCount: 50, location: { latitude: 50.154, longitude: -5.071 }, primaryType: 'barber_shop' },
       ] }), { status: 200 });
@@ -302,6 +305,16 @@ test('reach: a full day finds the clinic’s competition, reads their prices and
     assert.deepEqual(glow.social?.findings.map((f) => f.text), ['20% off lip filler for new clients', 'Profhilo now available, £300 for two sessions']);
     assert.equal(s.you?.instagram?.error, 'not-business');
     assert.deepEqual(s.you?.services?.map((x) => `${x.name} ${x.price}`), ['Lip filler 1ml £200', 'Dermaplaning £40']);
+    // No website, but a Fresha page from the Google listing: exact prices, team size and reviews without any AI call.
+    const skin = s.list[2];
+    assert.equal(skin.url, '');
+    assert.deepEqual(skin.bookingPages, ['https://www.fresha.com/a/skin-studio-falmouth-555']);
+    assert.equal(skin.services.length, 6);
+    assert.equal(skin.services[0].via, 'fresha');
+    assert.equal(skin.services[1].name, 'Anti-Wrinkle Injections – 1 area');
+    assert.equal(skin.venue?.team, 3);
+    assert.equal(skin.venue?.reviews, 212);
+    assert.equal(skin.venue?.partial, true);
     // First sight: no events, but advice exists and the number guard dropped the invented "500 bookings" line.
     assert.equal(s.events.length, 0);
     assert.equal(s.advice?.lines.length, 1);
@@ -314,7 +327,7 @@ test('reach: a full day finds the clinic’s competition, reads their prices and
     assert.equal(graph.length, 2);
     assert.match(decodeURIComponent(graph[0].url), /\/v26\.0\/17841400000000099\?fields=business_discovery\.username\(willowskin\)\{username,followers_count/);
     const aiCalls = log.filter((l) => l.url.includes('anthropic'));
-    assert.equal(aiCalls.length, 4, 'own services, Glow services, Glow captions, advice'); // Skin Studio has no website; The Beauty Room has none either
+    assert.equal(aiCalls.length, 4, 'own services, Glow services, Glow captions, advice'); // Skin Studio's Fresha page needs no AI; The Beauty Room has nothing to read
 
     // A week later: Glow puts lip filler up to £240 and gets 18 more reviews. Pages unchanged elsewhere are not sent to the AI again.
     glowPriceVersion = 1; log.length = 0;
