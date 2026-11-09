@@ -584,14 +584,14 @@ export function SendModal({ ctx, items, onClose }: { ctx: Ctx; items: DraftItem[
     <Modal title={items.length > 1 ? `Text ${i + 1} of ${items.length}: ${it.client.name}` : `Text ${it.client.name}`} onClose={onClose}
       footer={<>
         <Button kind="secondary" icon="copy" onClick={async () => { if (await copyText(forSms(text))) { ctx.toast('Copied.'); } }}>Copy</Button>
-        {mode === 'twilio' ? <Button busy={busy} icon="send" disabled={!!warn} onClick={viaProvider}>Send now</Button> : (
-          !opened ? <a className={`btn btn-primary ${warn ? 'is-disabled' : ''}`} href={warn ? undefined : smsLink(it.client.phone, forSms(text))} onClick={() => { if (!warn) setOpened(true); }}><Icon name="send" />Send from my phone</a>
-            : <Button busy={busy} icon="check" onClick={() => done('sms_phone')}>{i + 1 < items.length ? 'Sent, next' : 'I sent it'}</Button>
+        {mode === 'twilio' ? <Button busy={busy} icon="send" disabled={!!warn} onClick={viaProvider} className="send-main">Send now</Button> : (
+          !opened ? <a className={`btn btn-primary send-main ${warn ? 'is-disabled' : ''}`} href={warn ? undefined : smsLink(it.client.phone, forSms(text))} onClick={() => { if (!warn) setOpened(true); }}><Icon name="send" />Send from my phone</a>
+            : <Button busy={busy} icon="check" onClick={() => done('sms_phone')} className="send-main">{i + 1 < items.length ? 'Sent, next' : 'I sent it'}</Button>
         )}
-        {!opened && mode !== 'twilio' && <Button kind="quiet" busy={busy} onClick={() => done('copy')}>Mark as sent anyway</Button>}
+        {!opened && mode !== 'twilio' && <Button kind="quiet" busy={busy} onClick={() => done('copy')}>Mark as sent</Button>}
       </>}>
       <div className="modal-form">
-        <textarea className="textarea draft-edit" rows={5} value={text} onChange={(e: any) => setTexts(texts.map((t, k) => (k === i ? e.target.value : t)))} aria-label="Message text" />
+        <textarea className="textarea draft-edit" rows={6} value={text} onChange={(e: any) => setTexts(texts.map((t, k) => (k === i ? e.target.value : t)))} aria-label="Message text" />
         <div className="split xsmall faint"><span>To {it.client.phone.replace('+44', '0')} · {seg.chars} characters, {seg.segments} text{seg.segments === 1 ? '' : 's'}</span><span>{ACTION_LABEL[it.kind]}</span></div>
         {warn && <p className="field-error" role="alert">{warn}</p>}
         {opened && <p className="booking-note"><Icon name="info" /><span>Your messages app should have opened with the text ready. Press send there, then come back and tap “I sent it”. If nothing opened, copy the text and send it by hand.</span></p>}
@@ -678,7 +678,7 @@ function DueBack({ ctx, onOpen }: { ctx: Ctx; onOpen: (id: string) => void }) {
                   </div>
                   {p.ok ? (
                     <>
-                      <textarea className="textarea draft-edit" rows={3} value={t} onChange={(e: any) => setTexts({ ...texts, [c.id]: e.target.value })} aria-label={`Text to ${c.name}`} />
+                      <textarea className="textarea draft-edit" rows={4} value={t} onChange={(e: any) => setTexts({ ...texts, [c.id]: e.target.value })} aria-label={`Text to ${c.name}`} />
                       <div className="draft-foot">
                         <span className="xsmall faint">{seg.chars} characters, {seg.segments} text{seg.segments === 1 ? '' : 's'}</span>
                         <div className="row gap-8 wrap">
@@ -749,7 +749,7 @@ function ReviewsTab({ ctx }: { ctx: Ctx }) {
             return (
               <article className="draft-card" key={c.id}>
                 <div className="draft-head"><span className="subhead">{c.name}</span><span className="small faint">{v.treatment}, {shortDate(v.at)}</span></div>
-                <textarea className="textarea draft-edit" rows={3} value={t} onChange={(e: any) => setTexts({ ...texts, [c.id]: e.target.value })} aria-label={`Review request to ${c.name}`} />
+                <textarea className="textarea draft-edit" rows={4} value={t} onChange={(e: any) => setTexts({ ...texts, [c.id]: e.target.value })} aria-label={`Review request to ${c.name}`} />
                 <div className="draft-foot">
                   <span className="xsmall faint">{hasIncentive(t) ? <span className="field-error">Take out the offer: Google does not allow incentives for reviews.</span> : 'No offer, no incentive: just the ask.'}</span>
                   <Button small icon="send" disabled={!link || hasIncentive(t)} onClick={() => setSending([item(c, v)])}>Send</Button>

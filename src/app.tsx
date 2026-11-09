@@ -135,7 +135,7 @@ function Shell() {
         <nav className="tabbar" aria-label="Sections">
           {NAV.map((n) => (
             <Link key={n.path} to={n.path} aria-current={active(n.path)}>
-              <Icon name={n.icon} />{n.label.replace('The ', '').replace('Your ', '')}
+              <Icon name={n.icon} />{n.label.replace('The ', '').replace('Your clients', 'Clients')}
             </Link>
           ))}
         </nav>

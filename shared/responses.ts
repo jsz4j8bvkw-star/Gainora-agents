@@ -56,7 +56,7 @@ export function responsePack(
   const clinic = ctx.profile.business.name;
   const facts: string[] = [];
   if (row?.yours) facts.push(`Your price for ${lower1(row.label)}: ${row.yours.price} (your price list, ${row.yours.seenAt.slice(0, 10)}).`);
-  if (row && row.localAvg != null && row.listedBy) facts.push(`Local average ${pounds(row.localAvg)} across ${row.listedBy} nearby ${row.listedBy === 1 ? 'business' : 'businesses'} that list it; you are ${row.position}.`);
+  if (row && row.localAvg != null && row.listedBy) facts.push(`Local average ${pounds(row.localAvg)} across ${row.listedBy} nearby ${row.listedBy === 1 ? 'business' : 'businesses'} that list it; you are ${/^same/.test(row.position ?? '') ? `the ${row.position}` : row.position}.`);
   if (inc) facts.push(`What you include, in your words: ${inc}.`);
   facts.push(`What the Watcher saw: ${e.summary} (${e.competitor}, ${e.at.slice(0, 10)}).`);
 

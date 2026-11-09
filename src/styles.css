@@ -548,6 +548,8 @@ tr:last-child td { border-bottom: 0; }
 .modal pre { white-space: pre-wrap; font-family: var(--serif); font-size: 1.25rem; line-height: 1.5; font-weight: 500; margin: 0; padding: 24px 28px; }
 .modal-foot { flex-wrap: wrap; }
 @media (max-width: 640px) {
+  .modal-foot .send-main { flex-basis: 100% !important; order: -1; }
+  .modal-foot .btn { white-space: normal; }
   .modal pre { font-size: 1.125rem; padding: 20px 20px; }
   .modal .panel-head { padding: 16px 20px; }
   .modal-foot { justify-content: stretch !important; }
@@ -930,6 +932,8 @@ tr:last-child td { border-bottom: 0; }
 /* Response packs on competitor events */
 .pack { margin-top: 10px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--canvas); }
 .pack summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-size: var(--t-sm); color: var(--ink); display: flex; align-items: center; gap: 8px; }
+.pack summary svg { width: 16px; height: 16px; flex: none; color: var(--gold); }
+.pack summary::-webkit-details-marker { display: none; }
 .pack-body { padding: 4px 14px 14px; display: grid; gap: 14px; }
 .pack-item { display: grid; gap: 6px; }
 .pack-item .field-label { color: var(--ink-soft); }

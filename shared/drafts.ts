@@ -135,9 +135,10 @@ export function reviewReplyDraft(r: ReviewItem, v: Voice & { edge?: string }): s
   const praised = /natural|subtle|listen|talk(ed)? me through|nervous|gentle|professional|lovely|friendly|clean|calm|results?|skin|glow|happy|recommend/i.test(text);
   if (!complaint) {
     const thanks = praised
-      ? `Thank you, ${first}. It means a great deal to hear that${/natural|subtle/i.test(text) ? ' the result looks natural' : /nervous|talk(ed)? me through|listen/i.test(text) ? ' you felt looked after' : ' you were happy'}; that is exactly what we set out to do at ${v.clinic}.`
+      ? `Thank you, ${first}. It means a great deal to hear that${/nervous|talk(ed)? me through|listen/i.test(text) ? ' you felt looked after' : /natural|subtle/i.test(text) ? ' the result looks natural' : ' you were happy'}; that is exactly what we set out to do at ${v.clinic}.`
       : `Thank you so much, ${first}. We’re really glad you were happy with your visit to ${v.clinic}.`;
-    const edge = v.edge ? ` ${v.edge.replace(/\.$/, '')} is how we like to work, so it is lovely to hear it landed.` : '';
+    // The owner's edge only when the review touches on how they work (time, care, no pressure), so replies do not all read the same.
+    const edge = v.edge && /listen|talk(ed)? me through|nervous|time|rush|pressure|check(ed)? in|follow|review|care/i.test(text) ? ` ${v.edge.replace(/\.$/, '')} is how we like to work, so it is lovely to hear it landed.` : '';
     return `${thanks}${edge} We look forward to seeing you next time.\n\n${v.owner}`;
   }
   // Complaints: acknowledge the specific service point if they named one (never a medical detail), apologise once, move it offline.

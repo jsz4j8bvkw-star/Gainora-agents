@@ -30,8 +30,8 @@ export function Settings() {
   };
 
   const exportData = async () => {
-    const [home, watcher, scout, numbers, briefs, chat] = await Promise.all([api.getHome(), api.getWatcher().catch(() => null), api.listScout().catch(() => []), api.getNumbers().catch(() => []), api.listBriefs().catch(() => []), api.getChat().catch(() => [])]);
-    const blob = new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), profile, plan, home, watcher, scout, numbers, briefs, chat }, null, 2)], { type: 'application/json' });
+    const [home, watcher, scout, numbers, briefs, chat, clients] = await Promise.all([api.getHome(), api.getWatcher().catch(() => null), api.listScout().catch(() => []), api.getNumbers().catch(() => []), api.listBriefs().catch(() => []), api.getChat().catch(() => []), api.listClients().catch(() => null)]);
+    const blob = new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), profile, plan, home, watcher, scout, numbers, briefs, chat, clients }, null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob); a.download = 'gainora-my-data.json'; a.click(); URL.revokeObjectURL(a.href);
   };
