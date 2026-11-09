@@ -199,7 +199,8 @@ export interface Comparison {
   matched: { yours: number; yoursTotal: number; theirs: number; theirsTotal: number };
 }
 
-const money = (v: number) => `£${Number.isInteger(v) ? v : v.toFixed(2)}`;
+/** Averages and differences read as whole pounds ("£417", never "£416.67"). */
+const pounds = (v: number) => `£${Math.round(v).toLocaleString('en-GB')}`;
 
 function toSource(s: ServiceLine): PriceSource | null {
   const v = priceValue(s.price);
@@ -238,7 +239,7 @@ export function positionText(yours: PriceSource | null, theirs: (PriceSource | n
   const diff = round(yours.value - avg);
   const who = listed.length === 1 ? '1 other' : `${listed.length} others`;
   if (Math.abs(diff) < 0.5) return `same as the local average (${who})`;
-  return `${money(Math.abs(diff))} ${diff > 0 ? 'above' : 'below'} the local average of ${money(avg)} (${who})`;
+  return `${pounds(Math.abs(diff))} ${diff > 0 ? 'above' : 'below'} the local average of ${pounds(avg)} (${who})`;
 }
 
 /**
@@ -288,7 +289,7 @@ export function unmatchedNames(lists: ServiceLine[][], known: Record<string, str
 export function comparisonFacts(c: Comparison, max = 8): string[] {
   const out: string[] = [];
   for (const r of c.rows.filter((x) => x.yours && x.listedBy).slice(0, max)) {
-    out.push(`${r.label}: you ${r.yours!.price}; ${c.competitors.map((cp, i) => (r.theirs[i] ? `${cp.name} ${r.theirs[i]!.price}` : null)).filter(Boolean).join(', ')}; local average ${money(r.localAvg!)} (${r.position}).`);
+    out.push(`${r.label}: you ${r.yours!.price}; ${c.competitors.map((cp, i) => (r.theirs[i] ? `${cp.name} ${r.theirs[i]!.price}` : null)).filter(Boolean).join(', ')}; local average ${pounds(r.localAvg!)} (${r.position}).`);
   }
   if (c.theyOfferYouDont.length) out.push(`Offered nearby but not on your list: ${c.theyOfferYouDont.slice(0, 6).map((t) => `${t.label} (${t.by.map((b) => `${b.name} ${b.price}`).join(', ')})`).join('; ')}.`);
   if (c.onlyYou.length) out.push(`Only you list a price for: ${c.onlyYou.slice(0, 6).map((t) => `${t.label} ${t.price}`).join('; ')}.`);

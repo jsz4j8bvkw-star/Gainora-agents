@@ -91,7 +91,7 @@ test('treatments: the comparison compares like with like, uses “from” as a m
   assert.equal(lip.theirs[1]!.from, true);
   assert.equal(lip.localAvg, 213.33);
   assert.equal(lip.localMin, 180); assert.equal(lip.localMax, 240);
-  assert.equal(lip.position, '£13.33 below the local average of £213.33 (3 others)');
+  assert.equal(lip.position, '£13 below the local average of £213 (3 others)');
   const aw2 = c.rows.find((r) => r.id === 'aw-2')!;
   assert.deepEqual(aw2.theirs.map((t) => t?.price ?? null), ['£220', '£200', null], 'three areas is not two areas');
   assert.equal(aw2.position, 'cheapest of 3');
@@ -118,7 +118,7 @@ test('treatments: the comparison compares like with like, uses “from” as a m
   assert.equal(positionText(null, []), null);
   assert.equal(positionText({ price: '£100', value: 100, from: false, name: 'x', url: '', seenAt: at }, [{ price: '£150', value: 150, from: false, name: 'y', url: '', seenAt: at }]), '£50 below the local average of £150 (1 other)');
   const facts = comparisonFacts(c);
-  assert.match(facts[0], /Lip filler, 1ml: you £200; Glow Aesthetics £220, Skin Studio from £240, The Beauty Room £180; local average £213.33/);
+  assert.match(facts[0], /Lip filler, 1ml: you £200; Glow Aesthetics £220, Skin Studio from £240, The Beauty Room £180; local average £213 );
   assert.ok(facts.some((f) => /Offered nearby but not on your list: HydraFacial/.test(f)));
 });
 

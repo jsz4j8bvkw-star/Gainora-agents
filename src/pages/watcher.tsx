@@ -776,7 +776,7 @@ function PricesView({ data }: { data: WatcherState }) {
               <div className="price-row-head">
                 <div className="stack gap-4" style={{ minWidth: 0 }}>
                   <span className="price-item">{r.label}</span>
-                  <span className="price-note">{r.group}{r.localAvg != null ? ` · local average ${money(r.localAvg)}${r.localMin !== r.localMax ? ` (${money(r.localMin)} to ${money(r.localMax)})` : ''}, ${r.listedBy} nearby` : ' · nobody nearby lists a price'}</span>
+                  <span className="price-note">{r.group}{r.localAvg != null ? ` · local average ${money(Math.round(r.localAvg))}${r.localMin !== r.localMax ? ` (${money(r.localMin)} to ${money(r.localMax)})` : ''}, ${r.listedBy} nearby` : ' · nobody nearby lists a price'}</span>
                 </div>
                 <div className="price-row-you">
                   <span className="stat-label">You</span>
