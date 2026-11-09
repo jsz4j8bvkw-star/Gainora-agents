@@ -11,6 +11,9 @@ import { ASK_SOURCE_LINE, block, parseSources, sourceCatalogue } from '../../sha
 import { failureReply } from '../../shared/chat';
 import { comparisonFacts } from '../../shared/treatments';
 import { decodeFocus, looksLikeAPerson, PRIVATE_HOSTS, scrubPeople, type ScoutFocus } from '../../shared/scout';
+import { loadClients } from './clients';
+import { dueThisWeek } from '../../shared/clients';
+import { moneySummary } from '../../shared/money';
 
 const rid = () => 'r_' + Math.random().toString(36).slice(2, 10);
 const isHttp = (u: unknown) => { try { const x = new URL(String(u)); return x.protocol === 'https:' || x.protocol === 'http:'; } catch { return false; } };
@@ -244,12 +247,15 @@ const DAY_MS = 86_400_000;
 
 /** What the other agents found this week, so the Brief's priorities name real leads, contracts and fixes. */
 export async function briefContext(userId: string, profile: any, now = new Date()): Promise<BriefContext> {
-  const [leads, matches, ws, searches] = await Promise.all([
+  const [leads, matches, ws, searches, snap] = await Promise.all([
     db<any[]>(`leads?select=name,stage,next_follow_up_at,value_gbp&user_id=eq.${userId}&order=updated_at.desc&limit=200`).catch(() => []),
     db<any[]>(`tender_matches?select=fit,status,tenders(title,value,deadline)&user_id=eq.${userId}&status=in.(new,saved)&order=created_at.desc&limit=20`).catch(() => []),
     db<any[]>(`watcher_state?select=state&user_id=eq.${userId}`).catch(() => []),
     db<any[]>(`scout_searches?select=results&user_id=eq.${userId}&status=eq.ready&order=created_at.desc&limit=3`).catch(() => []),
+    loadClients(userId),
   ]);
+  const due = snap.ready ? dueThisWeek(snap.clients, snap.visits, profile?.clientSettings ?? {}, now) : null;
+  const brought = snap.ready ? moneySummary(snap.outcomes, snap.actions, new Date(now.getFullYear(), now.getMonth(), 1)) : null;
   const w = ws[0]?.state;
   const leadNames = new Set(leads.map((l) => String(l.name).toLowerCase()));
   const strong = new Set<string>();
@@ -276,6 +282,8 @@ export async function briefContext(userId: string, profile: any, now = new Date(
     topFix: topFix ? { title: topFix.title, who: topFix.who } : null,
     weeksLeft: started ? Math.max(0, Math.ceil((started + 90 * DAY_MS - now.getTime()) / (7 * DAY_MS))) : null,
     competitor: reachEvent && reachAction ? { summary: String(reachEvent.summary), action: String(reachAction) } : null,
+    dueBack: due?.count ? { count: due.count, names: due.names, value: due.value } : null,
+    brought: brought?.bookings ? { amount: brought.confirmed, bookings: brought.bookings } : null,
   };
 }
 
@@ -286,6 +294,8 @@ export function briefContextLines(ctx: BriefContext): { text: string; numbers: n
   if (ctx.lowReview) { lines.push(`Google reviews (The Watcher): a new ${ctx.lowReview.rating}-star review from ${ctx.lowReview.author} is waiting for a reply; a reply is drafted.`); numbers.push(ctx.lowReview.rating); }
   if (ctx.topFix) lines.push(`Website speed (The Watcher): biggest fix is "${ctx.topFix.title}" (${ctx.topFix.who === 'You' ? 'the owner can do it' : 'needs their web person'}).`);
   if (ctx.competitor) { lines.push(`Competitors (The Watcher): ${ctx.competitor.summary} Suggested: ${ctx.competitor.action}`); for (const m of `${ctx.competitor.summary} ${ctx.competitor.action}`.match(/\d[\d,]*(\.\d+)?/g) || []) numbers.push(Number(m.replace(/,/g, ''))); }
+  if (ctx.dueBack?.count) { lines.push(`Your clients: ${ctx.dueBack.count} due back this week (${ctx.dueBack.names.join(', ')})${ctx.dueBack.value ? `, worth £${Math.round(ctx.dueBack.value)} at their last prices` : ''}; rebook texts are drafted under Your clients.`); numbers.push(ctx.dueBack.count); if (ctx.dueBack.value) numbers.push(Math.round(ctx.dueBack.value)); }
+  if (ctx.brought?.bookings) { lines.push(`Bookings the owner confirmed came from Gainora's messages this month: ${ctx.brought.bookings}, worth £${Math.round(ctx.brought.amount)}.`); numbers.push(ctx.brought.bookings, Math.round(ctx.brought.amount)); }
   if (ctx.dueFollowUps?.length) lines.push(`Leads (The Scout): follow-ups due now with ${ctx.dueFollowUps.join(', ')}; the notes are drafted.`);
   if (ctx.leadsToContact?.length) { lines.push(`Leads (The Scout): ${ctx.leadsToContact.length} not yet contacted: ${ctx.leadsToContact.slice(0, 5).join(', ')}; introductions are drafted.`); numbers.push(ctx.leadsToContact.length); }
   if (ctx.strongLeads) { lines.push(`Research (The Scout): ${ctx.strongLeads} strong-fit matches not yet added to leads.`); numbers.push(ctx.strongLeads); }

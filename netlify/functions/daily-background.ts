@@ -1,12 +1,14 @@
-import { addActions, addAlert, callInternal, db, env, requireInternal } from '../lib/core';
+import { addActions, addAlert, callInternal, db, env, insert, requireInternal } from '../lib/core';
 import { sendEmail } from '../lib/email';
 import { formatMinutes, summariseValue, valueSentence, type ValueEvent } from '../../shared/value';
+import { dueReminders, loadClients, monthlyMoneyLines, reminderLine, weeklyClientLines } from '../lib/clients';
 
 // Background function (up to 15 minutes), started by the daily schedule:
 // 1. starts each client's Watcher run,
-// 2. sends the weekly summary email on each client's report day,
-// 3. reminds clients about follow-ups that are due today,
-// 4. on the 1st of the month, sends "Your month with Gainora".
+// 2. reminds the owner about their own clients who became due back (alert, to-do, once per due date),
+// 3. sends the weekly summary email on each client's report day (with who is due this week and the money number so far),
+// 4. reminds clients about follow-ups that are due today,
+// 5. on the 1st of the month, sends "Your month with Gainora" with what Gainora's messages brought in.
 const DAY = 86_400_000;
 const NAMES: Record<string, string> = { watcher: 'The Watcher', scout: 'The Scout', brief: 'The Brief' };
 const money = (n: number) => `£${Math.round(n).toLocaleString('en-GB')}`;
@@ -35,12 +37,30 @@ export default async (req: Request) => {
         const owner = p.data?.business?.ownerName || '';
         const to = [u.email, p.data?.preferences?.extraRecipient].filter(Boolean) as string[];
 
+        // The owner's own clients who became due since yesterday: one alert and one to-do, never twice for the same due date.
+        const snap = await loadClients(userId);
+        const clientSettings = p.data?.clientSettings ?? {};
+        if (snap.ready) {
+          try {
+            const already = await db<any[]>(`client_reminders?select=client_id,due_on&user_id=eq.${userId}&reminded_at=gte.${new Date(now.getTime() - 120 * DAY).toISOString()}`).catch(() => [] as any[]);
+            const reminded = new Set(already.map((r) => `${r.client_id}:${String(r.due_on).slice(0, 10)}`));
+            const rs = dueReminders(snap, clientSettings, new Date(now.getTime() - DAY), reminded, now);
+            const line = reminderLine(rs);
+            if (line && rs.length) {
+              await addAlert(userId, 'brief', 'notice', rs.length === 1 ? `${rs[0].name.split(' ')[0]} is due back` : `${rs.length} clients are due back`, line, `${app}/clients?tab=due`);
+              await addActions(userId, 'brief', [rs.length === 1 ? `Text ${rs[0].name.split(' ')[0]}, who is due back (drafted under Your clients)` : `Text the ${rs.length} clients due back this week (drafted under Your clients)`]);
+              await insert('client_reminders', rs.map((r) => ({ user_id: userId, client_id: r.clientId, due_on: r.dueOn }))).catch((e) => console.error('[gainora] reminders', e?.message));
+            }
+          } catch (e: any) { console.error('[gainora] due reminders', userId, e?.message); }
+        }
+
         // Weekly summary on the client's report day.
         if ((p.data?.preferences?.reportDay || 'Monday') === today) {
           const notes = await db<any[]>(`agent_notes?select=agent,body,created_at&user_id=eq.${userId}&created_at=gte.${new Date(now.getTime() - 7 * DAY).toISOString()}&order=created_at.desc`);
           const latest = new Map<string, string>();
           for (const n of notes) if (!latest.has(n.agent)) latest.set(n.agent, n.body);
           const lines = [...latest.entries()].map(([a, b]) => `${NAMES[a]}: ${b}`);
+          lines.push(...weeklyClientLines(snap, clientSettings, now));
           if (u.agents.has('brief')) lines.push('The Brief: add this week’s numbers and you’ll get your three priorities for the week.');
           if (lines.length) {
             for (const addr of to) await sendEmail(addr, `Your week at ${business}`, [`Good morning${owner ? ` ${owner}` : ''}. Here’s what your agents found this week.`, ...lines], { label: 'Open Gainora', url: app }).catch((e) => console.error('[gainora] digest', e?.message));
@@ -52,12 +72,14 @@ export default async (req: Request) => {
           const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
           const end = new Date(now.getFullYear(), now.getMonth(), 1);
           const rows = await db<any[]>(`value_events?select=id,agent,kind,title,amount,created_at&user_id=eq.${userId}&created_at=gte.${start.toISOString()}&created_at=lt.${end.toISOString()}&limit=3000`);
-          if (rows.length) {
+          const moneyLines = monthlyMoneyLines(snap, start, end);
+          if (rows.length || moneyLines.length) {
             const events: ValueEvent[] = rows.map((r) => ({ id: r.id, agent: r.agent, kind: r.kind, title: r.title, amount: r.amount != null ? Number(r.amount) : null, at: r.created_at }));
             const v = summariseValue(events);
             const month = londonPart(new Date(start.getTime() + 15 * DAY), { month: 'long' });
             const lines = [
               `Good morning${owner ? ` ${owner}` : ''}. Here’s what your agents did for ${business} in ${month}.`,
+              ...moneyLines,
               valueSentence(v, `in ${month}`),
               ...(v.minutesSaved >= 30 ? [`That’s about ${formatMinutes(v.minutesSaved)} of work you didn’t have to do yourself. It’s an estimate, based on typical times for each task.`] : []),
               ...(v.wonValue ? [`You recorded ${money(v.wonValue)} in won deals from your leads.`] : []),

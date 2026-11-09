@@ -418,7 +418,7 @@ export function createLiveApi(): Api {
       await rest(`clients?user_id=eq.${uid}`, { method: 'DELETE', doing: 'deleting your client data' });
     },
     async sendSms(action, phone) {
-      return fn<{ sent: boolean; message?: string }>('sms-send', { actionId: action.id, to: phone, text: action.text }, { timeoutMs: 20_000, doing: 'sending the text' });
+      return fn<{ sent: boolean; message?: string }>('sms-send', { actionId: action.id, to: phone, text: action.text, kind: action.kind }, { timeoutMs: 20_000, doing: 'sending the text' });
     },
 
     // The newest 100, oldest first (asc+limit would return the OLDEST 100 and hide new replies).
