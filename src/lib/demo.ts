@@ -10,7 +10,7 @@ import { metricsFor, analyseWeeks } from '../../shared/metrics';
 import { writeBrief, type BriefContext } from '../../shared/brief-writer';
 import { isDue } from '../../shared/leads';
 import { daysLeft } from '../../shared/tenders';
-import { fallbackReply } from '../../shared/reviews';
+import { reviewReplyDraft } from '../../shared/drafts';
 import { followUpSent, moveLead } from '../../shared/leads';
 import { hostOf } from '../../shared/learning';
 import { planToday } from '../../shared/today';
@@ -547,10 +547,7 @@ export function createDemoApi(): Api {
       if (!rv) return '';
       addValue('reply_drafted', 'watcher', `Drafted a reply to ${rv.author}`); save();
       const p = s.profile!;
-      if (rv.rating <= 2) {
-        return `Mark, thank you for letting us know, and I’m really sorry your bowl arrived chipped. That isn’t the standard we pack to, and you should have heard back from us by now. We’ll send a replacement straight away. Please get in touch through our website or pop into the shop, and I’ll arrange it personally today.\n\n${p.business.ownerName}, ${p.business.name}`;
-      }
-      return fallbackReply(rv, p.business.name, p.business.ownerName);
+      return reviewReplyDraft(rv, { clinic: p.business.name, owner: p.business.ownerName.split(' ')[0], style: p.preferences.style, edge: p.competitors.ourEdge });
     },
     async updateCompetitor(op, key, handle) {
       await wait(300);

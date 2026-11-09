@@ -12,7 +12,7 @@ import {
 import { CATALOGUE, matchTreatment, treatmentById } from '../../shared/treatments';
 import { parsePriceList } from '../../shared/booking';
 import { priceValue } from '../../shared/prices';
-import { forSms, hasIncentive, mentionsHealth, rebookText, reviewLink, reviewReplyDraft, reviewRequestText, safeReply, smsLink, smsSegments, type Voice } from '../../shared/drafts';
+import { forSms, hasIncentive, mentionsHealth, quietDayText, rebookText, reviewLink, reviewReplyDraft, reviewRequestText, safeReply, smsLink, smsSegments, type Voice } from '../../shared/drafts';
 import { ACTION_LABEL, coverLine, moneySentence, moneySummary, type ClientAction, type Outcome } from '../../shared/money';
 import { buildImport, detectColumns, FIELD_LABEL, guessSystem, MAX_FILE_BYTES, MAX_ROWS, parseCsv, readFile, toRecords, type ImportField, type ImportResult, type Mapping } from '../../shared/import';
 import { startOfMonth } from '../../shared/value';
@@ -608,6 +608,7 @@ function DueBack({ ctx, onOpen }: { ctx: Ctx; onOpen: (id: string) => void }) {
   const [approved, setApproved] = useState<Set<string>>(new Set());
   const [sending, setSending] = useState<DraftItem[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [quietDay, setQuietDay] = useState<{ date: string; slot: string } | null>(null);
   const all = groups.flatMap((g) => g.items);
   const total = all.reduce((a, x) => a + (x.due.lastPrice ?? 0), 0);
   const visitsOf = (id: string) => ctx.data.visits.filter((v) => v.clientId === id).length;
@@ -622,12 +623,34 @@ function DueBack({ ctx, onOpen }: { ctx: Ctx; onOpen: (id: string) => void }) {
     catch (e: any) { ctx.toast(humanThrown(e, 'That didn’t save.')); }
     finally { setBusy(null); }
   };
+  // Fill a quiet day: the clients due within the next three weeks who may be texted, offered a specific slot.
+  const quietCandidates = (): DraftItem[] => {
+    if (!quietDay) return [];
+    const dayLabel = new Date(quietDay.date).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+    const soon = ctx.data.clients.map((c) => ({ c, d: dueFor(c, ctx.data.visits, ctx.settings) })).filter(({ c, d }) => (d.status === 'due' || d.status === 'overdue' || (d.status === 'upcoming' && d.dueAt && new Date(d.dueAt).getTime() < Date.now() + 21 * DAY)) && canMessage(c, 'quiet_day', { visits: visitsOf(c.id), sent: ctx.data.actions, settings: ctx.settings }).ok);
+    return soon.sort((a, b) => (a.d.dueAt ?? '').localeCompare(b.d.dueAt ?? '')).slice(0, 8).map(({ c, d }) => ({ client: c, kind: 'quiet_day' as const, text: quietDayText(ctx.voice, { name: c.name, treatment: d.treatment, treatmentId: d.treatmentId }, { dayLabel, timeLabel: quietDay.slot || undefined }), treatmentId: d.treatmentId, amountHint: d.lastPrice }));
+  };
+  const quietPanel = (
+    <section className="panel panel-pad section" aria-labelledby="quiet-h">
+      <h2 className="heading" id="quiet-h">Fill a quiet day</h2>
+      <p className="small muted mt-8">Pick the day and Gainora chooses the clients who are due or nearly due (the next three weeks) and can be texted, and drafts a note offering them that slot. Up to eight, one at a time.</p>
+      <div className="row gap-12 wrap mt-16" style={{ alignItems: 'flex-end' }}>
+        <Field label="Day">{(id) => <input id={id} type="date" className="input" style={{ width: 'auto' }} min={today()} value={quietDay?.date ?? ''} onChange={(e: any) => setQuietDay({ date: e.target.value, slot: quietDay?.slot ?? '' })} />}</Field>
+        <Field label="Time" optional>{(id) => <select id={id} className="select" style={{ width: 'auto' }} value={quietDay?.slot ?? ''} onChange={(e: any) => setQuietDay({ date: quietDay?.date ?? today(), slot: e.target.value })}><option value="">Any time</option><option value="morning">morning</option><option value="afternoon">afternoon</option><option value="evening">evening</option></select>}</Field>
+        <Button kind="secondary" icon="send" disabled={!quietDay?.date} onClick={() => { const items = quietCandidates(); if (!items.length) ctx.toast('Nobody due soon can be texted for that day.'); else setSending(items); }}>Draft the texts{quietDay?.date ? ` (${quietCandidates().length})` : ''}</Button>
+      </div>
+    </section>
+  );
   if (!all.length) return (
+    <>
     <section className="panel empty" aria-label="Due back">
       <h2 className="heading">Nobody is due back this week</h2>
       <p className="muted mt-8">Gainora checks every client’s last visit against the gap for their treatment{Object.keys(ctx.settings.intervals ?? {}).length ? ' (with your own settings)' : ''}. As soon as someone is due, their draft text appears here, and Home shows the week’s total.</p>
       <p className="small faint mt-16">Change the gaps per treatment under <Link to="/settings">Plan and settings</Link>, or per client on their page.</p>
     </section>
+    {ctx.data.clients.length > 0 && quietPanel}
+    {sending && <SendModal ctx={ctx} items={sending} onClose={() => setSending(null)} />}
+    </>
   );
   return (
     <>
@@ -676,6 +699,7 @@ function DueBack({ ctx, onOpen }: { ctx: Ctx; onOpen: (id: string) => void }) {
           </div>
         </section>
       ))}
+      {quietPanel}
       <p className="xsmall faint mt-16">Texts go only to clients who opted in or are existing clients (the soft opt-in), never to anyone who opted out, never in quiet hours ({ctx.settings.quietStart ?? DEFAULT_SETTINGS.quietStart}:00 to {ctx.settings.quietEnd ?? DEFAULT_SETTINGS.quietEnd}:00), and at most {ctx.settings.weeklyCap ?? DEFAULT_SETTINGS.weeklyCap} a week to any one client. Every text ends with “Reply STOP to opt out”; record a STOP on the client’s page and they are never messaged again.</p>
       {sending && <SendModal ctx={ctx} items={sending} onClose={() => { setSending(null); setApproved(new Set()); }} />}
     </>

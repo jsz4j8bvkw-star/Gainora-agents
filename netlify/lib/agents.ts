@@ -5,7 +5,8 @@ import { analyseWeeks, findUnsupportedNumbers, metricsFor, type MetricChange } f
 import { writeBrief, type BriefContext } from '../../shared/brief-writer';
 import { isDue } from '../../shared/leads';
 import { daysLeft } from '../../shared/tenders';
-import { fallbackReply, type ReviewItem } from '../../shared/reviews';
+import { type ReviewItem } from '../../shared/reviews';
+import { reviewReplyDraft, safeReply } from '../../shared/drafts';
 import type { Learned } from '../../shared/learning';
 import { ASK_SOURCE_LINE, block, parseSources, sourceCatalogue } from '../../shared/ask';
 import { failureReply } from '../../shared/chat';
@@ -202,15 +203,15 @@ export async function draftFollowUp(userId: string, profile: any, lead: any): Pr
 
 /* ---------- Review replies (The Watcher) ---------- */
 export async function draftReviewReply(userId: string, profile: any, review: ReviewItem): Promise<string> {
-  const fallback = fallbackReply(review, profile.business.name, profile.business.ownerName);
+  const fallback = reviewReplyDraft(review, { clinic: profile.business.name, owner: String(profile.business.ownerName || '').split(' ')[0], style: profile.preferences?.style, edge: profile.competitors?.ourEdge });
   let text = fallback;
   try {
     const r = await ai({
       userId, agent: 'watcher', maxTokens: 400, fast: true,
-      system: `${HOUSE_STYLE}\nWrite the owner's public reply to a Google review, in the owner's voice: the business's preferred writing style, its products and what it is proud of (its edge), so it could not have been written for any other business. Thank the reviewer by first name. Refer to the specific thing they praised or complained about, naming the product or service if they did. Lengths: 5 stars 30 to 60 words; 4 stars 40 to 70 words; 3 stars or below 60 to 100 words. For a critical review: apologise sincerely for the specific problem without arguing, blaming or explaining it away, say what will happen next, and invite them to get in touch so it can be put right (do not invent contact details, phone numbers or names). Never offer discounts, refunds or gifts in exchange for changing the review, never mention other customers or competitors, and never promise an outcome. UK spelling. Sign with the owner's first name only. Plain text only, no subject line.`,
+      system: `${HOUSE_STYLE}\nWrite the owner's public reply to a Google review, in the owner's voice: the business's preferred writing style, its products and what it is proud of (its edge), so it could not have been written for any other business. Thank the reviewer by first name. Refer to the specific thing they praised or complained about, naming the product or service if they did. Lengths: 5 stars 30 to 60 words; 4 stars 40 to 70 words; 3 stars or below 60 to 100 words. For a critical review: apologise sincerely for the specific problem without arguing, blaming or explaining it away, say what will happen next, and invite them to get in touch so it can be put right (do not invent contact details, phone numbers or names). Never offer discounts, refunds or gifts in exchange for changing the review, never mention other customers or competitors, and never promise an outcome. Never mention or repeat any health detail (medication, allergies, conditions, reactions, swelling, bruising, what was injected or how much): a reply is public, so thank them in general terms only. For a complaint, keep it calm and move the conversation offline. UK spelling. Sign with the owner's first name only. Plain text only, no subject line.`,
       messages: [{ role: 'user', content: `${profileContext(profile)}\n\nReview by ${review.author}, ${review.rating} stars${review.when ? `, ${review.when}` : ''}:\n"${review.text || '(no text, rating only)'}"` }],
     });
-    const t = r.text.trim();
+    const t = safeReply(r.text.trim());
     if (t.length > 20 && !hasBanned(t) && !/discount|voucher|refund in exchange/i.test(t)) text = t;
   } catch { /* keep the fallback */ }
   await addValue(userId, 'watcher', 'reply_drafted', `Drafted a reply to ${review.author}`);

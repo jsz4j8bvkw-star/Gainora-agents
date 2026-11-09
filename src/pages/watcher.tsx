@@ -11,6 +11,7 @@ import { bookingPlatform, distanceLabel, reviewsSince, signalsFor, signalsForYou
 import { locationSourceLabel, RADII_KM, townOf } from '../../shared/geo';
 import type { PriceSource } from '../../shared/treatments';
 import { socialLabel } from '../../shared/social';
+import { safeReply } from '../../shared/drafts';
 import { scoreLabel } from '../../shared/speed';
 import type { Client, ClientsData, CompetitorChange, CompetitorsState, PlaceSummary, ReachEvent, ReviewItem, TrackedCompetitor, WatcherState } from '../lib/types';
 import { emptyClientsData } from '../lib/types';
@@ -230,7 +231,7 @@ function Reviews({ data, setData }: { data: WatcherState; setData: (w: WatcherSt
   };
   const draft = async (r: ReviewItem) => {
     setReply({ review: r, text: null });
-    try { setReply({ review: r, text: await api.draftReviewReply(r.id) }); }
+    try { setReply({ review: r, text: safeReply(await api.draftReviewReply(r.id)) }); }
     catch { setReply(null); toast('Couldn’t write the reply. Try again.'); }
   };
   // Opened from Home ("Open the drafted reply"): go straight to the draft for that review.
