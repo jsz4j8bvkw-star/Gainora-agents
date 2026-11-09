@@ -353,10 +353,11 @@ export async function runWatcher(userId: string, profile: any, opts: { quiet?: b
   const check = await checkSite(site);
   const sp = await checkSpeed(site, prev?.speed, !!opts.manual);
 
-  // Prices: weekly, and only when there are competitors with websites.
+  // Prices: weekly, only when there are competitors with websites, and only when the treatment-matched
+  // comparison (reach step 7) has nothing: for clinics and salons it replaces this AI-paired table.
   let prices: PriceTable | null = prev?.prices ?? null;
   let moves: PriceMove[] = [];
-  if (!prices || now.getTime() - new Date(prices.checkedAt).getTime() > WEEK) {
+  if (!(competitors?.comparison?.rows.length) && (!prices || now.getTime() - new Date(prices.checkedAt).getTime() > WEEK)) {
     try {
       const table = await buildPriceTable(userId, profile, now, reach?.gathered, competitors?.list);
       if (table) {

@@ -78,6 +78,14 @@ export function planToday(input: TodayInput, limit = 3): TodayItem[] {
     if (offer) items.push({ id: `reach-${offer.id}`, agent: 'watcher', weight: 44, title: `Decide how to answer ${offer.competitor}’s offer`, why: `${offer.summary}${advice(offer.key) ? ` ${advice(offer.key)}` : ''}`, cta: 'See the offer', link: '/watcher?tab=competitors' });
     const opened = reach.find((e) => e.kind === 'new-nearby');
     if (opened) items.push({ id: `reach-${opened.id}`, agent: 'watcher', weight: 38, title: `Look at ${opened.competitor}, newly listed near you`, why: `${opened.summary}${opened.detail ? ` ${opened.detail}` : ''} The Watcher now reads their website and Google listing every day.`, cta: 'See what they offer', link: '/watcher?tab=competitors' });
+    // Like-for-like prices: the biggest gap against the local average, and a common treatment nearby the owner does not list.
+    const cmp = w.competitors?.comparison;
+    if (cmp) {
+      const gap = cmp.rows.filter((r) => r.yours && r.listedBy >= 2 && r.localAvg != null).map((r) => ({ r, diff: r.yours!.value - r.localAvg! })).sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff))[0];
+      if (gap && Math.abs(gap.diff) >= Math.max(15, gap.r.localAvg! * 0.15)) items.push({ id: `price-${gap.r.id}`, agent: 'watcher', weight: 36, title: `Check your ${gap.r.label.charAt(0).toLowerCase() + gap.r.label.slice(1)} price`, why: `You charge ${gap.r.yours!.price}; the ${gap.r.listedBy} nearby businesses that list it average £${gap.r.localAvg} (${gap.r.position}). ${gap.diff > 0 ? 'A higher price holds when the page says what it includes.' : 'Make sure it still covers your time and product.'}`, cta: 'See the comparison', link: '/watcher?tab=prices' });
+      const missing = cmp.theyOfferYouDont.find((t) => t.by.length >= 3);
+      if (missing) items.push({ id: `gap-${missing.id}`, agent: 'watcher', weight: 30, title: `Decide whether to list ${missing.label.charAt(0).toLowerCase() + missing.label.slice(1)}`, why: `${missing.by.length} businesses nearby price it (${missing.by.slice(0, 3).map((b) => `${b.name} ${b.price}`).join(', ')}) and your list doesn’t show it.`, cta: 'See who offers it', link: '/watcher?tab=prices' });
+    }
     const fix = w.speed?.fixes.find((f) => !f.done && f.impact === 'High' && f.who === 'You');
     if (fix) items.push({ id: `fix-${fix.id}`, agent: 'watcher', weight: 42, title: fix.title, why: `${fix.why}${fix.saving ? ` Google’s test says this ${fix.saving}.` : ''} You can do it yourself.`, cta: 'See how', link: '/watcher?tab=speed' });
     if (w.brokenLinks.length) items.push({ id: 'links', agent: 'watcher', weight: 28, title: `Fix ${plural(w.brokenLinks.length, 'broken link')}`, why: 'Visitors who click them see an error page and many give up. The list shows where each one is.', cta: 'See the list', link: '/watcher?tab=overview' });
