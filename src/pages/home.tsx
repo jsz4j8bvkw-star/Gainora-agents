@@ -88,7 +88,7 @@ export function Home() {
               <div className="today-body">
                 <h3 className="subhead">{t.title}</h3>
                 <p className="muted today-why">{t.why}</p>
-                <span className="xsmall faint">{AGENTS[t.agent].name}</span>
+                <span className="xsmall faint">{t.agent === 'clients' ? 'Your clients' : AGENTS[t.agent].name}</span>
               </div>
               <div className="today-actions">
                 <Link to={t.link} className={`btn ${i === 0 ? 'btn-primary' : 'btn-secondary'} btn-small`}>{t.cta}<Icon name="chevron" /></Link>

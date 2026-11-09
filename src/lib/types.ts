@@ -14,8 +14,26 @@ export type { PriceTable, PriceRow, PriceCell } from '../../shared/prices';
 export type { LeadStage } from '../../shared/leads';
 export type { TodayItem } from '../../shared/today';
 export type { CompetitorsState, TrackedCompetitor, NearbyPlace, ReachEvent, ReachAdvice, ServiceLine, OfferLine, InstagramSnapshot, InstaPost } from '../../shared/competitors';
+export type { Client, Visit, Consent, ClientSettings, DueInfo, DueStatus, ClientFilter, MessageKind } from '../../shared/clients';
+export type { ClientAction, Outcome, OutcomeStatus, ActionKind, Channel, MoneySummary } from '../../shared/money';
+import type { ClientSettings } from '../../shared/clients';
+import type { Client, Visit } from '../../shared/clients';
+import type { ClientAction, Outcome } from '../../shared/money';
 
 export type AgentId = 'watcher' | 'scout' | 'brief';
+
+/**
+ * Everything under "Your clients". `ready` is false when the account's database does not have the
+ * client tables yet (the migration has not been run): the app shows a "being set up" state and never crashes.
+ */
+export interface ClientsData {
+  ready: boolean;
+  clients: Client[];
+  visits: Visit[];
+  actions: ClientAction[];
+  outcomes: Outcome[];
+}
+export const emptyClientsData = (ready = false): ClientsData => ({ ready, clients: [], visits: [], actions: [], outcomes: [] });
 
 export interface Competitor { name: string; url: string }
 
@@ -34,6 +52,8 @@ export interface BusinessProfile {
   numbers: { revenueBand: string; enquiriesPerWeek: string; salesPerWeek: string; averageOrder: string; track: string[] };
   goals: { focus: string; detail: string; target: string; twelveMonth: string; obstacle: string; timePerWeek: string };
   preferences: { reportDay: string; reportTime: string; alerts: string; style: string; extraRecipient: string };
+  /** Settings for "Your clients": per-treatment intervals, quiet hours, the weekly cap, the sending mode. Optional; defaults apply. */
+  clientSettings?: ClientSettings;
   completedAt?: string;
 }
 
@@ -142,6 +162,8 @@ export interface ChatMessage { id: string; role: 'user' | 'agent'; text: string;
 
 export interface HomeData {
   today?: TodayItem[];   // the ranked "do these today" list (see shared/today.ts)
+  /** "Your clients" data for Home's due card, money number and getting-started block. */
+  clients?: ClientsData;
   notes: Note[];
   actions: Action[];
   alerts: Alert[];

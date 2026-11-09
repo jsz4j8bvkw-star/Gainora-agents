@@ -6,12 +6,15 @@
 
 import type { Action, AgentId, BusinessProfile, Lead, Tender, WatcherState } from '../src/lib/types';
 import type { MetricChange } from './metrics';
+import type { Client, ClientSettings, Visit } from './clients';
+import { dueThisWeek } from './clients';
 import { isDue } from './leads';
 import { daysLeft } from './tenders';
 
 export interface TodayItem {
   id: string;
-  agent: AgentId;
+  /** Which agent found it; 'clients' for items from the owner's own client list. */
+  agent: AgentId | 'clients';
   title: string;   // what to do, in the imperative
   why: string;     // one or two sentences on why it matters, with the real figure where there is one
   cta: string;     // the button: what happens when it is tapped
@@ -29,6 +32,8 @@ export interface TodayInput {
   changes?: MetricChange[];       // this week's Brief analysis
   hasThisWeeksNumbers?: boolean;
   googleConfigured?: boolean;     // whether the Watcher can read Google reviews at all
+  /** The owner's clients and visits (Your clients), for the due-back item. */
+  clients?: { clients: Client[]; visits: Visit[]; settings?: ClientSettings } | null;
   now?: Date;
 }
 
@@ -136,6 +141,20 @@ export function planToday(input: TodayInput, limit = 3): TodayItem[] {
     }
   }
 
+  // Clients due back this week: the owner's own list, the most direct route to a booking.
+  if (input.clients && input.clients.clients.length) {
+    const d = dueThisWeek(input.clients.clients, input.clients.visits, input.clients.settings ?? {}, now);
+    if (d.count) {
+      const names = d.names.length ? `${d.names.slice(0, 2).join(' and ')}${d.count > 2 ? ` and ${d.count - 2} more` : ''}` : `${d.count} clients`;
+      items.push({
+        id: 'due-back', agent: 'clients', weight: d.overdue ? 78 : 70,
+        title: `Message ${d.count === 1 ? 'the client' : `${d.count} clients`} due back this week`,
+        why: `${names} ${d.count === 1 ? 'is' : 'are'} due${d.overdue ? ` (${d.overdue} overdue)` : ''}${d.priced ? `, worth ${money(d.value)} at their last prices` : ''}. A short personal text is drafted for each; you approve and send.`,
+        cta: 'See the drafts', link: '/clients?tab=due',
+      });
+    }
+  }
+
   if (agents.includes('brief')) {
     const dip = (input.changes ?? []).find((c) => (c.metric.id === 'orders' || c.metric.id === 'revenue') && c.direction === 'down' && (c.changePct ?? 0) <= -10);
     if (dip) items.push({ id: 'winback', agent: 'brief', weight: 55, title: 'Send a note to past customers', why: `${dip.metric.label} fell ${Math.abs(dip.changePct ?? 0)}% on last week. People who have bought before are the quickest sales to win back; the Brief writes the email, text and post for you.`, cta: 'Write my messages', link: '/brief?open=winback' });
@@ -152,6 +171,8 @@ export function planToday(input: TodayInput, limit = 3): TodayItem[] {
 export function actionLink(a: Pick<Action, 'text' | 'agent'>): string | null {
   const t = a.text.toLowerCase();
   if (a.agent === 'you') return null;
+  if (/due back|rebook|clients? due|overdue/.test(t)) return '/clients?tab=due';
+  if (/review request|ask .* for a (google )?review/.test(t)) return '/clients?tab=reviews';
   if (/review/.test(t) && !/competitor|changed/.test(t)) return '/watcher?tab=reviews';
   if (/google listing/.test(t)) return '/watcher?tab=reviews';
   if (/contract|tender/.test(t)) return '/scout?tab=contracts';
