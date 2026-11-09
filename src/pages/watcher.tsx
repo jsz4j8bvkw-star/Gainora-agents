@@ -12,7 +12,12 @@ import { locationSourceLabel, RADII_KM, townOf } from '../../shared/geo';
 import type { PriceSource } from '../../shared/treatments';
 import { socialLabel } from '../../shared/social';
 import { scoreLabel } from '../../shared/speed';
-import type { CompetitorChange, CompetitorsState, PlaceSummary, ReachEvent, ReviewItem, TrackedCompetitor, WatcherState } from '../lib/types';
+import type { Client, ClientsData, CompetitorChange, CompetitorsState, PlaceSummary, ReachEvent, ReviewItem, TrackedCompetitor, WatcherState } from '../lib/types';
+import { emptyClientsData } from '../lib/types';
+import { packWorthy, responsePack, type ResponsePack } from '../../shared/responses';
+import { canMessage, dueGroups } from '../../shared/clients';
+import { uuid } from '../lib/format';
+import { makeCtx, SendModal, type Ctx as ClientsCtx, type DraftItem } from './clients';
 
 const KIND: Record<CompetitorChange['kind'], { label: string; cls: string }> = {
   price: { label: 'Price change', cls: 'tag-brass' },
@@ -446,6 +451,10 @@ function Competitors({ data, setData }: { data: WatcherState; setData: (w: Watch
   const [finding, setFinding] = useState(false);
   const toast = useToast();
   const you = { rating: data.reviews?.rating ?? null, count: data.reviews?.count ?? null, reviews30: reviewsSince(data.reviews?.history, 30) };
+  // The owner's clients, for the response packs' "text to the clients who are due for this treatment".
+  const [clientsData, setClientsData] = useState<ClientsData>(emptyClientsData(false));
+  useEffect(() => { api.listClients().then(setClientsData).catch(() => {}); }, []);
+  const cctx = makeCtx(clientsData, setClientsData, profile, data, toast);
 
   const timeline: TimelineItem[] = [
     ...(comps?.events ?? []).map((e) => ({ id: e.id, at: e.at, competitor: e.competitor, key: e.key, ...REACH_KIND[e.kind], summary: e.summary, detail: e.detail, url: e.url, changeKind: e.kind === 'price' ? 'price' : e.kind === 'offer' || e.kind === 'post' ? 'offer' : undefined })),
@@ -527,6 +536,7 @@ function Competitors({ data, setData }: { data: WatcherState; setData: (w: Watch
                   {c.url && <a className="small" href={c.url} target="_blank" rel="noreferrer">{/instagram\.com/.test(c.url) ? 'See the post' : /google\.com\/maps/.test(c.url) ? 'See their listing' : 'See their page'}<span className="sr-only"> (opens in a new tab)</span></a>}
                   <Feedback agent="watcher" kind="change" id={c.id} text={c.summary} changeKind={c.changeKind} onNotRelevant={() => setTimeout(() => setHidden((h) => [...h, c.id]), 1200)} />
                 </div>
+                {packWorthy(c.changeKind ?? '') && <PackView ctx={cctx} event={{ id: c.id, kind: c.changeKind ?? 'offer', competitor: c.competitor, summary: c.summary, detail: c.detail, at: c.at }} comparison={comps?.comparison ?? null} />}
               </div>
             </article>
           ))}
@@ -937,5 +947,35 @@ function CompareView({ data }: { data: WatcherState }) {
         <p className="xsmall faint mt-16">“Looks bigger” means more public reviews, a bigger team shown on their booking page, more followers or more treatments listed. None of these is a count of their bookings or revenue, which no public page shows. Where a figure is missing, the reason is shown in its place.</p>
       </section>
     </>
+  );
+}
+
+/* ---------- Response packs: answer a competitor's move with your own facts ---------- */
+function PackView({ ctx, event, comparison }: { ctx: ClientsCtx; event: { id: string; kind: string; competitor: string; summary: string; detail?: string; at: string }; comparison: CompetitorsState['comparison'] }) {
+  const toast = useToast();
+  const [sending, setSending] = useState<DraftItem[] | null>(null);
+  const due = ctx.data.ready ? dueGroups(ctx.data.clients, ctx.data.visits, ctx.settings).flatMap((g) => g.items) : [];
+  const canText = (c: Client) => canMessage(c, 'competitor_response', { visits: ctx.data.visits.filter((v) => v.clientId === c.id).length, sent: ctx.data.actions, settings: ctx.settings }).ok;
+  const pack: ResponsePack = responsePack(event, { profile: ctx.profile, comparison, due, canText });
+  const copy = async (text: string, channel: 'instagram' | 'website', what: string) => {
+    if (!(await copyText(text))) { toast('Select the text and copy it.'); return; }
+    toast(`Copied. ${what}`);
+    if (ctx.data.ready) api.recordAction({ id: uuid(), clientId: null, kind: 'competitor_response', channel, text, sentAt: new Date().toISOString(), treatmentId: pack.treatmentId, ref: event.id }).then((a) => ctx.setData({ ...ctx.data, actions: [a, ...ctx.data.actions] })).catch(() => {});
+  };
+  const textItems = (): DraftItem[] => (pack.text ? pack.text.audience.map(({ client, due: d }) => ({ client, kind: 'competitor_response' as const, text: pack.text!.draft.replace(/^Hi [^,]+,/, `Hi ${client.name.split(' ')[0]},`), treatmentId: pack.treatmentId, amountHint: d.lastPrice, ref: event.id })) : []);
+  return (
+    <details className="pack">
+      <summary><Icon name="bolt" />Answer this{pack.label ? `: ${pack.label.toLowerCase()}` : ''}{pack.text ? `, including a text to ${pack.text.audience.length} client${pack.text.audience.length === 1 ? '' : 's'} who ${pack.text.audience.length === 1 ? 'is' : 'are'} due` : ''}</summary>
+      <div className="pack-body">
+        <p className="xsmall faint" style={{ margin: 0 }}>{pack.rule}</p>
+        <div className="pack-item"><span className="field-label">Instagram caption</span><pre>{pack.caption}</pre><div><Button kind="secondary" small icon="copy" onClick={() => copy(pack.caption, 'instagram', 'Paste it into Instagram when you post.')}>Copy caption</Button></div></div>
+        <div className="pack-item"><span className="field-label">One line for your website or booking page</span><pre>{pack.whyUs}</pre><div><Button kind="secondary" small icon="copy" onClick={() => copy(pack.whyUs, 'website', 'Add it where your prices are shown.')}>Copy line</Button></div></div>
+        {pack.text ? (
+          <div className="pack-item"><span className="field-label">Text to the {pack.text.audience.length} client{pack.text.audience.length === 1 ? '' : 's'} due for this ({pack.text.audience.map((a) => a.client.name.split(' ')[0]).slice(0, 4).join(', ')}{pack.text.audience.length > 4 ? '…' : ''})</span><pre>{pack.text.draft}</pre><div><Button small icon="send" onClick={() => setSending(textItems())}>Approve and send, one at a time</Button></div></div>
+        ) : pack.treatmentId && ctx.data.ready ? <p className="xsmall faint" style={{ margin: 0 }}>None of your clients who are due had this treatment, so there is no text to send.</p> : null}
+        <ul className="pack-facts">{pack.facts.map((f, i) => <li key={i}>{f}</li>)}</ul>
+      </div>
+      {sending && <SendModal ctx={ctx} items={sending} onClose={() => setSending(null)} />}
+    </details>
   );
 }

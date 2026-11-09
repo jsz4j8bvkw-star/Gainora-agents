@@ -40,6 +40,8 @@ export interface FirstInput {
   clients: Client[];
   visits: Visit[];
   hasBookingSystem: boolean;
+  /** Whether the owner has given a price list or booking page the Watcher can read prices from. */
+  hasPrices?: boolean;
   now?: Date;
 }
 
@@ -60,7 +62,8 @@ export function firstActions(i: FirstInput): FirstAction[] {
     const gap = cmp.rows.filter((r) => r.yours && r.listedBy >= 2 && r.localAvg != null).map((r) => ({ r, diff: r.yours!.value - r.localAvg! })).sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff))[0];
     if (gap && Math.abs(gap.diff) >= Math.max(15, gap.r.localAvg! * 0.15)) out.push({ id: `price-${gap.r.id}`, title: `Your ${gap.r.label.charAt(0).toLowerCase()}${gap.r.label.slice(1)} price is £${Math.round(Math.abs(gap.diff))} ${gap.diff > 0 ? 'above' : 'below'} the local average`, why: `You charge ${gap.r.yours!.price}; the ${gap.r.listedBy} nearby businesses that list it average £${Math.round(gap.r.localAvg!)}. ${gap.diff > 0 ? 'A higher price holds when the page says what it includes.' : 'Check it still covers your time and product.'}`, cta: 'See the comparison', link: '/watcher?tab=prices' });
   }
-  if (!out.length && w && !w.competitors?.foundAt) out.push({ id: 'wait-nearby', title: 'Your nearby competitors are being found', why: 'The Watcher is searching Google around you now. Their prices, reviews and Instagram appear on the Competitors tab within a few minutes.', cta: 'See the Watcher', link: '/watcher?tab=competitors' });
+  if (i.hasPrices === false && out.length < 3) out.push({ id: 'prices', title: 'Add your price list so prices compare like for like', why: 'Paste your treatments and prices under Your business (or give your public booking page). The Watcher then shows your price next to each nearby clinic’s for the same treatment, and visits pre-fill with your prices.', cta: 'Add my prices', link: '/business' });
+  if (out.length < 3 && w && !w.competitors?.foundAt) out.push({ id: 'wait-nearby', title: 'Your nearby competitors are being found', why: 'The Watcher is searching Google around you now. Their prices, reviews and Instagram appear on the Competitors tab within a few minutes.', cta: 'See the Watcher', link: '/watcher?tab=competitors' });
   return out.slice(0, 3);
 }
 

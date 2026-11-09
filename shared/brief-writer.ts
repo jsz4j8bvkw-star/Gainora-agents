@@ -30,6 +30,10 @@ export interface BriefContext {
   weeksLeft?: number | null;
   /** The most important competitor event this week (The Watcher's reach), with its suggested action. */
   competitor?: { summary: string; action: string } | null;
+  /** Clients due back this week (Your clients): how many, their names, the value at their last prices. */
+  dueBack?: { count: number; names: string[]; value: number } | null;
+  /** Bookings the owner confirmed came from Gainora this month. */
+  brought?: { amount: number; bookings: number } | null;
 }
 
 /** The goal line: where the 90-day target stands, using only figures the app has. */
@@ -96,6 +100,8 @@ export function writeBrief(changes: MetricChange[], profile: BusinessProfile, ct
   }
 
   const goal = goalLine(changes, profile, ctx);
+  if (ctx.brought?.bookings) paragraphs.push(`Gainora’s messages brought in ${money(ctx.brought.amount)} from ${plural(ctx.brought.bookings, 'booking')} you confirmed this month${ctx.dueBack?.count ? `, and ${plural(ctx.dueBack.count, 'client')} ${ctx.dueBack.count === 1 ? 'is' : 'are'} due back this week` : ''}.`);
+  else if (ctx.dueBack?.count) paragraphs.push(`${plural(ctx.dueBack.count, 'client')} ${ctx.dueBack.count === 1 ? 'is' : 'are'} due back this week${ctx.dueBack.value ? `, worth ${money(ctx.dueBack.value)} at their last prices` : ''}: the quickest bookings there are, and the texts are drafted.`);
   const steer = bad.length
     ? `The priority this week is to stop the drop in ${lower(bad[0].metric.label)} before adding anything new.`
     : 'You’re moving the right way. Protect the time that produced this week’s result.';
@@ -108,6 +114,7 @@ export function writeBrief(changes: MetricChange[], profile: BusinessProfile, ct
   const push = (a: string) => { if (actions.length < 3 && !actions.includes(a)) actions.push(a); };
 
   if (ctx.urgentIssue) push(`${ctx.urgentIssue.replace(/\.$/, '')}, so fix that before anything else (enquiries and orders depend on it)`);
+  if (ctx.dueBack?.count) push(`Text the ${ctx.dueBack.count} client${ctx.dueBack.count === 1 ? '' : 's'} due back this week${ctx.dueBack.names.length ? ` (${ctx.dueBack.names.slice(0, 2).join(', ')}${ctx.dueBack.count > 2 ? ' and others' : ''})` : ''}${ctx.dueBack.value ? `, worth ${money(ctx.dueBack.value)} at their last prices` : ''}; the drafts are under Your clients`);
   if (ctx.dueFollowUps?.length) push(`Follow up with ${ctx.dueFollowUps.slice(0, 2).join(' and ')}${ctx.dueFollowUps.length > 2 ? ` and ${ctx.dueFollowUps.length - 2} more` : ''} (the notes are written for you in The Scout)`);
   if (wholesale) {
     if (ctx.leadsToContact?.length) push(`Send your introduction to ${ctx.leadsToContact.slice(0, 2).join(' and ')}${ctx.leadsToContact.length > 2 ? ` and ${ctx.leadsToContact.length - 2} more` : ''} this week`);

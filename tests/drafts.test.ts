@@ -124,8 +124,12 @@ test('first ten minutes: review position against nearby, and three real first ac
   assert.equal(pos.ratingRank, 2); assert.equal(pos.of, 6); assert.ok(pos.countRank! > 1); assert.match(pos.text, /^4\.9 stars from 61 reviews: 2nd of 6 nearby by rating, but \d(st|nd|rd|th) of 6 by number of reviews; the busiest-looking has 212\./);
   assert.equal(reviewPosition({ ...w, competitors: { ...comps, list: comps.list.filter((c) => c.name !== 'The Lip Lounge') } })!.ratingRank, 1);
   assert.equal(reviewPosition({ ...w, reviews: null }), null);
-  const empty = firstActions({ watcher: { ...w, reviews: null }, clientsReady: true, clients: [], visits: [], hasBookingSystem: true, now });
+  const empty = firstActions({ watcher: { ...w, reviews: null }, clientsReady: true, clients: [], visits: [], hasBookingSystem: true, hasPrices: true, now });
   assert.deepEqual(empty.map((a) => a.id), ['import', 'google', 'price-lip-1'].slice(0, empty.length));
+  // A brand-new account with nothing yet: import, prices, and the search in progress.
+  const brandNew = firstActions({ watcher: { ...w, reviews: null, competitors: { ...comps, foundAt: null, comparison: null } }, clientsReady: true, clients: [], visits: [], hasBookingSystem: false, hasPrices: false, now });
+  assert.deepEqual(brandNew.map((a) => a.id), ['import', 'google', 'prices']);
+  assert.equal(firstActions({ watcher: { ...w, competitors: { ...comps, foundAt: null, comparison: null } }, clientsReady: true, clients: [], visits: [], hasBookingSystem: true, hasPrices: true, now }).map((a) => a.id).join(','), 'import,wait-nearby');
   assert.equal(empty[0].link, '/clients?tab=import'); assert.match(empty[0].title, /^Import your clients/);
   const some = firstActions({ watcher: w, clientsReady: true, clients: [client()], visits: [visit()], hasBookingSystem: true, now });
   assert.equal(some[0].id, 'ask-reviews'); assert.match(some[0].title, /Ask your last 1 clients for a Google review/);

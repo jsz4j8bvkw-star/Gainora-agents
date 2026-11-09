@@ -19,6 +19,9 @@ import { mondayOf, uid } from './format';
 import { communityResults, corporateResults, demandResults, localResults, partnerResults, sampleClients, sampleCompetitors, SAMPLE_PROFILE, SAMPLE_PROFILE_SHOP } from './demo-data';
 import { scoutMode } from '../../shared/scout';
 import { reviewsSince } from '../../shared/competitors';
+import { dueThisWeek } from '../../shared/clients';
+import { moneySummary } from '../../shared/money';
+import { startOfMonth } from '../../shared/value';
 export { SAMPLE_PROFILE, SAMPLE_PROFILE_SHOP };
 
 const KEY = 'gainora.agents.demo.v3';
@@ -125,6 +128,8 @@ function briefContextOf(s: DemoState): BriefContext {
     lowReview: low ? { author: low.author, rating: low.rating } : null,
     topFix: fix ? { title: fix.title, who: fix.who } : null,
     weeksLeft: Math.max(0, Math.ceil((started + 90 * DAY - Date.now()) / (7 * DAY))),
+    dueBack: (() => { const d = dueThisWeek(s.clients, s.visits, s.profile?.clientSettings ?? {}); return d.count ? { count: d.count, names: d.names, value: d.value } : null; })(),
+    brought: (() => { const m = moneySummary(s.outcomes, s.clientActions, startOfMonth()); return m.bookings ? { amount: m.confirmed, bookings: m.bookings } : null; })(),
   };
 }
 
@@ -221,6 +226,10 @@ function seed(s: DemoState) {
     { id: 't1', tenderId: 'sample-1', title: 'Locally made gifts and homeware for visitor centre shops', buyer: 'Heritage trust (sample)', summary: 'Supply of gifts, ceramics and textiles made in the county for resale in three visitor centre shops, with seasonal reorders.', value: 18000, deadline: iso(now + 21 * DAY), url: 'https://www.contractsfinder.service.gov.uk/', region: 'South West', sme: true, fit: 'strong', reason: 'They want locally made homeware for resale, which is exactly what you sell. You would need a price list, product photos and public liability insurance.', status: 'new', foundAt: iso(now - DAY) },
   ];
 
+  // Your clients: a clinic's regulars, with two bookings confirmed from rebook texts this month.
+  const sc = consumer ? sampleClients(now) : { clients: [], visits: [], actions: [], outcomes: [] };
+  s.clients = sc.clients; s.visits = sc.visits; s.clientActions = sc.actions; s.outcomes = sc.outcomes;
+
   // The Brief
   const metrics = metricsFor(p.numbers.track);
   const baseEnq = firstNumber(p.numbers.enquiriesPerWeek) ?? 30;
@@ -292,9 +301,6 @@ function seed(s: DemoState) {
     ev('brief_written', 'brief', 'Weekly Brief written', d(14)),
     ev('brief_written', 'brief', 'Weekly Brief written', d(21)),
   ];
-  // Your clients: a clinic's regulars, with two bookings confirmed from rebook texts this month.
-  const sc = consumer ? sampleClients(now) : { clients: [], visits: [], actions: [], outcomes: [] };
-  s.clients = sc.clients; s.visits = sc.visits; s.clientActions = sc.actions; s.outcomes = sc.outcomes;
   s.feedback = [];
   s.chat = [];
   s.seededAt = iso(now);
@@ -404,8 +410,8 @@ export function createDemoApi(): Api {
         today,
         clients: clientsNow(),
         notes: [
-          { agent: 'watcher', body: `Mark D. left a 2-star review about a chipped bowl. Reply today; I’ve drafted it. Your contact page also returned an error on Sunday night, so some enquiries may not be reaching you.` },
-          { agent: 'scout', body: `${due.length ? `${due[0].name} is due a follow-up today. ` : ''}I also found a public contract for locally made gifts worth £18,000 that fits you closely, and ${strong} shops that could stock your range.` },
+          { agent: 'watcher', body: (() => { const low = s.watcher?.reviews?.reviews.find((r) => r.isNew && r.rating <= 3); return `${low ? `${low.author} left a ${low.rating}-star review; the reply is drafted. ` : ''}Your contact page has no form, email or phone link, so some enquiries may not be reaching you.${s.watcher?.changes[0] ? ` ${s.watcher.changes[0].competitor} ${s.watcher.changes[0].summary.replace(/^[^ ]+( [^ ]+)* (added|published|changed|posted)/, '$2')}` : ''}`; })() },
+          { agent: 'scout', body: `${due.length ? `${due[0].name} is due a follow-up today. ` : ''}${s.tenders[0] ? `I also found a public contract, “${s.tenders[0].title.toLowerCase()}”, that fits you${s.tenders[0].value ? ` (published value £${s.tenders[0].value.toLocaleString('en-GB')})` : ''}` : 'I also looked for public contracts that fit you'}, and ${strong} strong leads.` },
           { agent: 'brief', body: s.briefs[0]?.headline ?? 'Add this week’s numbers to get your Brief.' },
         ],
         actions: s.actions,

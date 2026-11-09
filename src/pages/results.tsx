@@ -3,6 +3,8 @@ import { api } from '../lib/api';
 import { useApp } from '../app';
 import { AGENTS, ErrorNote, Icon, Loading, Tabs, useLoad } from '../components/ui';
 import { formatMinutes, groupDay, startOfMonth, summariseValue, valueSentence, VALUE_BASIS } from '../../shared/value';
+import { moneySummary } from '../../shared/money';
+import { Link } from '../lib/router';
 import { money, shortDate } from '../lib/format';
 import type { ValueEvent } from '../lib/types';
 
@@ -11,6 +13,7 @@ const WHO: Record<ValueEvent['agent'], string> = { watcher: 'The Watcher', scout
 export function Results() {
   const { profile } = useApp();
   const { data, error, loading, reload } = useLoad(() => api.listValue());
+  const { data: cd } = useLoad(() => api.listClients().catch(() => null));
   const [period, setPeriod] = useState<'month' | 'all'>('month');
 
   if (loading && !data) return <Loading />;
@@ -20,6 +23,7 @@ export function Results() {
   const v = summariseValue(data, since);
   const c = v.counts;
   const monthName = new Date().toLocaleDateString('en-GB', { month: 'long' });
+  const ms = cd?.ready ? moneySummary(cd.outcomes, cd.actions, since ?? new Date(0)) : null;
 
   // Group the timeline by day.
   const days = new Map<string, ValueEvent[]>();
@@ -41,11 +45,26 @@ export function Results() {
       <p className="results-sentence">{valueSentence(v, period === 'month' ? `in ${monthName}` : 'so far')}</p>
 
       <section className="results-grid" aria-label="Summary">
-        <div className="result-tile result-feature">
-          <span className="result-label"><Icon name="clock" />Time saved</span>
-          <span className="result-figure">{formatMinutes(v.minutesSaved)}</span>
-          <span className="result-note">An estimate. <details className="inline-details"><summary>How we work it out</summary><span>{VALUE_BASIS}</span></details></span>
-        </div>
+        {ms ? (
+          <Link to="/clients?tab=bookings" className="result-tile result-feature result-link">
+            <span className="result-label"><Icon name="tag" />Gainora helped bring in</span>
+            <span className="result-figure">{money(ms.confirmed)}</span>
+            <span className="result-note">{ms.bookings ? `From ${ms.bookings} booking${ms.bookings === 1 ? '' : 's'} you confirmed came from Gainora’s messages.` : 'Bookings you confirm came from Gainora’s messages. Nothing is estimated.'}{ms.likely.length ? ` ${ms.likely.length} likely to confirm.` : ''}</span>
+          </Link>
+        ) : (
+          <div className="result-tile result-feature">
+            <span className="result-label"><Icon name="clock" />Time saved</span>
+            <span className="result-figure">{formatMinutes(v.minutesSaved)}</span>
+            <span className="result-note">An estimate. <details className="inline-details"><summary>How we work it out</summary><span>{VALUE_BASIS}</span></details></span>
+          </div>
+        )}
+        {ms && (
+          <div className="result-tile">
+            <span className="result-label"><Icon name="clock" />Time saved</span>
+            <span className="result-figure">{formatMinutes(v.minutesSaved)}</span>
+            <span className="result-note">An estimate. <details className="inline-details"><summary>How we work it out</summary><span>{VALUE_BASIS}</span></details></span>
+          </div>
+        )}
         <div className="result-tile">
           <span className="result-label"><Icon name="scout" />Potential customers</span>
           <span className="result-figure">{c.lead_found}</span>
@@ -66,11 +85,13 @@ export function Results() {
           <span className="result-figure">{c.review_alert}</span>
           <span className="result-note">new, with {c.reply_drafted} {c.reply_drafted === 1 ? 'reply' : 'replies'} drafted</span>
         </div>
-        <div className="result-tile">
-          <span className="result-label"><Icon name="send" />Messages written for you</span>
-          <span className="result-figure">{c.draft_written + c.reply_drafted}</span>
-          <span className="result-note">Introductions, follow-ups and win-back messages</span>
-        </div>
+        {!ms && (
+          <div className="result-tile">
+            <span className="result-label"><Icon name="send" />Messages written for you</span>
+            <span className="result-figure">{c.draft_written + c.reply_drafted}</span>
+            <span className="result-note">Introductions, follow-ups and win-back messages</span>
+          </div>
+        )}
       </section>
 
       <section className="section" aria-labelledby="timeline-h">
@@ -95,7 +116,7 @@ export function Results() {
           </div>
         )}
       </section>
-      <p className="xsmall faint mt-16">Contract values are the values the buyer published, not money earned. Won deal values are the amounts you entered. {AGENTS.watcher.name}, {AGENTS.scout.name} and {AGENTS.brief.name} add to this page automatically.</p>
+      <p className="xsmall faint mt-16">“Gainora helped bring in” counts only bookings you confirmed came from a text, response or review request Gainora drafted, at the amounts you entered. Contract values are the values the buyer published, not money earned. Won deal values are the amounts you entered. {AGENTS.watcher.name}, {AGENTS.scout.name} and {AGENTS.brief.name} add to this page automatically.</p>
     </div>
   );
 }

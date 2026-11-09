@@ -947,6 +947,9 @@ tr:last-child td { border-bottom: 0; }
 .import-stats .stat-value { font-size: 2rem; }
 code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .9em; background: var(--canvas); padding: 1px 6px; border-radius: 4px; }
 
+a.result-link { text-decoration: none; color: var(--on-dark); }
+a.result-link:hover { color: var(--on-dark); }
+
 /* Settings: intervals */
 .interval-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px 20px; }
 .interval-row { display: grid; grid-template-columns: minmax(0, 1fr) 84px; gap: 10px; align-items: center; font-size: var(--t-sm); }

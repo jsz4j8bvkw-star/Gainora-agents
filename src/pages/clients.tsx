@@ -46,7 +46,7 @@ const CONSENT_SHORT: Record<Consent, { label: string; cls: string }> = {
   opted_in: { label: 'Opted in', cls: 'tag-forest' }, soft_opt_in: { label: 'Existing client', cls: 'tag-plain' }, opted_out: { label: 'Opted out', cls: 'tag-danger' }, unknown: { label: 'No consent', cls: 'tag-brass' },
 };
 
-interface Ctx {
+export interface Ctx {
   data: ClientsData; setData: (d: ClientsData) => void;
   profile: BusinessProfile; settings: ClientSettings; voice: Voice; prices: Record<string, number>;
   watcher: WatcherState | null;
@@ -539,14 +539,19 @@ function BookingModal({ ctx, client, action, onClose }: { ctx: Ctx; client: Clie
 }
 
 /* ---------- Drafts and sending ---------- */
-interface DraftItem { client: Client; kind: MessageKind; text: string; treatmentId: string | null; amountHint: number | null; ref?: string | null }
+export interface DraftItem { client: Client; kind: MessageKind; text: string; treatmentId: string | null; amountHint: number | null; ref?: string | null }
+
+/** Builds the shared context for pieces of Your clients that live on other pages (the Watcher's response packs). */
+export function makeCtx(data: ClientsData, setData: (d: ClientsData) => void, profile: BusinessProfile, watcher: WatcherState | null, toast: (m: string) => void): Ctx {
+  return { data, setData, profile, settings: settingsOf(profile), voice: voiceOf(profile), prices: ownerPrices(profile), watcher, toast };
+}
 
 /**
  * Approves and sends one or more drafts, one at a time. "Send from your phone" opens the phone's
  * messages app with the text ready; the owner presses send there, then marks it sent here. When a
  * provider is connected (Twilio, env-gated), the same approval sends it directly.
  */
-function SendModal({ ctx, items, onClose }: { ctx: Ctx; items: DraftItem[]; onClose: () => void }) {
+export function SendModal({ ctx, items, onClose }: { ctx: Ctx; items: DraftItem[]; onClose: () => void }) {
   const [i, setI] = useState(0);
   const [texts, setTexts] = useState(() => items.map((x) => x.text));
   const [busy, setBusy] = useState(false);

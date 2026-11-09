@@ -257,7 +257,7 @@ function FirstTen({ clients }: { clients: ClientsData | undefined }) {
     const t = setInterval(reload, 15_000); const stop = setTimeout(() => clearInterval(t), 6 * 60_000);
     return () => { clearInterval(t); clearTimeout(stop); };
   }, [searching, reload]);
-  const acts = firstActions({ watcher: w ?? null, clientsReady: !!clients?.ready, clients: clients?.clients ?? [], visits: clients?.visits ?? [], hasBookingSystem: !!profile.offer?.bookingSystem && !['None', 'Other'].includes(profile.offer.bookingSystem) });
+  const acts = firstActions({ watcher: w ?? null, clientsReady: !!clients?.ready, clients: clients?.clients ?? [], visits: clients?.visits ?? [], hasBookingSystem: !!profile.offer?.bookingSystem && !['None', 'Other'].includes(profile.offer.bookingSystem), hasPrices: !!(profile.offer?.priceList || profile.offer?.bookingUrl) });
   const pos = reviewPosition(w);
   const list = w?.competitors?.list ?? [];
   const town = profile.business.location.split(',')[0].trim();
