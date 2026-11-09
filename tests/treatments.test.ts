@@ -118,7 +118,7 @@ test('treatments: the comparison compares like with like, uses “from” as a m
   assert.equal(positionText(null, []), null);
   assert.equal(positionText({ price: '£100', value: 100, from: false, name: 'x', url: '', seenAt: at }, [{ price: '£150', value: 150, from: false, name: 'y', url: '', seenAt: at }]), '£50 below the local average of £150 (1 other)');
   const facts = comparisonFacts(c);
-  assert.match(facts[0], /Lip filler, 1ml: you £200; Glow Aesthetics £220, Skin Studio from £240, The Beauty Room £180; local average £213 );
+  assert.match(facts[0], /Lip filler, 1ml: you £200; Glow Aesthetics £220, Skin Studio from £240, The Beauty Room £180; local average £213 /);
   assert.ok(facts.some((f) => /Offered nearby but not on your list: HydraFacial/.test(f)));
 });
 
