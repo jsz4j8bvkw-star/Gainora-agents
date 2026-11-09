@@ -125,8 +125,9 @@ test('clients: history, filters, amount suggestions and the export the owner can
   assert.equal(treatmentIdFor('Botox 2 areas'), 'aw-2'); assert.equal(treatmentIdFor('Something bespoke'), null);
   const clients = [client(), client({ id: 'c2', name: 'Gemma Taylor', phone: '+447700900124', consent: 'opted_out' }), client({ id: 'c3', name: 'Old Client', phone: '', email: '' })];
   const all = [...visits, visit({ clientId: 'c2', at: weeksAgo(3), amount: 2000 }), visit({ clientId: 'c3', at: weeksAgo(40), treatment: 'Dermaplaning', treatmentId: 'dermaplaning', amount: 45 })];
-  assert.deepEqual(filterClients(clients, all, {}, { filter: 'due' }, now).map((c) => c.id), ['c3', 'c1']);          // most overdue first
-  assert.deepEqual(filterClients(clients, all, {}, { filter: 'lapsed' }, now).map((c) => c.id), ['c3']);           // no visit in 26 weeks
+  assert.deepEqual(filterClients(clients, all, {}, { filter: 'due' }, now).map((c) => c.id), ['c1']);                // c3 is lapsed, not due
+  assert.equal(dueFor(clients[2], all, {}, now).status, 'lapsed');                                                     // dermaplaning 40 weeks ago on a 4-week gap
+  assert.deepEqual(filterClients(clients, all, {}, { filter: 'lapsed' }, now).map((c) => c.id), ['c3']);           // lapsed, or no visit in 26 weeks
   assert.deepEqual(filterClients(clients, all, {}, { filter: 'top' }, now).map((c) => c.id), ['c2', 'c1', 'c3']);   // by total spent
   assert.deepEqual(filterClients(clients, all, {}, { filter: 'opted_out' }, now).map((c) => c.id), ['c2']);
   assert.deepEqual(filterClients(clients, all, {}, { q: 'lip' }, now).map((c) => c.id), ['c1']);                    // by treatment

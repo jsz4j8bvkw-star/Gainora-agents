@@ -1,8 +1,10 @@
 import type { Api } from './api';
 import type {
-  Action, Alert, BriefReport, BusinessProfile, ChatMessage, FeedbackRecord, HomeData, Lead, ScoutResult, ScoutSearch, Tender,
-  ValueEvent, ValueKind, WatcherState, WeekNumbers,
+  Action, Alert, BriefReport, BusinessProfile, ChatMessage, Client, ClientAction, FeedbackRecord, HomeData, Lead, Outcome, ScoutResult, ScoutSearch, Tender,
+  ValueEvent, ValueKind, Visit, WatcherState, WeekNumbers,
 } from './types';
+import { likelyOutcomes } from '../../shared/money';
+import { uuid } from './format';
 import { emptyProfile } from './questions';
 import { metricsFor, analyseWeeks } from '../../shared/metrics';
 import { writeBrief, type BriefContext } from '../../shared/brief-writer';
@@ -14,12 +16,12 @@ import { hostOf } from '../../shared/learning';
 import { planToday } from '../../shared/today';
 import { sourceCatalogue } from '../../shared/ask';
 import { mondayOf, uid } from './format';
-import { communityResults, corporateResults, demandResults, localResults, partnerResults, sampleCompetitors, SAMPLE_PROFILE, SAMPLE_PROFILE_SHOP } from './demo-data';
+import { communityResults, corporateResults, demandResults, localResults, partnerResults, sampleClients, sampleCompetitors, SAMPLE_PROFILE, SAMPLE_PROFILE_SHOP } from './demo-data';
 import { scoutMode } from '../../shared/scout';
 import { reviewsSince } from '../../shared/competitors';
 export { SAMPLE_PROFILE, SAMPLE_PROFILE_SHOP };
 
-const KEY = 'gainora.agents.demo.v2';
+const KEY = 'gainora.agents.demo.v3';
 const DAY = 86_400_000;
 
 interface DemoState {
@@ -37,9 +39,18 @@ interface DemoState {
   feedback: FeedbackRecord[];
   leads: Lead[];
   tenders: Tender[];
+  clients: Client[];
+  visits: Visit[];
+  clientActions: ClientAction[];
+  outcomes: Outcome[];
+  /** When the sample account was seeded: for the first minute and a half the demo behaves like a brand-new account (first search running, no clients yet). */
+  seededAt?: string;
 }
 
-const fresh = (): DemoState => ({ user: null, profile: null, seeded: false, actions: [], alerts: [], watcher: null, scout: [], numbers: [], briefs: [], chat: [], values: [], feedback: [], leads: [], tenders: [] });
+/** How long a freshly set-up demo behaves like a new account, so the first ten minutes can be seen. */
+export const DEMO_FIRST_MINUTES_MS = 90_000;
+
+const fresh = (): DemoState => ({ user: null, profile: null, seeded: false, actions: [], alerts: [], watcher: null, scout: [], numbers: [], briefs: [], chat: [], values: [], feedback: [], leads: [], tenders: [], clients: [], visits: [], clientActions: [], outcomes: [] });
 
 function load(): DemoState {
   try {
@@ -281,9 +292,19 @@ function seed(s: DemoState) {
     ev('brief_written', 'brief', 'Weekly Brief written', d(14)),
     ev('brief_written', 'brief', 'Weekly Brief written', d(21)),
   ];
+  // Your clients: a clinic's regulars, with two bookings confirmed from rebook texts this month.
+  const sc = consumer ? sampleClients(now) : { clients: [], visits: [], actions: [], outcomes: [] };
+  s.clients = sc.clients; s.visits = sc.visits; s.clientActions = sc.actions; s.outcomes = sc.outcomes;
   s.feedback = [];
   s.chat = [];
+  s.seededAt = iso(now);
   s.seeded = true;
+}
+
+/** The Watcher's state as a new account sees it in its first minutes: the nearby search still running. */
+function firstMinutesWatcher(w: WatcherState): WatcherState {
+  const c = w.competitors;
+  return { ...w, changes: [], competitors: c ? { ...c, foundAt: null, list: c.list.filter((x) => x.source === 'typed'), nearby: [], events: [], advice: undefined, comparison: null } : c };
 }
 
 function demoReply(text: string, s: DemoState): ChatMessage {
@@ -344,6 +365,8 @@ export function createDemoApi(): Api {
   let s = load();
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(s)); } catch { /* demo works without storage */ } };
   const ensure = () => { if (s.profile?.completedAt && !s.seeded) { seed(s); save(); } };
+  const firstMinutes = () => !!s.seededAt && Date.now() - new Date(s.seededAt).getTime() < DEMO_FIRST_MINUTES_MS;
+  const clientsNow = () => (firstMinutes() ? { ready: true, clients: [], visits: [], actions: [], outcomes: [] } : { ready: true, clients: s.clients, visits: s.visits, actions: s.clientActions, outcomes: s.outcomes });
   const addValue = (kind: ValueKind, agent: ValueEvent['agent'], title: string, amount?: number) => { s.values = [ev(kind, agent, title, Date.now(), amount), ...s.values]; };
 
   return {
@@ -373,11 +396,13 @@ export function createDemoApi(): Api {
       const due = s.leads.filter((l) => l.stage === 'contacted' && l.nextFollowUp && new Date(l.nextFollowUp).getTime() < Date.now() + DAY);
       const thisWeek = mondayOf();
       const today = planToday({
-        profile: p, agents: ['watcher', 'scout', 'brief'], watcher: s.watcher, leads: s.leads, tenders: s.tenders, searches: s.scout.length,
+        profile: p, agents: ['watcher', 'scout', 'brief'], watcher: firstMinutes() ? firstMinutesWatcher(s.watcher!) : s.watcher, leads: s.leads, tenders: s.tenders, searches: s.scout.length,
         changes: analyseWeeks(s.numbers, metrics), hasThisWeeksNumbers: s.numbers.some((w) => w.weekOf === thisWeek),
+        clients: { ...clientsNow(), settings: p.clientSettings },
       });
       return {
         today,
+        clients: clientsNow(),
         notes: [
           { agent: 'watcher', body: `Mark D. left a 2-star review about a chipped bowl. Reply today; I’ve drafted it. Your contact page also returned an error on Sunday night, so some enquiries may not be reaching you.` },
           { agent: 'scout', body: `${due.length ? `${due[0].name} is due a follow-up today. ` : ''}I also found a public contract for locally made gifts worth £18,000 that fits you closely, and ${strong} shops that could stock your range.` },
@@ -402,7 +427,7 @@ export function createDemoApi(): Api {
     },
     async markAlertsRead() { s.alerts = s.alerts.map((a) => ({ ...a, read: true })); save(); },
 
-    async getWatcher() { await wait(200); ensure(); return s.watcher!; },
+    async getWatcher() { await wait(200); ensure(); return firstMinutes() ? firstMinutesWatcher(s.watcher!) : s.watcher!; },
     async runWatcher() {
       await wait(2200);
       const w = s.watcher!;
@@ -609,6 +634,40 @@ export function createDemoApi(): Api {
         social: `New this week: a fresh batch of ${best} from our makers, plus the winter gift sets. Everything is made within 30 miles of the shop, and we still gift-wrap for free. Come and see us or order online.`,
       };
     },
+
+    // Your clients
+    async listClients() { await wait(150); ensure(); return clientsNow(); },
+    async saveClient(c) {
+      await wait(150);
+      s.clients = s.clients.some((x) => x.id === c.id) ? s.clients.map((x) => (x.id === c.id ? c : x)) : [c, ...s.clients];
+      save(); return c;
+    },
+    async deleteClient(id) {
+      s.clients = s.clients.filter((c) => c.id !== id); s.visits = s.visits.filter((v) => v.clientId !== id);
+      s.clientActions = s.clientActions.filter((a) => a.clientId !== id); s.outcomes = s.outcomes.filter((o) => o.clientId !== id); save();
+    },
+    async addVisit(v) {
+      await wait(150);
+      s.visits = [v, ...s.visits];
+      const likely = likelyOutcomes(s.clientActions.filter((a) => a.clientId === v.clientId), [v], s.outcomes, uuid);
+      s.outcomes = [...likely, ...s.outcomes]; save();
+      return { visit: v, likely };
+    },
+    async deleteVisit(id) { s.visits = s.visits.filter((v) => v.id !== id); save(); },
+    async importClients(clients, visits, optOutIds) {
+      await wait(600);
+      s.clients = [...clients, ...s.clients]; s.visits = [...visits, ...s.visits];
+      s.clients = s.clients.map((c) => (optOutIds.includes(c.id) ? { ...c, consent: 'opted_out', consentAt: new Date().toISOString(), consentSource: 'import' } : c)); save();
+    },
+    async recordAction(a) {
+      s.clientActions = [a, ...s.clientActions];
+      if (a.kind === 'review_request' && a.clientId) s.clients = s.clients.map((c) => (c.id === a.clientId ? { ...c, lastReviewAskAt: a.sentAt } : c));
+      save(); return a;
+    },
+    async saveOutcome(o) { s.outcomes = s.outcomes.some((x) => x.id === o.id) ? s.outcomes.map((x) => (x.id === o.id ? o : x)) : [o, ...s.outcomes]; save(); return o; },
+    async deleteOutcome(id) { s.outcomes = s.outcomes.filter((o) => o.id !== id); save(); },
+    async deleteAllClientData() { await wait(300); s.clients = []; s.visits = []; s.clientActions = []; s.outcomes = []; save(); },
+    async sendSms() { await wait(300); return { sent: false, message: 'No text-message provider is connected in the demo. Use “Send from your phone”, which opens your messages app with the text ready.' }; },
 
     resetDemo() { s = fresh(); save(); },
     fillSample() {

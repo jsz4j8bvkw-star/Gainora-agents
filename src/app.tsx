@@ -16,6 +16,7 @@ import { Ask } from './pages/ask';
 import { Profile } from './pages/profile';
 import { Settings } from './pages/settings';
 import { Results } from './pages/results';
+import { Clients } from './pages/clients';
 
 interface AppState {
   user: User;
@@ -64,6 +65,7 @@ export function App() {
 
 const NAV: { path: string; label: string; icon: string; agent?: AgentId }[] = [
   { path: '/', label: 'Home', icon: 'home' },
+  { path: '/clients', label: 'Your clients', icon: 'clients' },
   { path: '/watcher', label: 'The Watcher', icon: 'watcher', agent: 'watcher' },
   { path: '/scout', label: 'The Scout', icon: 'scout', agent: 'scout' },
   { path: '/brief', label: 'The Brief', icon: 'brief', agent: 'brief' },
@@ -78,6 +80,7 @@ function Shell() {
   usePaletteShortcut(openPalette);
   const active = (p: string) => (p === '/' ? path === '/' : path.startsWith(p)) ? 'page' : undefined;
   const page = (() => {
+    if (path.startsWith('/clients')) return <Clients />;
     if (path.startsWith('/watcher')) return <Watcher />;
     if (path.startsWith('/scout')) return <Scout />;
     if (path.startsWith('/brief')) return <Brief />;
@@ -132,7 +135,7 @@ function Shell() {
         <nav className="tabbar" aria-label="Sections">
           {NAV.map((n) => (
             <Link key={n.path} to={n.path} aria-current={active(n.path)}>
-              <Icon name={n.icon} />{n.label.replace('The ', '')}
+              <Icon name={n.icon} />{n.label.replace('The ', '').replace('Your ', '')}
             </Link>
           ))}
         </nav>

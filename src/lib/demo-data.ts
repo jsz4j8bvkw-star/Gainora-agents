@@ -229,3 +229,63 @@ export function localResults(town: string): ScoutResult[] {
   ];
   return items.map((x, i) => ({ id: uid('r_'), name: x.name, location: town, website: 'https://example.com', fit: i < 3 ? 'strong' : 'possible', reason: x.reason, when: x.when, how: x.how, source: { title: `${x.name} (sample)`, url: 'https://example.com' }, saved: false }));
 }
+
+/* ---------- Your clients (demo) ---------- */
+import type { Client, Visit } from '../../shared/clients';
+import type { ClientAction, Outcome } from '../../shared/money';
+import { treatmentIdFor } from '../../shared/clients';
+
+/**
+ * A nurse-led clinic's regulars: anti-wrinkle clients on a 13-week cycle, a few lip and Profhilo
+ * clients, some due now, some overdue, one who opted out, one lapsed and one who moved away.
+ * With two bookings confirmed this month from rebook texts and one likely one waiting.
+ */
+export function sampleClients(now: number): { clients: Client[]; visits: Visit[]; actions: ClientAction[]; outcomes: Outcome[] } {
+  const day = (n: number) => iso(now - n * DAY).slice(0, 10);
+  const weeks = (n: number) => day(Math.round(n * 7));
+  const clients: Client[] = []; const visits: Visit[] = [];
+  let n = 0;
+  const add = (name: string, phone: string, email: string, consent: Client['consent'], history: [number, string, number | null][], extra: Partial<Client> = {}) => {
+    const id = `cl_${++n}`;
+    clients.push({ id, name, phone, email, consent, consentAt: consent === 'opted_in' || consent === 'opted_out' ? iso(now - 120 * DAY) : null, consentSource: consent === 'opted_out' ? 'stop' : 'import', source: 'import', importedFrom: 'Fresha', createdAt: iso(now - 60 * DAY), ...extra });
+    for (const [w, treatment, amount] of history) visits.push({ id: `v_${id}_${w}`, clientId: id, at: weeks(w), treatment, treatmentId: treatmentIdFor(treatment), amount, practitioner: 'Hannah', createdAt: iso(now - 60 * DAY) });
+    return id;
+  };
+  // Due this week / overdue (anti-wrinkle on 13 weeks)
+  add('Sarah Mitchell', '+447700900101', 'sarah.m@example.com', 'soft_opt_in', [[40, 'Anti-wrinkle injections – 2 areas', 185], [27, 'Anti-wrinkle injections – 2 areas', 195], [14, 'Anti-wrinkle injections – 2 areas', 195]]);
+  add('Gemma Taylor', '+447700900102', '', 'opted_in', [[35, 'Lip filler 0.5ml', 170], [16, 'Anti-wrinkle injections – 3 areas', 240]]);
+  add('Rachel Price', '+447700900103', 'rachel.p@example.com', 'soft_opt_in', [[52, 'Profhilo (2 sessions)', 390], [30, 'Profhilo (2 sessions)', 390]]);
+  add('Claire Morgan', '+447700900104', '', 'soft_opt_in', [[28, 'Anti-wrinkle injections – 1 area', 150], [13.5, 'Anti-wrinkle injections – 1 area', 150]]);
+  add('Nicola Shaw', '+447700900105', 'nicola@example.com', 'soft_opt_in', [[62, 'Lip filler 1ml', 220], [41, 'Lip filler 1ml', 220]]);
+  // Upcoming
+  add('Emma Hughes', '+447700900106', 'emma.h@example.com', 'opted_in', [[22, 'Anti-wrinkle injections – 2 areas', 195], [8, 'Anti-wrinkle injections – 2 areas', 195]]);
+  add('Laura Bennett', '+447700900107', '', 'soft_opt_in', [[10, 'Microneedling', 120], [4, 'Microneedling', 120]]);
+  add('Becky Owen', '+447700900108', 'becky@example.com', 'soft_opt_in', [[3, 'Dermaplaning', 45], [0.4, 'Dermaplaning', 45]]);
+  add('Amy Jones', '+447700900109', '', 'soft_opt_in', [[6, 'Seventy Hyal skin booster', 180], [1, 'Seventy Hyal skin booster', 180]]);
+  // Recently seen, good candidates for a review request
+  add('Kate Roberts', '+447700900110', 'kate.r@example.com', 'opted_in', [[20, 'Anti-wrinkle injections – 2 areas', 195], [0.6, 'Anti-wrinkle injections – 2 areas', 195]]);
+  add('Lucy Edwards', '+447700900111', '', 'soft_opt_in', [[1.1, 'Lip filler 0.5ml', 170]]);
+  // Opted out, lapsed, moved away
+  add('Jo Walker', '+447700900112', 'jo.w@example.com', 'opted_out', [[30, 'Anti-wrinkle injections – 2 areas', 195], [15, 'Anti-wrinkle injections – 2 areas', 195]]);
+  add('Hannah Lewis', '', 'hannah.l@example.com', 'soft_opt_in', [[58, 'HydraFacial', 95], [50, 'HydraFacial', 95]], { phoneRaw: '01270 555123' });
+  add('Sophie Lawson', '+447700900114', '', 'soft_opt_in', [[45, 'Anti-wrinkle injections – 2 areas', 195]], { notComingBack: true, notes: 'Moved to Manchester, March 2026.' });
+  // Comes every 10 weeks by her own choice
+  add('Priya Patel', '+447700900115', 'priya@example.com', 'opted_in', [[30, 'Anti-wrinkle injections – 2 areas', 195], [20, 'Anti-wrinkle injections – 2 areas', 195], [10.5, 'Anti-wrinkle injections – 2 areas', 195]], { intervalWeeks: 10 });
+
+  // Messages sent earlier this month and the bookings they led to.
+  const sent = (id: string, clientId: string, kind: ClientAction['kind'], daysAgo: number, treatmentId: string | null, amountHint: number | null, text: string): ClientAction => ({ id, clientId, kind, channel: 'sms_phone', text, sentAt: iso(now - daysAgo * DAY), treatmentId, amountHint });
+  const actions: ClientAction[] = [
+    sent('act_1', 'cl_10', 'rebook', 12, 'aw-2', 195, 'Hi Kate, it’s Hannah at Willow Aesthetics. It’s been about 3 months since your anti-wrinkle top-up, so you’re due about now. Book here: https://www.fresha.com/a/willow-aesthetics-crewe-sample Reply STOP to opt out.'),
+    sent('act_2', 'cl_11', 'rebook', 15, 'lip-0.5', 170, 'Hi Lucy, it’s Hannah at Willow Aesthetics. It’s been about 7 months since your lip filler, so you’re due about now. Book here: https://www.fresha.com/a/willow-aesthetics-crewe-sample Reply STOP to opt out.'),
+    sent('act_3', 'cl_9', 'rebook', 9, 'skin-booster-1', 180, 'Hi Amy, it’s Hannah at Willow Aesthetics. It’s been about a month since your skin booster, so you’re due about now. Book here: https://www.fresha.com/a/willow-aesthetics-crewe-sample Reply STOP to opt out.'),
+    sent('act_4', 'cl_12', 'review_request', 20, 'aw-2', null, 'Hi Jo, it’s Hannah at Willow Aesthetics. Thank you for coming in for your anti-wrinkle top-up. If you were happy, would you leave us a Google review? https://search.google.com/local/writereview?placeid=sample-place Reply STOP to opt out.'),
+  ];
+  const outcomes: Outcome[] = [
+    { id: 'out_1', actionId: 'act_1', clientId: 'cl_10', visitId: 'v_cl_10_0.6', amount: 195, status: 'confirmed', at: iso(now - 4 * DAY), title: 'Kate Roberts rebooked anti-wrinkle injections, 2 areas', createdAt: iso(now - 4 * DAY) },
+    { id: 'out_2', actionId: 'act_2', clientId: 'cl_11', visitId: 'v_cl_11_1.1', amount: 170, status: 'confirmed', at: iso(now - 8 * DAY), title: 'Lucy Edwards rebooked lip filler, 0.5ml', createdAt: iso(now - 8 * DAY) },
+    { id: 'out_3', actionId: 'act_3', clientId: 'cl_9', visitId: 'v_cl_9_1', amount: 180, status: 'likely', at: iso(now - 7 * DAY), title: 'Seventy Hyal skin booster after a rebook text', createdAt: iso(now - 7 * DAY) },
+  ];
+  // Jo replied STOP to the review request: recorded as an opt-out.
+  const jo = clients.find((c) => c.id === 'cl_12')!; jo.consentAt = iso(now - 19 * DAY); jo.lastReviewAskAt = iso(now - 20 * DAY);
+  return { clients, visits, actions, outcomes };
+}

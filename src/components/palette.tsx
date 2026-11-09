@@ -9,6 +9,9 @@ interface Item { id: string; label: string; icon: string; group: 'Ask' | 'Go to'
 
 const DESTINATIONS = [
   { path: '/', label: 'Home', icon: 'home' },
+  { path: '/clients', label: 'Your clients', icon: 'clients', hint: 'Who is due back, reviews, bookings' },
+  { path: '/clients?tab=due', label: 'Due back', icon: 'clock', hint: 'Clients to text this week' },
+  { path: '/clients?tab=import', label: 'Import clients', icon: 'download', hint: 'From Fresha, Phorest, Pabau, Booksy, Timely, Treatwell' },
   { path: '/watcher', label: 'The Watcher', icon: 'watcher', hint: 'Website and competitors' },
   { path: '/scout', label: 'The Scout', icon: 'scout', hint: 'Find new customers' },
   { path: '/brief', label: 'The Brief', icon: 'brief', hint: 'Weekly numbers' },

@@ -20,6 +20,9 @@ export function navigate(to: string, opts: { replace?: boolean } = {}) {
   window.scrollTo({ top: 0 });
 }
 
+// The demo has no URL bar to type into, so it exposes navigation for the hosted preview and for screenshots.
+if (memory && typeof window !== 'undefined') (window as any).__nav = navigate;
+
 export function usePath(): string {
   const [path, setPath] = useState(current());
   useEffect(() => {

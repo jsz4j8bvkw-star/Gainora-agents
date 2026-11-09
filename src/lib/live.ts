@@ -1,13 +1,16 @@
 import type { Api } from './api';
 import type {
-  Action, AgentId, Alert, BriefReport, BusinessProfile, ChatMessage, FeedbackRecord, HomeData, Lead, PlaceSummary, Plan, ScoutSearch,
-  Tender, User, ValueEvent, WatcherState, WeekNumbers, WinbackDrafts,
+  Action, AgentId, Alert, BriefReport, BusinessProfile, ChatMessage, Client, ClientAction, ClientsData, FeedbackRecord, HomeData, Lead, Outcome, PlaceSummary, Plan, ScoutSearch,
+  Tender, User, ValueEvent, Visit, WatcherState, WeekNumbers, WinbackDrafts,
 } from './types';
+import { emptyClientsData } from './types';
 import { analyseWeeks, metricsFor } from '../../shared/metrics';
 import { planToday } from '../../shared/today';
 import { humanError, parseJsonBody } from './errors';
 import { POLL_DELAYS_MS } from '../../shared/chat';
 import { decodeFocus } from '../../shared/scout';
+import { likelyOutcomes } from '../../shared/money';
+import { uuid } from './format';
 
 declare const __SUPABASE_URL__: string;
 declare const __SUPABASE_ANON_KEY__: string;
@@ -15,12 +18,23 @@ declare const __SUPABASE_ANON_KEY__: string;
 const URL_ = typeof __SUPABASE_URL__ !== 'undefined' ? __SUPABASE_URL__ : '';
 const ANON = typeof __SUPABASE_ANON_KEY__ !== 'undefined' ? __SUPABASE_ANON_KEY__ : '';
 const SESSION_KEY = 'gainora.session.v1';
+const enc = encodeURIComponent;
 const DAY = 86_400_000;
 
 interface Session { access_token: string; refresh_token: string; expires_at: number; user: User }
 
 export class ApiError extends Error {
-  constructor(message: string, public status = 0) { super(message); }
+  constructor(message: string, public status = 0, public code = '') { super(message); }
+}
+
+/**
+ * True when PostgREST says a table is not there: the migration for it has not been run yet.
+ * The app then shows a "being set up" state instead of an error. (PGRST205: not in the schema
+ * cache; 42P01: undefined table.)
+ */
+export function isMissingTable(e: unknown): boolean {
+  const err = e as Partial<ApiError> | undefined;
+  return !!err && (err.code === 'PGRST205' || err.code === '42P01' || (err.status === 404 && !err.code));
 }
 
 function readSession(): Session | null {
@@ -107,7 +121,7 @@ async function rest<T>(path: string, init: { method?: string; body?: unknown; pr
   const data = await readBody(res);
   if (!res.ok) {
     console.error('[gainora] data error', res.status, path.split('?')[0], data?.message || data?.code || '');
-    throw new ApiError(humanError({ status: res.status, body: data, doing: init.doing ?? (init.method && init.method !== 'GET' ? 'saving your changes' : 'loading your data') }), res.status);
+    throw new ApiError(humanError({ status: res.status, body: data, doing: init.doing ?? (init.method && init.method !== 'GET' ? 'saving your changes' : 'loading your data') }), res.status, typeof data?.code === 'string' ? data.code : '');
   }
   return (data === undefined ? undefined : data) as T;
 }
@@ -152,6 +166,24 @@ const mapTender = (r: any): Tender => ({
   value: r.tenders?.value != null ? Number(r.tenders.value) : null, deadline: r.tenders?.deadline ?? null, url: r.tenders?.url ?? 'https://www.contractsfinder.service.gov.uk/',
   region: r.tenders?.region ?? null, sme: r.tenders?.sme ?? null, fit: r.fit, reason: r.reason, status: r.status, foundAt: r.created_at,
 });
+/* Your clients: rows ↔ records (shared/clients.ts and shared/money.ts shapes). */
+const mapClient = (r: any): Client => ({
+  id: r.id, name: r.name, phone: r.phone ?? '', phoneRaw: r.phone_raw ?? undefined, email: r.email ?? '', consent: r.consent, consentAt: r.consent_at, consentSource: r.consent_source,
+  intervalWeeks: r.interval_weeks, snoozedUntil: r.snoozed_until, notComingBack: !!r.not_coming_back, lastReviewAskAt: r.last_review_ask_at, notes: r.notes ?? undefined,
+  source: r.source, importedFrom: r.imported_from, createdAt: r.created_at,
+});
+const clientRow = (c: Client, userId: string) => ({
+  id: c.id, user_id: userId, name: c.name.slice(0, 160), phone: c.phone || '', phone_raw: c.phoneRaw ?? null, email: c.email || '', consent: c.consent, consent_at: c.consentAt ?? null, consent_source: c.consentSource ?? null,
+  interval_weeks: c.intervalWeeks ?? null, snoozed_until: c.snoozedUntil ?? null, not_coming_back: !!c.notComingBack, last_review_ask_at: c.lastReviewAskAt ?? null, notes: c.notes ?? null,
+  source: c.source, imported_from: c.importedFrom ?? null,
+});
+const mapVisit = (r: any): Visit => ({ id: r.id, clientId: r.client_id, at: r.visited_on, treatment: r.treatment, treatmentId: r.treatment_id, amount: r.amount != null ? Number(r.amount) : null, practitioner: r.practitioner, createdAt: r.created_at });
+const visitRow = (v: Visit, userId: string) => ({ id: v.id, user_id: userId, client_id: v.clientId, visited_on: v.at.slice(0, 10), treatment: v.treatment.slice(0, 200), treatment_id: v.treatmentId, amount: v.amount, practitioner: v.practitioner ?? null });
+const mapClientAction = (r: any): ClientAction => ({ id: r.id, clientId: r.client_id, kind: r.kind, channel: r.channel, text: r.text, sentAt: r.sent_at, treatmentId: r.treatment_id, amountHint: r.amount_hint != null ? Number(r.amount_hint) : null, ref: r.ref });
+const actionRow = (a: ClientAction, userId: string) => ({ id: a.id, user_id: userId, client_id: a.clientId, kind: a.kind, channel: a.channel, text: a.text.slice(0, 2000), treatment_id: a.treatmentId ?? null, amount_hint: a.amountHint ?? null, ref: a.ref ?? null, sent_at: a.sentAt });
+const mapOutcome = (r: any): Outcome => ({ id: r.id, actionId: r.action_id, clientId: r.client_id, visitId: r.visit_id, amount: r.amount != null ? Number(r.amount) : null, status: r.status, at: r.happened_at, title: r.title, createdAt: r.created_at });
+const outcomeRow = (o: Outcome, userId: string) => ({ id: o.id, user_id: userId, action_id: o.actionId, client_id: o.clientId, visit_id: o.visitId ?? null, amount: o.amount, status: o.status, happened_at: o.at, title: o.title.slice(0, 200) });
+
 const mapFeedback = (r: any): FeedbackRecord => ({
   id: r.id, agent: r.agent, itemKind: r.item_kind, itemId: r.item_id, verdict: r.verdict, reason: r.reason, text: r.item_text,
   host: r.host, changeKind: r.change_kind, createdAt: r.created_at,
@@ -193,7 +225,7 @@ export function createLiveApi(): Api {
     async billingUrl() { return (await fn<{ url: string }>('billing-portal', {})).url; },
 
     async getHome(): Promise<HomeData> {
-      const [profile, plan, notes, actions, alerts, watcher, changeRows, searches, briefs, numbers, leads, tenders] = await Promise.all([
+      const [profile, plan, notes, actions, alerts, watcher, changeRows, searches, briefs, numbers, leads, tenders, clientsData] = await Promise.all([
         this.getProfile(),
         this.getPlan(),
         rest<any[]>('agent_notes?select=agent,body,created_at&order=created_at.desc&limit=12'),
@@ -206,6 +238,7 @@ export function createLiveApi(): Api {
         rest<any[]>('week_numbers?select=week_of,values&order=week_of.desc&limit=6'),
         rest<any[]>('leads?select=*&order=created_at.desc&limit=300').catch(() => [] as any[]),
         rest<any[]>('tender_matches?select=id,tender_id,fit,reason,status,created_at,tenders(*)&status=in.(new,saved)&order=created_at.desc&limit=50').catch(() => [] as any[]),
+        this.listClients().catch(() => emptyClientsData(false)),
       ]);
       const p = profile!;
       const latestNote: Partial<Record<AgentId, string>> = {};
@@ -228,9 +261,11 @@ export function createLiveApi(): Api {
         watcher: ws ? { ...ws, changes: changeRows.map((c) => ({ id: c.id, competitor: c.competitor, url: c.url, at: c.created_at, kind: c.kind, summary: c.summary, detail: c.detail ?? undefined })) } : null,
         leads: leadList, tenders: tenders.map(mapTender), searches: searches.length,
         changes: weeks.length ? analyseWeeks(weeks, metrics) : [], hasThisWeeksNumbers: weeks.some((w) => w.weekOf === thisWeek),
+        clients: clientsData.ready ? { clients: clientsData.clients, visits: clientsData.visits, settings: p.clientSettings } : null,
       });
       return {
         today,
+        clients: clientsData,
         notes: (['watcher', 'scout', 'brief'] as AgentId[]).filter((a) => latestNote[a]).map((a) => ({ agent: a, body: latestNote[a]! })),
         actions: actions.map(mapAction),
         alerts: alerts.map(mapAlert),
@@ -316,6 +351,75 @@ export function createLiveApi(): Api {
     async listTenders() { return (await rest<any[]>('tender_matches?select=id,tender_id,fit,reason,status,created_at,tenders(*)&status=neq.dismissed&order=created_at.desc&limit=100')).map(mapTender); },
     async updateTender(id, status) { await fn('tenders', { id, status }); },
     async draftWinback(): Promise<WinbackDrafts> { return fn<WinbackDrafts>('winback', {}); },
+
+    // Your clients. The tables may not exist yet (the migration is the owner's to run): then `ready` is false.
+    async listClients(): Promise<ClientsData> {
+      try {
+        const [clients, visits, actions, outcomes] = await Promise.all([
+          rest<any[]>('clients?select=*&order=created_at.desc&limit=5000', { doing: 'loading your clients' }),
+          rest<any[]>('client_visits?select=*&order=visited_on.desc&limit=20000', { doing: 'loading your clients' }),
+          rest<any[]>('client_actions?select=*&order=sent_at.desc&limit=5000', { doing: 'loading your clients' }),
+          rest<any[]>('client_outcomes?select=*&order=happened_at.desc&limit=5000', { doing: 'loading your clients' }),
+        ]);
+        return { ready: true, clients: clients.map(mapClient), visits: visits.map(mapVisit), actions: actions.map(mapClientAction), outcomes: outcomes.map(mapOutcome) };
+      } catch (e) {
+        if (isMissingTable(e)) return emptyClientsData(false);
+        throw e;
+      }
+    },
+    async saveClient(c) {
+      const s = await session();
+      const rows = await rest<any[]>('clients?on_conflict=id', { method: 'POST', prefer: 'resolution=merge-duplicates,return=representation', doing: 'saving the client', body: clientRow(c, s!.user.id) });
+      return rows[0] ? mapClient(rows[0]) : c;
+    },
+    async deleteClient(id) { await rest(`clients?id=eq.${enc(id)}`, { method: 'DELETE', doing: 'deleting the client' }); },
+    async addVisit(v) {
+      const s = await session();
+      const rows = await rest<any[]>('client_visits', { method: 'POST', prefer: 'return=representation', doing: 'saving the visit', body: visitRow(v, s!.user.id) });
+      const visit = rows[0] ? mapVisit(rows[0]) : v;
+      // A visit within 21 days of a Gainora message to this client becomes a "likely" outcome for the owner to confirm.
+      let likely: Outcome[] = [];
+      try {
+        const [actions, outcomes] = await Promise.all([
+          rest<any[]>(`client_actions?select=*&client_id=eq.${enc(v.clientId)}&order=sent_at.desc&limit=50`),
+          rest<any[]>(`client_outcomes?select=*&client_id=eq.${enc(v.clientId)}&limit=200`),
+        ]);
+        likely = likelyOutcomes(actions.map(mapClientAction), [visit], outcomes.map(mapOutcome), uuid);
+        if (likely.length) await rest('client_outcomes', { method: 'POST', prefer: 'return=minimal', body: likely.map((o) => outcomeRow(o, s!.user.id)) });
+      } catch (e) { console.error('[gainora] likely outcome', (e as Error)?.message); }
+      return { visit, likely };
+    },
+    async deleteVisit(id) { await rest(`client_visits?id=eq.${enc(id)}`, { method: 'DELETE', doing: 'deleting the visit' }); },
+    async importClients(clients, visits, optOutIds) {
+      const s = await session(); const uid = s!.user.id;
+      // In batches, so a 5,000-row import is several small requests rather than one huge one.
+      for (let i = 0; i < clients.length; i += 200) await rest('clients?on_conflict=id', { method: 'POST', prefer: 'resolution=merge-duplicates,return=minimal', doing: 'saving your clients', body: clients.slice(i, i + 200).map((c) => clientRow(c, uid)) });
+      for (let i = 0; i < visits.length; i += 500) await rest('client_visits', { method: 'POST', prefer: 'return=minimal', doing: 'saving the visits', body: visits.slice(i, i + 500).map((v) => visitRow(v, uid)) });
+      for (const id of optOutIds) await rest(`clients?id=eq.${enc(id)}`, { method: 'PATCH', body: { consent: 'opted_out', consent_at: new Date().toISOString(), consent_source: 'import' } });
+    },
+    async recordAction(a) {
+      const s = await session();
+      const rows = await rest<any[]>('client_actions', { method: 'POST', prefer: 'return=representation', doing: 'recording the message', body: actionRow(a, s!.user.id) });
+      if (a.kind === 'review_request' && a.clientId) await rest(`clients?id=eq.${enc(a.clientId)}`, { method: 'PATCH', body: { last_review_ask_at: a.sentAt } }).catch(() => {});
+      return rows[0] ? mapClientAction(rows[0]) : a;
+    },
+    async saveOutcome(o) {
+      const s = await session();
+      const rows = await rest<any[]>('client_outcomes?on_conflict=id', { method: 'POST', prefer: 'resolution=merge-duplicates,return=representation', doing: 'saving the booking', body: outcomeRow(o, s!.user.id) });
+      return rows[0] ? mapOutcome(rows[0]) : o;
+    },
+    async deleteOutcome(id) { await rest(`client_outcomes?id=eq.${enc(id)}`, { method: 'DELETE' }); },
+    async deleteAllClientData() {
+      const s = await session(); const uid = s!.user.id;
+      // Outcomes and actions first (they reference clients), then clients (visits cascade).
+      await rest(`client_outcomes?user_id=eq.${uid}`, { method: 'DELETE', doing: 'deleting your client data' });
+      await rest(`client_actions?user_id=eq.${uid}`, { method: 'DELETE', doing: 'deleting your client data' });
+      await rest(`client_visits?user_id=eq.${uid}`, { method: 'DELETE', doing: 'deleting your client data' });
+      await rest(`clients?user_id=eq.${uid}`, { method: 'DELETE', doing: 'deleting your client data' });
+    },
+    async sendSms(action, phone) {
+      return fn<{ sent: boolean; message?: string }>('sms-send', { actionId: action.id, to: phone, text: action.text }, { timeoutMs: 20_000, doing: 'sending the text' });
+    },
 
     // The newest 100, oldest first (asc+limit would return the OLDEST 100 and hide new replies).
     async getChat() { return (await rest<any[]>('chat_messages?select=*&order=created_at.desc&limit=100')).map(mapMsg).reverse(); },

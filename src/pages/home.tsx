@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { useApp } from '../app';
 import { Link } from '../lib/router';
@@ -6,7 +6,11 @@ import { AGENTS, Button, ErrorNote, Icon, Loading, useLoad, useToast } from '../
 import { greeting, longDate, money, relative } from '../lib/format';
 import { formatMinutes, startOfMonth, summariseValue } from '../../shared/value';
 import { actionLink } from '../../shared/today';
-import type { Action, AgentId, TodayItem } from '../lib/types';
+import { dueThisWeek } from '../../shared/clients';
+import { moneySummary } from '../../shared/money';
+import { firstActions, isNewAccount, reviewPosition } from '../../shared/firstten';
+import { distanceLabel } from '../../shared/competitors';
+import type { Action, AgentId, ClientsData, TodayItem } from '../lib/types';
 
 const AGENT_SHORT: Record<string, string> = { watcher: 'Watcher', scout: 'Scout', brief: 'Brief', you: 'You' };
 
@@ -59,6 +63,9 @@ export function Home() {
   const unread = data.alerts.filter((a) => !a.read).length;
   const today = (data.today ?? []).filter((t) => !done[t.id]);
   const firstName = profile.business.ownerName.split(' ')[0];
+  const cd = data.clients;
+  const due = cd?.ready ? dueThisWeek(cd.clients, cd.visits, profile.clientSettings ?? {}) : null;
+  const fresh = isNewAccount(profile, cd?.clients ?? []);
 
   return (
     <div className="page">
@@ -69,6 +76,21 @@ export function Home() {
         </div>
         <Link to="/ask" className="btn btn-secondary hide-phone"><Icon name="ask" />Ask a question</Link>
       </div>
+
+      {fresh && <FirstTen clients={cd} />}
+
+      {due && due.count > 0 && (
+        <Link to="/clients?tab=due" className="due-card" aria-label="Clients due back this week">
+          <span className="row gap-16" style={{ alignItems: 'center', minWidth: 0 }}>
+            <span className="due-card-figure">{due.count}</span>
+            <span className="due-card-body">
+              <span className="subhead">{due.count === 1 ? 'client' : 'clients'} due back this week{due.overdue ? `, ${due.overdue} overdue` : ''}</span>
+              <span className="small muted">{due.names.join(', ')}{due.count > due.names.length ? ` and ${due.count - due.names.length} more` : ''}{due.priced ? ` · ${money(due.value)} at their last prices` : ''}. A text is drafted for each.</span>
+            </span>
+          </span>
+          <span className="btn btn-primary btn-small">See the drafts<Icon name="chevron" /></span>
+        </Link>
+      )}
 
       <section className="today" aria-labelledby="today-h">
         <div className="section-head">
@@ -126,6 +148,7 @@ export function Home() {
           ) : <p className="small" style={{ color: '#BDB8AF' }}>Add a number to your target under Your business to track progress here.</p>}
           <p className="small" style={{ color: '#8E8A82' }}>{g.weeksLeft} {g.weeksLeft === 1 ? 'week' : 'weeks'} left. Focus: {profile.goals.focus}.</p>
         </aside>
+        {cd?.ready && <MoneyStrip clients={cd} />}
         <ValueStrip />
         </div>
       </div>
@@ -205,6 +228,70 @@ export function Home() {
         </div>
       </section>
     </div>
+  );
+}
+
+/** The money number: only bookings the owner confirmed came from Gainora's messages. */
+function MoneyStrip({ clients }: { clients: ClientsData }) {
+  const s = moneySummary(clients.outcomes, clients.actions, startOfMonth());
+  const month = new Date().toLocaleDateString('en-GB', { month: 'long' });
+  return (
+    <Link to="/clients?tab=bookings" className="home-money" aria-label="What Gainora helped bring in this month">
+      <span className="biz-kicker">{month}: Gainora helped bring in</span>
+      <span className="home-money-figure">{money(s.confirmed)}<small>from {s.bookings} booking{s.bookings === 1 ? '' : 's'} you confirmed</small></span>
+      <span className="home-money-line">{s.bookings ? 'Tap for the list behind the number.' : 'When a client books after a text Gainora drafted, mark it and it counts here. Nothing is estimated.'}{s.likely.length ? ` ${s.likely.length} likely booking${s.likely.length === 1 ? '' : 's'} waiting for you to confirm.` : ''}</span>
+    </Link>
+  );
+}
+
+/**
+ * A new owner's first ten minutes: their nearby competitors as the Watcher finds them (polled while
+ * the first search runs), where their reviews stand, and three things to do now.
+ */
+function FirstTen({ clients }: { clients: ClientsData | undefined }) {
+  const { profile } = useApp();
+  const { data: w, reload } = useLoad(() => api.getWatcher().catch(() => null));
+  const searching = !w?.competitors?.foundAt;
+  useEffect(() => {
+    if (!searching) return;
+    const t = setInterval(reload, 15_000); const stop = setTimeout(() => clearInterval(t), 6 * 60_000);
+    return () => { clearInterval(t); clearTimeout(stop); };
+  }, [searching, reload]);
+  const acts = firstActions({ watcher: w ?? null, clientsReady: !!clients?.ready, clients: clients?.clients ?? [], visits: clients?.visits ?? [], hasBookingSystem: !!profile.offer?.bookingSystem && !['None', 'Other'].includes(profile.offer.bookingSystem) });
+  const pos = reviewPosition(w);
+  const list = w?.competitors?.list ?? [];
+  const town = profile.business.location.split(',')[0].trim();
+  return (
+    <section className="first-grid" aria-labelledby="first-h">
+      <div className="panel">
+        <div className="panel-head"><h2 className="heading" id="first-h">Your first ten minutes</h2><span className="small faint">Three things to do now</span></div>
+        <ol className="first-steps">
+          {acts.length === 0 && <li style={{ gridTemplateColumns: '1fr' }}><span className="muted">Your agents are at work. The first things to do appear here within a few minutes.</span></li>}
+          {acts.map((a) => (
+            <li key={a.id}>
+              <span className="stack gap-4" style={{ minWidth: 0 }}><span className="subhead">{a.title}</span><span className="small muted">{a.why}</span></span>
+              <Link to={a.link} className="btn btn-secondary btn-small">{a.cta}<Icon name="chevron" /></Link>
+            </li>
+          ))}
+        </ol>
+      </div>
+      <div className="first-side">
+        <div className="panel panel-pad">
+          <h3 className="subhead">Businesses like yours near {town || 'you'}</h3>
+          {searching ? <p className="progress-line mt-8"><span className="pulse" aria-hidden="true" />Searching Google around you now. Usually a few minutes.</p> : (
+            <>
+              <p className="small muted mt-8">{list.length} found{w?.competitors?.foundRadiusKm ? ` within ${w.competitors.foundRadiusKm} km` : ''}. The Watcher now reads their prices, reviews and Instagram every day.</p>
+              <ul className="comp-list-plain mt-8">{list.slice(0, 5).map((c) => <li key={c.key} className="split"><span>{c.name}</span><span className="faint xsmall">{distanceLabel(c.distanceKm)}{c.rating != null ? ` · ${c.rating.toFixed(1)}★ (${c.count})` : ''}</span></li>)}</ul>
+              <p className="mt-8"><Link to="/watcher?tab=competitors" className="small">See the comparison</Link></p>
+            </>
+          )}
+        </div>
+        <div className="panel panel-pad">
+          <h3 className="subhead">Your reviews next to theirs</h3>
+          {pos ? <p className="small muted mt-8">{pos.text}</p> : <p className="small muted mt-8">Connect your Google listing and this shows where your rating and review count sit among the businesses nearby. <Link to="/watcher?tab=reviews">Find my listing</Link></p>}
+        </div>
+      </div>
+    </section>
   );
 }
 

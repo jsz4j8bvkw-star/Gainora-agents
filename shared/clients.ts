@@ -171,7 +171,7 @@ export function summarise(visits: Visit[]): ClientSummary {
 }
 
 /* ---------- Due back ---------- */
-export type DueStatus = 'overdue' | 'due' | 'upcoming' | 'none' | 'snoozed' | 'not_coming_back';
+export type DueStatus = 'overdue' | 'due' | 'upcoming' | 'none' | 'snoozed' | 'not_coming_back' | 'lapsed';
 
 export interface DueInfo {
   clientId: string;
@@ -190,6 +190,8 @@ export interface DueInfo {
 
 /** Due within this many days counts as "due this week". */
 export const DUE_SOON_DAYS = 7;
+/** Overdue by more than this (or more than one whole interval, whichever is longer) and the client has lapsed: a win-back, not a reminder. */
+export const LAPSED_AFTER_WEEKS = 8;
 
 /**
  * When a client is next due, from their most recent visit of each treatment and the interval
@@ -216,7 +218,10 @@ export function dueFor(client: Client, visits: Visit[], settings: ClientSettings
   const info: DueInfo = { ...base, dueAt, treatment: best.v.treatment, treatmentId: best.v.treatmentId, lastPrice: best.v.amount, intervalWeeks: best.weeks, intervalSource: best.source };
   if (client.snoozedUntil && new Date(client.snoozedUntil).getTime() > now.getTime()) return { ...info, status: 'snoozed' };
   const diff = now.getTime() - best.due;
-  if (diff > DUE_SOON_DAYS * DAY) return { ...info, status: 'overdue', weeksOverdue: Math.max(1, Math.floor(diff / WEEK)) };
+  if (diff > DUE_SOON_DAYS * DAY) {
+    const weeksOverdue = Math.max(1, Math.floor(diff / WEEK));
+    return { ...info, status: weeksOverdue > Math.max(LAPSED_AFTER_WEEKS, best.weeks) ? 'lapsed' : 'overdue', weeksOverdue };
+  }
   if (best.due <= now.getTime() + DUE_SOON_DAYS * DAY) return { ...info, status: 'due' };
   return { ...info, status: 'upcoming' };
 }
@@ -280,7 +285,7 @@ export function filterClients(clients: Client[], visits: Visit[], settings: Clie
     const d = dues.get(c.id)!; const s = sums.get(c.id)!;
     switch (opts.filter) {
       case 'due': return d.status === 'due' || d.status === 'overdue';
-      case 'lapsed': return !c.notComingBack && s.lastVisitAt != null && now.getTime() - new Date(s.lastVisitAt).getTime() > LAPSED_WEEKS * WEEK;
+      case 'lapsed': return !c.notComingBack && (d.status === 'lapsed' || (s.lastVisitAt != null && now.getTime() - new Date(s.lastVisitAt).getTime() > LAPSED_WEEKS * WEEK));
       case 'opted_out': return c.consent === 'opted_out';
       case 'no_consent': return c.consent === 'unknown';
       default: return true;

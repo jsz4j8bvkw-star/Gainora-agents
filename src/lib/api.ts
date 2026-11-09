@@ -1,6 +1,6 @@
 import type {
-  Action, BriefReport, BusinessProfile, ChatMessage, FeedbackKind, FeedbackRecord, HomeData, Lead, LeadStage, PlaceSummary, Plan,
-  ScoutKind, ScoutSearch, Tender, User, ValueEvent, WatcherState, WeekNumbers, WinbackDrafts,
+  Action, BriefReport, BusinessProfile, ChatMessage, Client, ClientAction, ClientsData, FeedbackKind, FeedbackRecord, HomeData, Lead, LeadStage, Outcome, PlaceSummary, Plan,
+  ScoutKind, ScoutSearch, Tender, User, ValueEvent, Visit, WatcherState, WeekNumbers, WinbackDrafts,
 } from './types';
 import { createDemoApi } from './demo';
 import { createLiveApi } from './live';
@@ -67,6 +67,21 @@ export interface Api {
 
   // Win-back messages (The Brief)
   draftWinback(): Promise<WinbackDrafts>;
+
+  // Your clients: the owner's own records, written by the app under row-level security.
+  // Every call tolerates the tables not existing yet (`ready: false`): nothing here can crash the page.
+  listClients(): Promise<ClientsData>;
+  saveClient(c: Client): Promise<Client>;                       // insert or update
+  deleteClient(id: string): Promise<void>;                      // the client and everything about them
+  addVisit(v: Visit): Promise<{ visit: Visit; likely: Outcome[] }>;   // and any new "likely" outcomes it creates
+  deleteVisit(id: string): Promise<void>;
+  importClients(clients: Client[], visits: Visit[], optOutIds: string[]): Promise<void>;
+  recordAction(a: ClientAction): Promise<ClientAction>;         // a message the owner approved and sent, or a pack used
+  saveOutcome(o: Outcome): Promise<Outcome>;                    // confirm, dismiss or add a booking
+  deleteOutcome(id: string): Promise<void>;
+  deleteAllClientData(): Promise<void>;
+  /** Sends through the connected SMS provider (Twilio) when one is set up; otherwise says so. Never used without the owner's approval. */
+  sendSms(action: ClientAction, phone: string): Promise<{ sent: boolean; message?: string }>;
 
   resetDemo?(): void;
   fillSample?(): BusinessProfile;

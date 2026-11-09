@@ -36,6 +36,7 @@ const PATHS: Record<string, string> = {
   clock: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 7v5.5l3.5 2',
   bolt: 'M13 3.5L5.5 13.5H12l-1 7 7.5-10H12z',
   tag: 'M3.5 12.5V4h8.5l8.5 8.5-8 8zM8 8.5h.01',
+  clients: 'M9 11.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM2.5 20c.6-3.6 3.2-5.5 6.5-5.5s5.9 1.9 6.5 5.5M16 4.8a3.5 3.5 0 0 1 0 6.7M18.5 14.6c1.8.7 2.8 2.3 3 4.9',
 };
 
 export function Icon({ name, title, className }: { name: keyof typeof PATHS | string; title?: string; className?: string }) {
