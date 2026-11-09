@@ -41,7 +41,7 @@ export default handler(async (req) => {
     if (!n) throw new HttpError(404, 'That business is no longer on the nearby list.');
     if (comps.list.length >= MAX_TRACKED) throw new HttpError(400, `The Watcher follows up to ${MAX_TRACKED} competitors. Remove one first.`);
     comps.nearby = comps.nearby.filter((x) => x.key !== key);
-    comps.list = [...comps.list, { key: n.key, name: n.name, source: 'found', url: n.url || '', placeId: n.placeId, address: n.address, mapsUrl: `https://www.google.com/maps/place/?q=place_id:${encodeURIComponent(n.placeId)}`, distanceKm: n.distanceKm, rating: n.rating, count: n.count, history: [{ at: now, rating: n.rating, count: n.count }], ratingCheckedAt: now, services: [], offers: [], bookingPages: [], social: null, firstSeenAt: now }];
+    comps.list = [...comps.list, { key: n.key, name: n.name, source: 'found', url: n.url || '', placeId: n.placeId, address: n.address, mapsUrl: `https://www.google.com/maps/place/?q=place_id:${encodeURIComponent(n.placeId)}`, distanceKm: n.distanceKm, rating: n.rating, count: n.count, history: [{ at: now, rating: n.rating, count: n.count }], ratingCheckedAt: now, services: [], offers: [], bookingPages: n.booking ?? [], instagram: n.instagram, instagramSetBy: n.instagram ? 'listing' : undefined, facebook: n.facebook, primaryType: n.primaryType, relevance: n.relevance, social: null, venue: null, firstSeenAt: now }];
   } else if (b.op === 'restore') {
     comps.dismissed = comps.dismissed.filter((d) => d.key !== key);
   } else if (b.op === 'instagram') {
