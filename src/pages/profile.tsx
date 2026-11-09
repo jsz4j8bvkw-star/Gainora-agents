@@ -5,7 +5,7 @@ import { useApp } from '../app';
 import { Button, Icon, useLoad, useToast } from '../components/ui';
 import { learnFrom } from '../../shared/learning';
 import { relative } from '../lib/format';
-import { FieldInput } from './onboarding';
+import { FieldInput, displayAnswer } from './onboarding';
 import { SECTIONS, getPath, setPath, validateSection, type Section } from '../lib/questions';
 import type { BusinessProfile } from '../lib/types';
 
@@ -51,7 +51,7 @@ export function SectionEditor({ section, profile, onSaved }: { section: Section;
           </div>
         </>
       ) : (
-        <dl>{section.fields.map((f) => <div key={f.path} style={{ display: 'contents' }}><dt>{f.label}</dt><dd>{show(getPath(profile, f.path))}</dd></div>)}</dl>
+        <dl>{section.fields.map((f) => <div key={f.path} style={{ display: 'contents' }}><dt>{f.label}</dt><dd>{f.kind === 'pricelist' || f.kind === 'booking' ? displayAnswer(getPath(profile, f.path), f) : show(getPath(profile, f.path))}</dd></div>)}</dl>
       )}
     </section>
   );

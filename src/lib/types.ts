@@ -22,7 +22,11 @@ export interface BusinessProfile {
     name: string; website: string; instagram?: string; facebook?: string; oneLiner: string; industry: string; location: string; postcode?: string;
     tradingSince: string; teamSize: string; legalForm: string; ownerName: string;
   };
-  offer: { products: string; typicalPrice: string; salesChannels: string[]; bestSeller: string };
+  offer: {
+    products: string; typicalPrice: string; salesChannels: string[]; bestSeller: string;
+    /** The booking system (Fresha, Phorest…), the public booking page, and the owner's own price list, one line per treatment. All optional. */
+    bookingSystem?: string; bookingUrl?: string; priceList?: string;
+  };
   customers: { ideal: string; sources: string[]; areas: string[]; repeat: string };
   competitors: { list: Competitor[]; ourEdge: string; theirEdge: string };
   numbers: { revenueBand: string; enquiriesPerWeek: string; salesPerWeek: string; averageOrder: string; track: string[] };

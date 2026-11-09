@@ -1,7 +1,7 @@
 import { socialUrl } from '../../shared/social';
 import type { BusinessProfile } from './types';
 
-export type FieldKind = 'text' | 'url' | 'email' | 'textarea' | 'select' | 'chips' | 'multi' | 'number' | 'money' | 'competitors';
+export type FieldKind = 'text' | 'url' | 'email' | 'textarea' | 'select' | 'chips' | 'multi' | 'number' | 'money' | 'competitors' | 'booking' | 'pricelist';
 
 export interface Field {
   path: string;              // e.g. "business.name"
@@ -60,6 +60,9 @@ export const SECTIONS: Section[] = [
       { path: 'offer.typicalPrice', label: 'Typical price or order value', kind: 'text', placeholder: 'For example: £35 average order, gift sets £60–£90', required: true },
       { path: 'offer.bestSeller', label: 'Best seller or most profitable line', kind: 'text', placeholder: 'Hand-thrown mugs', optional: true },
       { path: 'offer.salesChannels', label: 'How customers buy', kind: 'multi', options: ['Website', 'In person', 'Phone', 'Email', 'Social media messages', 'Etsy, Amazon or other marketplaces', 'Wholesale'], required: true, wide: true },
+      { path: 'offer.bookingSystem', label: 'Which booking system do you use?', kind: 'booking', help: 'The Watcher reads only your public booking page, the one your customers see. It never logs in and never changes anything.', optional: true, wide: true },
+      { path: 'offer.bookingUrl', label: 'Link to your online booking page', kind: 'url', placeholder: 'https://www.fresha.com/a/your-clinic', help: 'The public page where customers book. The Watcher reads your treatments and prices from it and compares them with the businesses nearby.', optional: true, wide: true },
+      { path: 'offer.priceList', label: 'Your price list', kind: 'pricelist', placeholder: 'One treatment per line, for example:\nLip filler 1ml £220\nAnti-wrinkle 2 areas £200\nDermaplaning 45 mins £45', help: 'Optional. Type or paste it; the Watcher turns each line into a row you can check below. This is used alongside anything it reads from your website or booking page.', optional: true, wide: true },
     ],
   },
   {
@@ -125,7 +128,7 @@ export const SECTIONS: Section[] = [
 export function emptyProfile(): BusinessProfile {
   return {
     business: { name: '', website: '', instagram: '', facebook: '', oneLiner: '', industry: '', location: '', postcode: '', tradingSince: '', teamSize: '', legalForm: '', ownerName: '' },
-    offer: { products: '', typicalPrice: '', salesChannels: [], bestSeller: '' },
+    offer: { products: '', typicalPrice: '', salesChannels: [], bestSeller: '', bookingSystem: '', bookingUrl: '', priceList: '' },
     customers: { ideal: '', sources: [], areas: [], repeat: '' },
     competitors: { list: [{ name: '', url: '' }], ourEdge: '', theirEdge: '' },
     numbers: { revenueBand: '', enquiriesPerWeek: '', salesPerWeek: '', averageOrder: '', track: [] },

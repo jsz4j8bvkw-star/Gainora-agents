@@ -5,6 +5,8 @@ import { api } from '../lib/api';
 import type { BusinessProfile } from '../lib/types';
 import { SECTIONS, emptyProfile, getPath, normaliseUrl, sectionComplete, setPath, validateSection, type Field as Q } from '../lib/questions';
 import { Button, Choices, Field, Icon } from '../components/ui';
+import { BOOKING_SYSTEMS, parsePriceList } from '../../shared/booking';
+import { matchTreatment } from '../../shared/treatments';
 
 declare const __DEMO__: boolean;
 const BASE = (typeof __DEMO__ !== 'undefined' && __DEMO__) ? './' : '/';
@@ -32,6 +34,41 @@ export function FieldInput({ f, profile, onChange, error }: { f: Q; profile: Bus
             ))}
             {list.length < 5 && (
               <div><Button kind="quiet" small icon="plus" onClick={() => onChange(f.path, [...list, { name: '', url: '' }])}>Add another competitor</Button></div>
+            )}
+          </div>
+        )}
+      </Field>
+    );
+  }
+  if (f.kind === 'booking') {
+    const chosen = BOOKING_SYSTEMS.find((b) => b.id === v);
+    return (
+      <Field label={f.label} help={f.help} optional as="group" error={error} className={f.wide ? 'wide' : ''}>
+        {(_, d) => (
+          <div className="stack gap-12">
+            <Choices name={f.path} options={BOOKING_SYSTEMS.map((b) => b.label)} value={chosen?.label ?? ''} onChange={(label) => onChange(f.path, BOOKING_SYSTEMS.find((b) => b.label === label)?.id ?? '')} describedBy={d} />
+            {chosen && <p className={`booking-note ${chosen.readable === 'no' ? 'is-warn' : ''}`} role="status"><Icon name={chosen.readable === 'no' ? 'alert' : 'info'} /><span>{chosen.note}</span></p>}
+          </div>
+        )}
+      </Field>
+    );
+  }
+  if (f.kind === 'pricelist') {
+    const rows = parsePriceList(String(v ?? ''));
+    const matched = rows.filter((r) => matchTreatment(r.name)).length;
+    return (
+      <Field label={f.label} help={f.help} optional error={error} className={f.wide ? 'wide' : ''}>
+        {(id, d) => (
+          <div className="stack gap-12">
+            <textarea id={id} aria-describedby={d} className="textarea pricelist-input" rows={6} placeholder={f.placeholder} value={v ?? ''} onChange={(e: any) => onChange(f.path, e.target.value)} />
+            {rows.length > 0 && (
+              <div className="pricelist-preview" aria-live="polite">
+                <div className="split xsmall faint"><span>{rows.length} price{rows.length === 1 ? '' : 's'} read{matched ? `, ${matched} matched to treatments the Watcher compares` : ''}</span></div>
+                <table className="comp-services"><tbody>
+                  {rows.slice(0, 40).map((r) => <tr key={r.name + r.price}><td>{r.name}{r.duration ? <span className="faint"> · {r.duration}</span> : null}</td><td className="tabular">{r.price}</td></tr>)}
+                </tbody></table>
+                {rows.length > 40 && <p className="xsmall faint">and {rows.length - 40} more</p>}
+              </div>
             )}
           </div>
         )}
@@ -73,10 +110,13 @@ export function FieldInput({ f, profile, onChange, error }: { f: Q; profile: Bus
   );
 }
 
-function display(v: any): string {
+function display(v: any, f?: Q): string {
+  if (f?.kind === 'pricelist') { const n = parsePriceList(String(v ?? '')).length; return n ? `${n} price${n === 1 ? '' : 's'}` : '–'; }
+  if (f?.kind === 'booking') return BOOKING_SYSTEMS.find((b) => b.id === v)?.label || '–';
   if (Array.isArray(v)) return v.length ? (typeof v[0] === 'string' ? v.join(', ') : v.filter((c: any) => c.name || c.url).map((c: any) => (c.url ? `${c.name} (${c.url.replace(/^https?:\/\//, '')})` : c.name)).join(', ')) : '–';
   return String(v ?? '').trim() || '–';
 }
+export { display as displayAnswer };
 
 export function Onboarding({ initial, onDone }: { initial: BusinessProfile | null; onDone: (p: BusinessProfile) => void }) {
   const [profile, setProfile] = useState<BusinessProfile>(() => ({ ...emptyProfile(), ...(initial ?? {}) }));
@@ -195,7 +235,7 @@ export function Onboarding({ initial, onDone }: { initial: BusinessProfile | nul
                       <Button kind="quiet" small icon="pencil" onClick={() => setStep(i + 1)}>Edit</Button>
                     </div>
                     <dl>
-                      {s.fields.map((f) => <div key={f.path} style={{ display: 'contents' }}><dt>{f.label}</dt><dd>{display(getPath(profile, f.path))}</dd></div>)}
+                      {s.fields.map((f) => <div key={f.path} style={{ display: 'contents' }}><dt>{f.label}</dt><dd>{display(getPath(profile, f.path), f)}</dd></div>)}
                     </dl>
                   </section>
                 ))}

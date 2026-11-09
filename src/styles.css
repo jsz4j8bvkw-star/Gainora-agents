@@ -739,3 +739,12 @@ tr:last-child td { border-bottom: 0; }
 .learn-list li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 12px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); font-size: var(--t-sm); }
 .learn-text { overflow-wrap: anywhere; }
 @media (max-width: 640px) { .learn-list li { grid-template-columns: auto minmax(0, 1fr); } }
+
+/* Booking system and price list (onboarding and Your business) */
+.booking-note { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: var(--r-md); background: var(--forest-tint); color: var(--ink-soft); font-size: var(--t-sm); line-height: 1.5; max-width: 68ch; }
+.booking-note svg { width: 18px; height: 18px; flex: none; color: var(--gold); margin-top: 1px; }
+.booking-note.is-warn { background: var(--brass-tint); color: var(--brass); }
+.booking-note.is-warn svg { color: var(--brass); }
+.pricelist-input { min-height: 140px; font-variant-numeric: tabular-nums; }
+.pricelist-preview { border: 1px solid var(--line); border-radius: var(--r-md); padding: 12px 16px; background: var(--surface); display: grid; gap: 8px; }
+.pricelist-preview .comp-services td:last-child { font-weight: 600; }
