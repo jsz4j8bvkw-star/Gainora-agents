@@ -13,6 +13,7 @@ import { extractPrices } from './pages';
 import { priceValue } from './prices';
 import { socialUrl } from './social';
 import type { VenueStats } from './booking';
+import type { Comparison } from './treatments';
 
 const DAY = 86_400_000;
 
@@ -109,6 +110,9 @@ export interface CompetitorsState {
   events: ReachEvent[];
   placesCalls?: { month: string; n: number };
   advice?: { at: string; lines: ReachAdvice[] };
+  /** The like-for-like price table (shared/treatments.ts) and the AI-resolved names it used. */
+  comparison?: Comparison | null;
+  treatmentMap?: Record<string, string | null>;
 }
 
 export const MAX_FOUND = 5;
@@ -548,7 +552,7 @@ export function mergeEvents(prev: ReachEvent[] | undefined, fresh: ReachEvent[],
 }
 
 /* ---------- Plain-words advice (rule-based; used in the demo and when the AI is unavailable) ---------- */
-export interface YouForAdvice { rating: number | null; count: number | null; reviews30: number | null; services: ServiceLine[]; instagram?: InstagramSnapshot | null }
+export interface YouForAdvice { rating: number | null; count: number | null; reviews30: number | null; services: ServiceLine[]; instagram?: InstagramSnapshot | null; venue?: VenueStats | null }
 
 /** Comparable service: same normalised name, or one name contains the other. */
 export function comparable(a: string, b: string): boolean {
@@ -561,9 +565,10 @@ export function comparable(a: string, b: string): boolean {
   return shared >= Math.min(wa.length, wb.length) && shared >= 1 && Math.abs(wa.length - wb.length) <= 1;
 }
 
-export function adviseReach(list: TrackedCompetitor[], you: YouForAdvice, events: ReachEvent[], now = new Date()): ReachAdvice[] {
+export function adviseReach(list: TrackedCompetitor[], you: YouForAdvice, events: ReachEvent[], now = new Date(), comparison?: Comparison | null): ReachAdvice[] {
   const out: ReachAdvice[] = [];
   const recent = events.filter((e) => now.getTime() - new Date(e.at).getTime() < 8 * DAY);
+  const money = (v: number) => `£${Number.isInteger(v) ? v : v.toFixed(2)}`;
 
   const surge = recent.find((e) => e.kind === 'reviews');
   if (surge) out.push({ key: surge.key, text: `${surge.summary} That is a sign of how busy they look to people choosing on Google, not a count of their bookings.`, action: 'Ask your last ten happy customers for a Google review this week; a short text with your review link is enough.' });
@@ -571,7 +576,19 @@ export function adviseReach(list: TrackedCompetitor[], you: YouForAdvice, events
   const offer = recent.find((e) => e.kind === 'offer' || e.kind === 'post');
   if (offer) out.push({ key: offer.key, text: `${offer.summary}`, action: 'Decide whether to answer it. Matching a discount is rarely the only option: a bundle, a loyalty perk or simply saying what you include works too.' });
 
+  // Like-for-like prices: the biggest gap against the local average, and the most common treatment nearby that the owner does not list.
+  if (comparison) {
+    const gap = comparison.rows.filter((r) => r.yours && r.listedBy >= 2 && r.localAvg != null).map((r) => ({ r, diff: r.yours!.value - r.localAvg! })).sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff))[0];
+    if (gap && Math.abs(gap.diff) >= Math.max(10, gap.r.localAvg! * 0.12)) {
+      const r = gap.r;
+      out.push({ text: `${r.label}: you charge ${r.yours!.price}; the ${r.listedBy} nearby businesses that list it average ${money(r.localAvg!)} (from ${money(r.localMin!)} to ${money(r.localMax!)}). You are ${r.position}.`, action: gap.diff > 0 ? 'Make sure the page where that price is shown says what it includes (time, product, aftercare, your qualifications); a higher price with a clear reason holds. If there is no reason, decide whether the gap is deliberate.' : 'You are the cheaper option for this. Check the price still covers your time and product before you leave it; the gap is room to add value rather than a reason to cut further.' });
+    }
+    const missing = comparison.theyOfferYouDont.find((t) => t.by.length >= 2);
+    if (missing) out.push({ text: `${missing.by.length} businesses nearby price ${missing.label.charAt(0).toLowerCase() + missing.label.slice(1)} (${missing.by.slice(0, 3).map((b) => `${b.name} ${b.price}`).join(', ')}) and your list doesn’t show it.`, action: 'If you offer it, add it to your price list or booking page with a price; if you don’t, it is a sign of what people around you are being sold.' });
+  }
+
   for (const c of list) {
+    if (comparison) break; // the comparison above already covers prices like for like
     for (const s of c.services) {
       const mine = you.services.find((m) => comparable(m.name, s.name));
       if (!mine) continue;

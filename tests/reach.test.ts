@@ -315,6 +315,13 @@ test('reach: a full day finds the clinic’s competition, reads their prices and
     assert.equal(skin.venue?.team, 3);
     assert.equal(skin.venue?.reviews, 212);
     assert.equal(skin.venue?.partial, true);
+    // Like for like: lip filler 1ml across the three who list it, with the local average and the owner's position.
+    const lip = s.comparison!.rows.find((r) => r.id === 'lip-1')!;
+    assert.equal(lip.yours?.price, '£200');
+    assert.deepEqual(lip.theirs.map((t) => t?.price ?? null), [null, '£220', '£220', null]);
+    assert.equal(lip.localAvg, 220);
+    assert.equal(lip.position, 'cheapest of 3');
+    assert.ok(s.comparison!.theyOfferYouDont.some((t) => t.id === 'profhilo-2'), 'Profhilo (2 sessions) is priced nearby but not by the owner');
     // First sight: no events, but advice exists and the number guard dropped the invented "500 bookings" line.
     assert.equal(s.events.length, 0);
     assert.equal(s.advice?.lines.length, 1);
@@ -338,6 +345,8 @@ test('reach: a full day finds the clinic’s competition, reads their prices and
     assert.equal(day2.added.find((e) => e.kind === 'price')!.summary, 'Glow Aesthetics changed the price of lip filler 1ml from £220 to £240.');
     assert.equal(day2.added.find((e) => e.kind === 'price')!.url, 'https://glow.example/prices');
     assert.equal(day2.state.list[1].count, 228);
+    assert.equal(day2.state.comparison!.rows.find((r) => r.id === 'lip-1')!.theirs[1]?.price, '£240');
+    assert.equal(day2.added.filter((e) => e.kind === 'price' && e.competitor === 'Glow Aesthetics').length, 1, 'the name diff and the comparison report one move, not two');
     assert.equal(day2.state.list[1].history.length, 2);
     assert.ok(!log.some((l) => l.url.includes('places:searchText') || l.url.includes('places:searchNearby')), 'no new nearby search within the month');
     const aiAgain = log.filter((l) => l.url.includes('anthropic')).map((l) => l.body.system as string);

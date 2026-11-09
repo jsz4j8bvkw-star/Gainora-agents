@@ -20,10 +20,11 @@ import { fetchPage, okPage, pool, type Fetched } from './http';
 import {
   addSample, adviseReach, classifyWebsiteUri, competitorKey, diffCompetitor, distanceKm as distanceKm_, emptyCompetitors, hostOf, instagramHandle, mergeEvents, mergeTracked, newlyFound, postsInLast,
   relevanceOf, reviewsSince, sameBusiness, searchPlan, validateCaptionFindings, validateOffers, validateServices, bookingLinks, withinRadius,
-  type CompetitorsState, type FoundPlace, type InstagramSnapshot, type OfferLine, type ReachAdvice, type ReachEvent, type SearchPlan, type ServiceLine, type TrackedCompetitor,
+  type CompetitorsState, type FoundPlace, type InstagramSnapshot, type OfferLine, type ReachAdvice, type ReachEvent, type SearchPlan, type ServiceLine, type TrackedCompetitor, type YouForAdvice,
 } from '../../shared/competitors';
 import { extractLinks, extractOffers, hashText, visibleText } from '../../shared/pages';
 import { parsePriceList, readBookingPage, type VenueStats } from '../../shared/booking';
+import { CATALOGUE, comparePrices, comparisonFacts, normName, priceMoves, treatmentById, unmatchedNames, type Comparison } from '../../shared/treatments';
 import { priceLines, pricePageCandidates } from '../../shared/prices';
 import { mapsUrl, pickCompetitorPlace, type PlaceSummary, type ReviewPoint } from '../../shared/reviews';
 import { socialUrl } from '../../shared/social';
@@ -244,21 +245,49 @@ async function instagramSnapshot(userId: string, who: string, pageUrl: string, p
   return { handle: r.handle, url: pageUrl, checkedAt: at, followers: r.followers, mediaCount: r.mediaCount, followersHistory, postsLast30: postsInLast(r.posts, 30, now), posts: r.posts.slice(0, 12), findings: findings.filter((f) => postUrls.has(f.url) || now.getTime() - new Date(f.seenAt).getTime() < 60 * DAY), error: null };
 }
 
+/* ---------- Treatment names the rules could not place: one constrained AI pass, answers kept ---------- */
+async function resolveLeftovers(userId: string, names: string[]): Promise<Record<string, string | null>> {
+  const out: Record<string, string | null> = {};
+  for (const n of names) out[normName(n)] = null; // unknown until proven: never matched by guesswork
+  if (!aiConfigured() || !names.length) return out;
+  try {
+    const r = await ai({
+      userId, agent: 'watcher', maxTokens: 1200, fast: true,
+      system: `${HOUSE_STYLE}\nYou map treatment or service names from a UK beauty or aesthetics price list to a fixed catalogue. For each name, answer with the catalogue id that means the SAME treatment at the SAME amount or unit, or "none" when there is no exact equivalent, when the amount or area is not stated and the catalogue id states one, or when it is a package, course, deposit, consultation or product. Never guess. Return JSON only: {"map": {"<name exactly as given>": "<id or none>"}}.\nCATALOGUE:\n${CATALOGUE.map((t) => `${t.id}: ${t.label}`).join('\n')}`,
+      messages: [{ role: 'user', content: names.map((n) => `- ${n}`).join('\n') }],
+    });
+    const j = extractJson<any>(r.text);
+    for (const [name, id] of Object.entries(j?.map ?? {})) {
+      const key = normName(name);
+      if (!(key in out)) continue;
+      out[key] = typeof id === 'string' && treatmentById(id) ? id : null;
+    }
+  } catch (e: any) { console.error('[gainora] reach treatment map', e?.message); }
+  return out;
+}
+
 /* ---------- Advice ---------- */
-async function writeAdvice(userId: string, profile: any, list: TrackedCompetitor[], you: { rating: number | null; count: number | null; reviews30: number | null; services: ServiceLine[] }, events: ReachEvent[], now: Date): Promise<ReachAdvice[]> {
-  const fallback = adviseReach(list, you, events, now);
+async function writeAdvice(userId: string, profile: any, list: TrackedCompetitor[], you: YouForAdvice, events: ReachEvent[], now: Date, comparison?: Comparison | null): Promise<ReachAdvice[]> {
+  const fallback = adviseReach(list, you, events, now, comparison);
   const recent = events.filter((e) => now.getTime() - new Date(e.at).getTime() < 8 * DAY).slice(0, 8);
   if (!list.length || !aiConfigured()) return fallback;
+  const size = (c: TrackedCompetitor) => [
+    c.venue?.team != null ? `team of ${c.venue.team} on ${c.venue.platform}` : '',
+    c.venue?.reviews != null ? `${c.venue.reviews} ${c.venue.platform} reviews` : '',
+    c.venue?.serviceCount != null ? `${c.venue.serviceCount} treatments listed` : '',
+    c.social && !c.social.error ? `Instagram ${c.social.followers ?? '–'} followers, ${c.social.postsLast30 ?? '–'} posts in 30 days` : '',
+  ].filter(Boolean).join(', ');
   const facts = [
-    `YOU: Google ${you.rating ?? '–'} stars from ${you.count ?? '–'} reviews; ${you.reviews30 != null ? `${you.reviews30} new reviews in the last 30 days` : 'review pace not known yet'}. Your listed services: ${you.services.slice(0, 15).map((s) => `${s.name} ${s.price}`).join('; ') || 'none read yet'}.`,
-    ...list.map((c) => `${c.name} (${c.source === 'typed' ? 'named by you' : 'found nearby'}${c.distanceKm != null ? `, ${c.distanceKm} km away` : ''}): Google ${c.rating ?? '–'} stars from ${c.count ?? '–'} reviews${reviewsSince(c.history, 30, now) != null ? `, ${reviewsSince(c.history, 30, now)} new in 30 days` : ''}. Services: ${c.services.slice(0, 12).map((s) => `${s.name} ${s.price}`).join('; ') || 'none found'}. Offers: ${c.offers.map((o) => o.text).join(' | ') || 'none'}.${c.social && !c.social.error ? ` Instagram: ${c.social.followers ?? '–'} followers, ${c.social.postsLast30 ?? '–'} posts in 30 days.` : ''}`),
+    `YOU: Google ${you.rating ?? '–'} stars from ${you.count ?? '–'} reviews; ${you.reviews30 != null ? `${you.reviews30} new reviews in the last 30 days` : 'review pace not known yet'}.${you.venue?.team != null ? ` Team of ${you.venue.team} on ${you.venue.platform}.` : ''}${you.instagram && !you.instagram.error ? ` Instagram ${you.instagram.followers ?? '–'} followers, ${you.instagram.postsLast30 ?? '–'} posts in 30 days.` : ''} Your listed services: ${you.services.slice(0, 15).map((s) => `${s.name} ${s.price}`).join('; ') || 'none read yet'}.`,
+    ...list.map((c) => `${c.name} (${c.source === 'typed' ? 'named by you' : 'found nearby'}${c.distanceKm != null ? `, ${c.distanceKm} km away` : ''}${c.url ? '' : ', no website'}): Google ${c.rating ?? '–'} stars from ${c.count ?? '–'} reviews${reviewsSince(c.history, 30, now) != null ? `, ${reviewsSince(c.history, 30, now)} new in 30 days` : ''}.${size(c) ? ` Size signals: ${size(c)}.` : ''} Services: ${c.services.slice(0, 12).map((s) => `${s.name} ${s.price}`).join('; ') || 'none found'}. Offers: ${c.offers.map((o) => o.text).join(' | ') || 'none'}.`),
+    comparison && comparison.rows.length ? `LIKE-FOR-LIKE PRICES (same treatment, same amount):\n${comparisonFacts(comparison).map((f) => `- ${f}`).join('\n')}` : '',
     recent.length ? `WHAT CHANGED THIS WEEK:\n${recent.map((e) => `- ${e.summary}`).join('\n')}` : 'Nothing changed this week.',
-  ].join('\n');
+  ].filter(Boolean).join('\n');
   const allowed = [...facts.matchAll(/£?\d[\d,]*(\.\d+)?/g)].map((m) => Number(m[0].replace(/[£,]/g, ''))).filter((n) => !Number.isNaN(n));
   try {
     const r = await ai({
       userId, agent: 'watcher', maxTokens: 900, fast: true,
-      system: `${HOUSE_STYLE}\nYou are The Watcher explaining the competition to a business owner, like a sharp adviser who has read all the facts below. Write at most 3 short observations, most important first, each with ONE concrete action the owner can take this week. Use only the facts given; every number you mention must appear in them. New Google reviews are "a sign of how busy they look", never bookings or revenue. Never suggest contacting a competitor, copying their wording, or automatic price matching as the only option. Compare like with like only. Return JSON only: {"lines": [{"key": "the competitor key or null", "text": "one or two sentences on what the facts say", "action": "one specific thing to do this week"}]}.`,
+      system: `${HOUSE_STYLE}\nYou are The Watcher explaining the competition to a business owner, like a sharp adviser who has read all the facts below. Write at most 3 short observations, most important first, each with ONE concrete action the owner can take this week. Use only the facts given; every number you mention must appear in them. New Google reviews, review counts, team size and Instagram followers are signs of how big or busy a business looks, never bookings or revenue; say "looks" when you compare size. Compare prices only within the LIKE-FOR-LIKE lines (same treatment, same amount); never compare a 1ml price with a 0.5ml one or one area with two. A "from" price is a minimum. Never suggest contacting a competitor, copying their wording, or matching a price as the only option; when a price gap matters, say what the owner could add, explain or change instead. Return JSON only: {"lines": [{"key": "the competitor key or null", "text": "one or two sentences on what the facts say", "action": "one specific thing to do this week"}]}.`,
       messages: [{ role: 'user', content: `${profileContext(profile)}\n\nCOMPETITOR KEYS: ${list.map((c) => `${c.name}=${c.key}`).join(', ')}\n\nFACTS (${now.toISOString().slice(0, 10)}):\n${facts}` }],
     });
     const j = extractJson<any>(r.text);
@@ -438,19 +467,33 @@ export async function checkReach(input: ReachInput): Promise<ReachOutput> {
     }
   }
 
-  // 7. What changed, and what it means.
+  // 7. Prices, like for like: every line is matched to the treatment catalogue by rule; the few names
+  //    the rules cannot place go to the fast model once, constrained to catalogue ids or "none", and
+  //    the answers are kept. Then one table: your price, each competitor's, the local average and range.
+  const yourServices = state.you?.services ?? [];
+  const leftovers = unmatchedNames([yourServices, ...state.list.map((c) => c.services)], state.treatmentMap ?? {});
+  if (leftovers.length) state.treatmentMap = { ...(state.treatmentMap ?? {}), ...(await resolveLeftovers(userId, leftovers)) };
+  const prevComparison = state.comparison ?? null;
+  state.comparison = comparePrices(yourServices, state.list.map((c) => ({ key: c.key, name: c.name, services: c.services })), at, state.treatmentMap ?? {});
+
+  // 8. What changed, and what it means.
   const reviews30 = reviewsSince(input.you.history, 30, now);
   const fresh: ReachEvent[] = [...newlyFound(input.prev ? prevList : undefined, state.list, now)];
   for (const c of state.list) fresh.push(...diffCompetitor(prevList.find((p) => p.key === c.key), c, { reviews30 }, now));
+  // Price moves the comparison can see (the same treatment under a renamed line), where the name diff missed them.
+  for (const m of priceMoves(prevComparison, state.comparison)) {
+    if (fresh.some((e) => e.kind === 'price' && e.key === m.key && e.summary.includes(m.to))) continue;
+    fresh.push({ id: `price:${m.key}:${at.slice(0, 10)}:${m.id}`, at, key: m.key, competitor: m.competitor, kind: 'price', url: m.url, summary: `${m.competitor} changed the price of ${m.label.charAt(0).toLowerCase() + m.label.slice(1)} from ${m.from} to ${m.to}.` });
+  }
   const muted = new Set(input.learned?.mutedChangeKinds ?? []);
   const kept = fresh.filter((e) => !(muted.has('price') && e.kind === 'price') && !(muted.has('offer') && (e.kind === 'offer' || e.kind === 'post')));
   const { events, added } = mergeEvents(state.events, kept);
   state.events = events;
 
-  const you = { rating: input.you.rating, count: input.you.count, reviews30, services: state.you?.services ?? [] };
+  const you = { rating: input.you.rating, count: input.you.count, reviews30, services: yourServices, instagram: state.you?.instagram, venue: state.you?.venue };
   const adviceAge = state.advice ? now.getTime() - new Date(state.advice.at).getTime() : Infinity;
   if (state.list.length && (added.length || adviceAge > WEEK || !state.advice)) {
-    state.advice = { at, lines: await writeAdvice(userId, profile, state.list, you, state.events, now) };
+    state.advice = { at, lines: await writeAdvice(userId, profile, state.list, you, state.events, now, state.comparison) };
   }
   state.checkedAt = at;
   return { state, added, gathered };
