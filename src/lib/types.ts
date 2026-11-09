@@ -4,6 +4,8 @@ import type { PriceTable } from '../../shared/prices';
 import type { LeadStage } from '../../shared/leads';
 import type { TodayItem } from '../../shared/today';
 import type { CompetitorsState } from '../../shared/competitors';
+import type { ScoutFocus } from '../../shared/scout';
+export type { ScoutFocus, ScoutMode } from '../../shared/scout';
 export type { ValueEvent, ValueKind, ValueSummary } from '../../shared/value';
 export type { FeedbackRecord, FeedbackKind, Learned } from '../../shared/learning';
 export type { SpeedState, Fix } from '../../shared/speed';
@@ -86,12 +88,15 @@ export interface ScoutResult {
   fit: 'strong' | 'possible'; reason: string;
   source: { title: string; url: string };
   saved: boolean;
-  when?: string;          // local opportunities: when it happens
-  how?: string;           // local opportunities: how to take part
+  when?: string;          // events: when it happens; public posts: when it was posted
+  how?: string;           // events: how to take part
+  platform?: string;      // public posts and groups: where it lives ("Reddit r/Crewe", "Nextdoor", "Mumsnet")
+  next?: string;          // the concrete next step for the owner
+  draft?: string;         // a ready-to-post reply or introduction the owner posts or sends themselves
   dismissed?: boolean;
 }
 
-export type ScoutKind = 'customers' | 'local';
+export type ScoutKind = ScoutFocus;
 
 export interface ScoutSearch {
   id: string; query: string; area: string; createdAt: string;

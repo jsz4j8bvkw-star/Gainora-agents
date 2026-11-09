@@ -483,7 +483,7 @@ export async function checkReach(input: ReachInput): Promise<ReachOutput> {
   // Price moves the comparison can see (the same treatment under a renamed line), where the name diff missed them.
   for (const m of priceMoves(prevComparison, state.comparison)) {
     if (fresh.some((e) => e.kind === 'price' && e.key === m.key && e.summary.includes(m.to))) continue;
-    fresh.push({ id: `price:${m.key}:${at.slice(0, 10)}:${m.id}`, at, key: m.key, competitor: m.competitor, kind: 'price', url: m.url, summary: `${m.competitor} changed the price of ${m.label.charAt(0).toLowerCase() + m.label.slice(1)} from ${m.from} to ${m.to}.` });
+    fresh.push({ id: `price:${m.key}:${at.slice(0, 10)}:${m.id}`, at, key: m.key, competitor: m.competitor, kind: 'price', url: m.url, summary: `${m.competitor} changed the price of ${/^[A-Z][A-Z]|^(HydraFacial|HIFU|LED|IPL|BIAB|PRP|RF|Profhilo|Sculptra|Morpheus8)\b/.test(m.label) ? m.label : m.label.charAt(0).toLowerCase() + m.label.slice(1)} from ${m.from} to ${m.to}.` });
   }
   const muted = new Set(input.learned?.mutedChangeKinds ?? []);
   const kept = fresh.filter((e) => !(muted.has('price') && e.kind === 'price') && !(muted.has('offer') && (e.kind === 'offer' || e.kind === 'post')));

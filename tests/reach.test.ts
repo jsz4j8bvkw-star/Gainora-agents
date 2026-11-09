@@ -9,7 +9,7 @@ import { planToday } from '../shared/today';
 import { writeBrief } from '../shared/brief-writer';
 import { analyseWeeks, metricsFor } from '../shared/metrics';
 import { emptyProfile, SECTIONS, validateSection } from '../src/lib/questions';
-import { SAMPLE_PROFILE } from '../src/lib/demo';
+import { SAMPLE_PROFILE, SAMPLE_PROFILE_SHOP } from '../src/lib/demo';
 import { FRESHA_PAGE } from './fixtures';
 
 const DAY = 86_400_000;
@@ -24,7 +24,8 @@ const tracked = (over: Partial<TrackedCompetitor>): TrackedCompetitor => ({
 test('reach: search terms come from what the business sells, with the industry as fallback', () => {
   assert.deepEqual(searchTerms({ business: { industry: 'Hair, beauty and wellbeing', oneLiner: 'Aesthetics clinic offering lip filler and anti-wrinkle injections' }, offer: { products: 'Dermal filler, skin boosters' } }), ['aesthetics clinic']);
   assert.deepEqual(searchTerms({ business: { industry: 'Hair, beauty and wellbeing', oneLiner: 'Hair salon and nail bar' }, offer: { products: 'Cuts, colour, gel nails' } }), ['nail salon', 'hair salon']);
-  assert.deepEqual(searchTerms(SAMPLE_PROFILE), ['homeware and gift shop']);
+  assert.deepEqual(searchTerms(SAMPLE_PROFILE_SHOP), ['homeware and gift shop']);
+  assert.deepEqual(searchTerms(SAMPLE_PROFILE), ['aesthetics clinic']);
   assert.deepEqual(searchTerms({ business: { industry: 'Property', oneLiner: 'We let flats' }, offer: { products: 'Lettings' } }), ['estate agent']);
   assert.deepEqual(searchTerms({ business: { industry: 'Other', oneLiner: 'Something unusual' }, offer: {} }), []);
 });
@@ -437,7 +438,7 @@ test('reach: a review surge and a new offer reach the Today list with honest wor
 test('reach: the Brief’s priorities can name the competitor move and its action', () => {
   const metrics = metricsFor(['Enquiries']);
   const changes = analyseWeeks([{ weekOf: '2026-10-26', values: { enquiries: 20 } }, { weekOf: '2026-11-02', values: { enquiries: 22 } }], metrics);
-  const b = writeBrief(changes, SAMPLE_PROFILE, { competitor: { summary: 'Cove Living is advertising “20% off candles this November”.', action: 'Lead with free gift wrapping in your next two posts' } });
+  const b = writeBrief(changes, SAMPLE_PROFILE_SHOP, { competitor: { summary: 'Cove Living is advertising “20% off candles this November”.', action: 'Lead with free gift wrapping in your next two posts' } });
   assert.ok(b.actions.some((a) => /Lead with free gift wrapping in your next two posts \(cove Living is advertising/.test(a)), b.actions.join(' | '));
 });
 

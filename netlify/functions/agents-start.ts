@@ -1,4 +1,5 @@
 import { activeAgents, addActions, addNote, callInternal, db, getProfile, handler, insert, json, userFromRequest } from '../lib/core';
+import { dbKindFor, encodeFocus, scoutMode } from '../../shared/scout';
 
 // Runs once after onboarding: first Watcher check, a first Scout search and contract match, and a welcome note for The Brief.
 export default handler(async (req) => {
@@ -11,10 +12,14 @@ export default handler(async (req) => {
 
   if (agents.includes('watcher')) await callInternal('watcher-background', { userId: user.id, quiet: false });
   if (agents.includes('scout')) {
+    const mode = scoutMode(profile);
     const wholesale = /wholesale|b2b/i.test(profile.goals?.focus || '') || (profile.offer?.salesChannels || []).includes('Wholesale');
     const town = String(profile.business?.location || '').split(',')[0].trim();
-    const query = wholesale ? 'Independent shops that could stock our products' : `Businesses near ${town || 'us'} that could refer customers to us`;
-    const [row] = await insert('scout_searches', { user_id: user.id, query, area: profile.customers?.areas?.includes('Local') ? (town || 'United Kingdom') : 'United Kingdom', status: 'running', kind: 'customers' });
+    const what = String(profile.offer?.bestSeller || profile.offer?.products || 'what we offer').split(/[,.]/)[0].trim().toLowerCase();
+    // A clinic's customers are people: the first search looks for people asking for exactly this nearby. Businesses that sell to businesses get the original search.
+    const focus = mode === 'consumer' ? 'demand' as const : 'customers' as const;
+    const query = mode === 'consumer' ? `People asking for ${what} recommendations near ${town || 'us'}` : wholesale ? 'Independent shops that could stock our products' : `Businesses near ${town || 'us'} that could refer customers to us`;
+    const [row] = await insert('scout_searches', { user_id: user.id, query: encodeFocus(query, focus), area: profile.customers?.areas?.includes('Local') || mode === 'consumer' ? (town || 'United Kingdom') : 'United Kingdom', status: 'running', kind: dbKindFor(focus) });
     await callInternal('scout-background', { id: row.id });
     await callInternal('tenders-background', { userId: user.id }); // first public contracts that fit
   }

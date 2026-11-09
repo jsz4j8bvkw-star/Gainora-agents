@@ -13,8 +13,11 @@ import { followUpSent, moveLead } from '../../shared/leads';
 import { hostOf } from '../../shared/learning';
 import { planToday } from '../../shared/today';
 import { sourceCatalogue } from '../../shared/ask';
-import { adviseReach, reviewsSince, type CompetitorsState, type TrackedCompetitor } from '../../shared/competitors';
 import { mondayOf, uid } from './format';
+import { communityResults, corporateResults, demandResults, localResults, partnerResults, sampleCompetitors, SAMPLE_PROFILE, SAMPLE_PROFILE_SHOP } from './demo-data';
+import { scoutMode } from '../../shared/scout';
+import { reviewsSince } from '../../shared/competitors';
+export { SAMPLE_PROFILE, SAMPLE_PROFILE_SHOP };
 
 const KEY = 'gainora.agents.demo.v2';
 const DAY = 86_400_000;
@@ -63,20 +66,6 @@ const firstNumber = (s: string): number | null => {
 };
 const lower1 = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
 
-export const SAMPLE_PROFILE: BusinessProfile = {
-  business: {
-    ownerName: 'Sarah', name: 'Harbour & Home', website: 'https://example.com',
-    oneLiner: 'We sell handmade homeware from Cornish makers, online and in our Falmouth shop.',
-    industry: 'Retail and e-commerce', location: 'Falmouth, Cornwall', tradingSince: '2019', teamSize: '2–5', legalForm: 'Limited company',
-  },
-  offer: { products: 'Ceramic tableware, linen, candles and gift sets. Wholesale to a few local cafés.', typicalPrice: '£35 average order, gift sets £60–£90', salesChannels: ['Website', 'In person', 'Wholesale'], bestSeller: 'Hand-thrown mugs' },
-  customers: { ideal: 'Homeowners aged 30–60 who value handmade and buy gifts several times a year.', sources: ['Instagram', 'Google search', 'Word of mouth', 'Walk-ins'], areas: ['Local', 'Across the UK'], repeat: 'Some' },
-  competitors: { list: [{ name: 'Cove Living', url: 'https://example.org' }, { name: 'Saltwater Store', url: 'https://example.net' }], ourEdge: 'Everything is made within 30 miles and we gift-wrap for free.', theirEdge: 'Faster delivery and a bigger range.' },
-  numbers: { revenueBand: '£5k–£20k', enquiriesPerWeek: '30', salesPerWeek: '42', averageOrder: '35', track: ['Revenue', 'Orders or sales', 'Enquiries', 'Website visitors'] },
-  goals: { focus: 'Find new wholesale or B2B clients', target: '6 new wholesale stockists by the end of February', detail: 'Wholesale orders are steadier than retail through the quiet months.', twelveMonth: 'Wholesale making up a third of sales and a second member of staff.', obstacle: 'Time. I run the shop, the website and the social posts myself.', timePerWeek: '2–5 hours' },
-  preferences: { reportDay: 'Monday', reportTime: '7am', alerts: 'Urgent only', style: 'Short and direct', extraRecipient: '' },
-};
-
 const SHOP_NAMES = ['The Driftwood Room', 'Kittiwake & Co', 'Saltmarsh General Store', 'Penhallow Gifts', 'The Linen Cupboard', 'Harbourside Interiors', 'Fern & Flint', 'Tidewater Home', 'The Quay Pantry', 'Gull Cottage Goods'];
 const TOWNS = ['Truro', 'St Ives', 'Padstow', 'Penzance', 'Fowey', 'Exeter', 'Totnes', 'Plymouth', 'Bath', 'Bristol'];
 const REASONS = [
@@ -99,21 +88,6 @@ function makeResults(seed: number, n: number, exclude: string[] = []): ScoutResu
     website: 'https://example.com', fit: i < Math.ceil(n / 2) ? 'strong' : 'possible',
     reason: reasons[i % reasons.length],
     source: { title: `${name} – about page (sample)`, url: 'https://example.com' }, saved: false,
-  }));
-}
-
-function localResults(town: string): ScoutResult[] {
-  const items = [
-    { name: `${town} Christmas Makers Market`, when: 'First Saturday in December', how: 'Stall applications are open on the organiser’s page. Pitches are listed at £35.', reason: 'A makers’ market in your own town in peak gift season, which is where your typical customer shops.' },
-    { name: 'Independent Business Awards, retail category', when: 'Entries close at the end of November', how: 'Free to enter online. Shortlisted businesses get local press coverage.', reason: 'Cheap credibility and press, and the retail category suits a shop like yours.' },
-    { name: `${town} business network breakfast`, when: 'Every second Thursday, 7.30am', how: 'Your first visit is free. Book through their events page.', reason: 'Local owners who buy gifts for clients and staff, and who could stock or recommend you.' },
-    { name: 'Spring wedding fair at a local hotel', when: 'A Sunday in mid-March', how: 'Exhibitor packs are available from the venue’s events team.', reason: 'Couples buy gift sets and table linen, so your range is a natural fit.' },
-    { name: 'Harbour food and craft festival', when: 'Late May bank holiday weekend', how: 'Trader applications usually open in January.', reason: 'Heavy footfall from visitors and second-home owners, your ideal customers.' },
-    { name: 'Primary school Christmas fair', when: 'Second Friday in December', how: 'Contact the parents’ association to book a table, usually for a small donation.', reason: 'A low-cost way to reach local families before Christmas.' },
-  ];
-  return items.map((x, i) => ({
-    id: uid('r_'), name: x.name, location: town, website: 'https://example.com', fit: i < 3 ? 'strong' : 'possible',
-    reason: x.reason, when: x.when, how: x.how, source: { title: `${x.name} (sample)`, url: 'https://example.com' }, saved: false,
   }));
 }
 
@@ -143,168 +117,97 @@ function briefContextOf(s: DemoState): BriefContext {
   };
 }
 
-/** Sample competition for the demo: two the owner named, three found nearby, with the kind of detail the live app reads from public pages. */
-function sampleCompetitors(p: BusinessProfile, comps: { name: string; url: string }[], now: number): CompetitorsState {
-  const d = (n: number) => iso(now - n * DAY);
-  const samples = (start: number, perWeek: number) => Array.from({ length: 7 }, (_, i) => ({ at: d(42 - i * 7), rating: 4.3, count: start + i * perWeek }));
-  const c1 = comps[0]?.name || 'Cove Living'; const c2 = comps[1]?.name || 'Saltwater Store';
-  const u1 = comps[0]?.url || 'https://example.org'; const u2 = comps[1]?.url || comps[0]?.url || 'https://example.net';
-  const base = { services: [], offers: [], bookingPages: [], social: null, history: [], rating: null, count: null };
-  const list: TrackedCompetitor[] = [
-    { ...base, key: 'p:sample-cove', name: c1, source: 'typed', url: u1, placeId: 'sample-cove', address: `Arwenack Street, ${p.business.location.split(',')[0]}`, mapsUrl: 'https://www.google.com/maps', distanceKm: 0.6,
-      rating: 4.3, count: 140, history: samples(122, 3), ratingCheckedAt: d(0), firstSeenAt: d(40),
-      instagram: 'https://www.instagram.com/coveliving/', instagramSetBy: 'website', facebook: 'https://www.facebook.com/coveliving',
-      services: [
-        { name: 'Stoneware mug', price: '£22', url: `${u1}/shop`, seenAt: d(0) }, { name: 'Linen tea towel', price: '£14', url: `${u1}/shop`, seenAt: d(0) },
-        { name: 'Soy candle 200g', price: '£15', url: `${u1}/shop`, seenAt: d(0) }, { name: 'Christmas gift box', price: '£55', url: `${u1}/gifts`, seenAt: d(0) },
-      ],
-      offers: [{ text: 'Free UK delivery on orders over £40', url: u1, seenAt: d(2), from: 'website' }],
-      pagesRead: [u1, `${u1}/shop`, `${u1}/gifts`],
-      social: { handle: 'coveliving', url: 'https://www.instagram.com/coveliving/', checkedAt: d(0), followers: 4120, mediaCount: 612, postsLast30: 11,
-        followersHistory: Array.from({ length: 14 }, (_, i) => ({ at: d(13 - i), n: 3980 + i * 10 })),
-        posts: [
-          { id: 'ig1', caption: 'Candle season is here. 20% off all gift sets until Sunday, in store and online.', at: d(1), likes: 86, comments: 7, url: 'https://www.instagram.com/p/sample1/', type: 'IMAGE' },
-          { id: 'ig2', caption: 'New in: hand-thrown stoneware mugs from our Penryn maker, £22 each.', at: d(5), likes: 142, comments: 12, url: 'https://www.instagram.com/p/sample2/', type: 'CAROUSEL_ALBUM' },
-        ],
-        findings: [
-          { text: '20% off all gift sets until Sunday', url: 'https://www.instagram.com/p/sample1/', seenAt: d(1), from: 'instagram' },
-          { text: 'hand-thrown stoneware mugs from our Penryn maker, £22 each', url: 'https://www.instagram.com/p/sample2/', seenAt: d(5), from: 'instagram' },
-        ], error: null },
-    },
-    { ...base, key: 'h:example.net', name: c2, source: 'typed', url: u2, placeId: 'sample-salt', address: `Church Street, ${p.business.location.split(',')[0]}`, mapsUrl: 'https://www.google.com/maps', distanceKm: 1.1,
-      rating: 4.7, count: 58, history: samples(52, 1), ratingCheckedAt: d(0), firstSeenAt: d(40),
-      services: [{ name: 'Ceramic mug', price: '£16', url: `${u2}/shop`, seenAt: d(0) }, { name: 'Soy candle', price: '£18', url: `${u2}/shop`, seenAt: d(0) }, { name: 'Gift set', price: '£65', url: `${u2}/shop`, seenAt: d(0) }],
-      social: { handle: 'saltwaterstore', url: 'https://www.instagram.com/saltwaterstore/', checkedAt: d(0), followers: null, mediaCount: null, postsLast30: null, followersHistory: [], posts: [], findings: [], error: 'not-business' },
-      instagram: 'https://www.instagram.com/saltwaterstore/', instagramSetBy: 'website' },
-    { ...base, key: 'p:sample-saltcedar', name: 'Salt & Cedar Homeware', source: 'found', url: 'https://example.com/salt-cedar', placeId: 'sample-saltcedar', address: `Market Strand, ${p.business.location.split(',')[0]}`, mapsUrl: 'https://www.google.com/maps', distanceKm: 0.3,
-      rating: 4.5, count: 212, history: samples(190, 3), ratingCheckedAt: d(0), firstSeenAt: d(30),
-      services: [{ name: 'Large serving bowl', price: '£48', url: 'https://example.com/salt-cedar/shop', seenAt: d(0) }, { name: 'Linen napkin set of 4', price: '£36', url: 'https://example.com/salt-cedar/shop', seenAt: d(0) }, { name: 'Soy candle 220g', price: '£19', url: 'https://example.com/salt-cedar/shop', seenAt: d(0) }],
-      offers: [{ text: '20% off candles this November', url: 'https://example.com/salt-cedar', seenAt: d(1), from: 'website' }] },
-    { ...base, key: 'p:sample-candleco', name: 'Falmouth Candle Co.', source: 'found', url: '', placeId: 'sample-candleco', address: `Killigrew Street, ${p.business.location.split(',')[0]}`, mapsUrl: 'https://www.google.com/maps', distanceKm: 0.8,
-      rating: 4.9, count: 31, history: samples(27, 1).slice(2), ratingCheckedAt: d(0), firstSeenAt: d(30) },
-    { ...base, key: 'p:sample-pendower', name: 'Pendower Living', source: 'found', url: 'https://example.com/pendower', placeId: 'sample-pendower', address: `High Street, ${p.business.location.split(',')[0]}`, mapsUrl: 'https://www.google.com/maps', distanceKm: 1.6,
-      rating: 5, count: 4, history: [{ at: d(0), rating: 5, count: 4 }], ratingCheckedAt: d(0), firstSeenAt: d(0), services: [], offers: [] },
-  ];
-  const events = [
-    { id: 'new-nearby:p:sample-pendower', at: d(0), key: 'p:sample-pendower', competitor: 'Pendower Living', kind: 'new-nearby' as const, url: 'https://www.google.com/maps', summary: 'New on Google near you: Pendower Living, 1.6 km away (4 reviews).', detail: 'A listing with few reviews is often a recent opening.' },
-    { id: 'post:p:sample-cove', at: d(1), key: 'p:sample-cove', competitor: c1, kind: 'post' as const, url: 'https://www.instagram.com/p/sample1/', summary: `${c1} posted on Instagram: “20% off all gift sets until Sunday”.` },
-    { id: 'offer:p:sample-saltcedar', at: d(1), key: 'p:sample-saltcedar', competitor: 'Salt & Cedar Homeware', kind: 'offer' as const, url: 'https://example.com/salt-cedar', summary: 'Salt & Cedar Homeware is advertising “20% off candles this November”.' },
-    { id: 'reviews:p:sample-cove', at: d(2), key: 'p:sample-cove', competitor: c1, kind: 'reviews' as const, url: 'https://www.google.com/maps', summary: `${c1} got ${reviewsSince(list[0].history, 30, new Date(now))} new Google reviews in the last 30 days; you got 3.`, detail: 'New reviews are a sign of how busy a business looks, not a count of their bookings.' },
-  ];
-  const you = { rating: 4.6, count: 87, reviews30: reviewsSince([{ at: d(30), rating: 4.6, count: 84 }, { at: d(0), rating: 4.6, count: 87 }], 30, new Date(now)), services: [
-    { name: 'Hand-thrown mug', price: '£18', url: p.business.website, seenAt: d(0) }, { name: 'Linen tea towel', price: '£12', url: p.business.website, seenAt: d(0) },
-    { name: 'Soy candle, 200g', price: '£16', url: p.business.website, seenAt: d(0) }, { name: 'Gift set', price: '£60', url: p.business.website, seenAt: d(0) },
-  ] };
-  return {
-    checkedAt: d(0), foundAt: d(30), searchTerms: ['homeware and gift shop'], list, events,
-    you: { lat: 50.153, lng: -5.07, services: you.services, sourcesCheckedAt: d(0), instagram: { handle: 'harbourandhome', url: 'https://www.instagram.com/harbourandhome/', checkedAt: d(0), followers: 2310, mediaCount: 418, postsLast30: 6, followersHistory: Array.from({ length: 14 }, (_, i) => ({ at: d(13 - i), n: 2260 + i * 4 })), posts: [], findings: [], error: null } },
-    nearby: [
-      { key: 'p:sample-quay', placeId: 'sample-quay', name: 'The Quay Pantry', address: `Quay Street, ${p.business.location.split(',')[0]}`, url: 'https://example.com/quay', rating: 4.4, count: 77, distanceKm: 0.5 },
-      { key: 'p:sample-gull', placeId: 'sample-gull', name: 'Gull Cottage Goods', address: `Swanpool, ${p.business.location.split(',')[0]}`, rating: 4.8, count: 19, distanceKm: 2.3 },
-    ],
-    dismissed: [{ key: 'p:sample-fishmonger', name: 'Harbour Fishmongers', at: d(28) }],
-    placesCalls: { month: iso(now).slice(0, 7), n: 11 },
-    advice: { at: d(0), lines: adviseReach(list, you, events, new Date(now)) },
-  };
-}
-
 function seed(s: DemoState) {
   const p = s.profile!;
   const now = Date.now();
   const r = rng(p.business.name.length * 977 + 13);
   const comps = p.competitors.list.filter((c) => c.name.trim());
   const c1 = comps[0]?.name || 'Your main competitor';
-  const c2 = comps[1]?.name || c1;
   const town = p.business.location.split(',')[0].trim() || 'your town';
   const site = p.business.website.replace(/\/$/, '');
 
   // The Watcher
   const history = Array.from({ length: 30 }, (_, i) => {
     const up = i !== 11;
-    return { at: iso(now - (29 - i) * DAY), ms: up ? Math.round(420 + r() * 380 + (i > 24 ? 160 : 0)) : 0, up };
+    return { at: iso(now - (29 - i) * DAY), ms: up ? Math.round(620 + r() * 380 + (i > 24 ? 160 : 0)) : 0, up };
   });
+  const competitors = sampleCompetitors(p, comps, now);
+  const glow = competitors.list[0].name;
   s.watcher = {
     site: p.business.website, lastCheck: iso(now - 3 * 3_600_000), nextCheck: iso(now + 3_600_000 * 21),
-    up: true, responseMs: history[29].ms, uptime30d: 99.7, sslDaysLeft: 23, pagesChecked: 48,
+    up: true, responseMs: history[29].ms, uptime30d: 99.7, sslDaysLeft: 23, pagesChecked: 12,
     brokenLinks: [
-      { url: `${site}/products/winter-gift-set`, foundOn: `${site}/gift-guide`, status: 404 },
-      { url: `${site}/collections/linen-old`, foundOn: `${site}/`, status: 404 },
+      { url: `${site}/treatments/skin-boosters-old`, foundOn: `${site}/treatments`, status: 404 },
     ],
     issues: [
-      { id: 'contact', level: 'urgent', title: 'Your contact page needs attention', detail: 'Your contact page returned an error when we loaded it on Sunday night, so visitors may not be able to reach you until it is fixed.', link: `${site}/contact` },
+      { id: 'contact', level: 'urgent', title: 'Your contact page needs attention', detail: 'Your contact page has no form, email link or phone link that we could find. Visitors need an obvious way to reach you; most of your enquiries come through Instagram, but Google sends people here.', link: `${site}/contact` },
       { id: 'ssl', level: 'notice', title: 'Your security certificate renews in 23 days', detail: 'Most hosts renew automatically. If yours doesn’t, visitors will see a warning page, so check it is set to auto-renew.' },
-      { id: 'links', level: 'notice', title: '2 links lead to a missing page', detail: 'Visitors who click these see an error. Update or remove them; the list is below.' },
+      { id: 'links', level: 'notice', title: '1 link leads to a missing page', detail: 'Visitors who click it see an error. Update or remove it; the list is below.' },
     ],
     history,
     changes: [
-      { id: uid('c_'), competitor: c1, url: comps[0]?.url || '', at: iso(now - 2 * DAY), kind: 'offer', summary: `${c1} added free UK delivery on orders over £40.`, detail: 'New banner across the top of every page. Your free delivery threshold is higher, so this is worth reviewing before December.' },
-      { id: uid('c_'), competitor: c2, url: comps[1]?.url || comps[0]?.url || '', at: iso(now - 4 * DAY), kind: 'new-page', summary: `${c2} published a Christmas gift guide.`, detail: 'Twelve products, mostly under £40, with gift wrapping as an add-on at £3.50.' },
-      { id: uid('c_'), competitor: c1, url: comps[0]?.url || '', at: iso(now - 9 * DAY), kind: 'price', summary: `${c1} raised its mug prices from £18 to £22.`, detail: 'Your hand-thrown mugs are now the cheaper option for a comparable product.' },
+      { id: uid('c_'), competitor: glow, url: comps[0]?.url || '', at: iso(now - 2 * DAY), kind: 'offer', summary: `${glow} added a banner: 20% off Profhilo for new clients this November.`, detail: 'Their Profhilo (two sessions) is £420 to your £390, so even at 20% off they land at about £336. Worth considering: say plainly what your two sessions include (the free two-week review, the nurse prescriber) where your price is shown, rather than cutting.' },
+      { id: uid('c_'), competitor: glow, url: comps[0]?.url || '', at: iso(now - 9 * DAY), kind: 'new-page', summary: `${glow} published a “Meet the team” page with four practitioners.`, detail: 'A bigger team is a size signal, not a quality one. Your edge is one nurse who sees you every time; it belongs on your home page.' },
     ],
     reviews: {
-      placeId: 'sample-place', placeName: p.business.name, mapsUrl: 'https://www.google.com/maps', rating: 4.6, count: 87, previousCount: 84,
+      placeId: 'sample-place', placeName: p.business.name, mapsUrl: 'https://www.google.com/maps', rating: 4.9, count: 61, previousCount: 59,
       checkedAt: iso(now - 3 * 3_600_000),
+      history: [{ at: iso(now - 35 * DAY), rating: 4.9, count: 55 }, { at: iso(now - 28 * DAY), rating: 4.9, count: 56 }, { at: iso(now - 21 * DAY), rating: 4.9, count: 58 }, { at: iso(now - 14 * DAY), rating: 4.9, count: 58 }, { at: iso(now - 7 * DAY), rating: 4.9, count: 59 }, { at: iso(now), rating: 4.9, count: 61 }],
       reviews: [
-        { id: 'rv1', author: 'Mark D.', rating: 2, text: 'Ordered a dinner set online and one bowl arrived chipped. I emailed but haven’t heard back after a week.', when: '2 days ago', isNew: true },
-        { id: 'rv2', author: 'Emma R.', rating: 5, text: 'Bought three mugs as a birthday present and they were beautifully wrapped. Lovely shop and really friendly.', when: '4 days ago', isNew: true },
-        { id: 'rv3', author: 'James T.', rating: 4, text: 'Gorgeous linen and candles. Delivery took a little longer than expected but worth the wait.', when: '6 days ago', isNew: true },
-        { id: 'rv4', author: 'Priya S.', rating: 5, text: `My favourite shop in ${town} for gifts. Everything is made locally and you can tell.`, when: '3 weeks ago', isNew: false },
+        { id: 'rv1', author: 'Claire M.', rating: 3, text: 'Lovely results and Hannah is brilliant, but I messaged on Instagram three times to rebook and heard nothing for a week.', when: '2 days ago', isNew: true },
+        { id: 'rv2', author: 'Gemma T.', rating: 5, text: 'Finally found someone who listens. Natural lips, no duck face, and she checked in two weeks later for free.', when: '4 days ago', isNew: true },
+        { id: 'rv3', author: 'Rachel P.', rating: 5, text: 'First time having anti-wrinkle injections and I was nervous. Hannah talked me through everything and the result is so subtle. Will be back.', when: '6 days ago', isNew: true },
+        { id: 'rv4', author: 'Sophie L.', rating: 5, text: `Best clinic in ${town} by a mile. Profhilo has made such a difference to my skin.`, when: '3 weeks ago', isNew: false },
       ],
-      competitors: [{ name: c1, rating: 4.3, count: 126 }, ...(c2 !== c1 ? [{ name: c2, rating: 4.7, count: 54 }] : [])],
+      competitors: competitors.list.filter((c) => c.rating != null).map((c) => ({ name: c.name, rating: c.rating, count: c.count })),
     },
     speed: {
       checkedAt: iso(now - 2 * DAY), strategy: 'mobile',
-      scores: { performance: 54, accessibility: 88, seo: 92, bestPractices: 96 },
-      field: { lcp: { value: '3.4 s', rating: 'Needs work' }, inp: { value: '160 ms', rating: 'Good' }, cls: { value: '0.12', rating: 'Needs work' } },
+      scores: { performance: 61, accessibility: 90, seo: 88, bestPractices: 96 },
+      field: { lcp: { value: '3.1 s', rating: 'Needs work' }, inp: { value: '140 ms', rating: 'Good' }, cls: { value: '0.08', rating: 'Good' } },
       fixes: [
-        { id: 'image-delivery-insight', title: 'Shrink your photos', impact: 'High', who: 'You', saving: 'could make the page about 1.8 s faster', why: 'Large images are the most common reason pages are slow on phones, and slow pages lose visitors before they see anything.', how: 'Resize photos to no more than 2,000 pixels wide and save them as WebP or compressed JPEG. Most website builders have an image compression setting or app.' },
-        { id: 'lcp-discovery-insight', title: 'Load your main image first', impact: 'High', who: 'Your web person', saving: 'could make the page about 0.9 s faster', why: 'The biggest image at the top of the page is set to load late, so the page looks empty for longer.', how: 'Ask your web person to turn off “lazy loading” for the top banner image and mark it as high priority.' },
-        { id: 'cls-culprits-insight', title: 'Stop the page jumping as it loads', impact: 'Medium', who: 'Your web person', why: 'Content moves around while the page loads, so people tap the wrong thing or lose their place.', how: 'Give every image and embedded item a fixed width and height, and reserve space for banners and pop-ups.' },
+        { id: 'image-delivery-insight', title: 'Shrink your photos', impact: 'High', who: 'You', saving: 'could make the page about 1.4 s faster', why: 'Large before-and-after photos are the most common reason clinic sites are slow on phones, and slow pages lose visitors before they see anything.', how: 'Resize photos to no more than 2,000 pixels wide and save them as WebP or compressed JPEG. Most website builders have an image compression setting or app.' },
+        { id: 'lcp-discovery-insight', title: 'Load your main image first', impact: 'High', who: 'Your web person', saving: 'could make the page about 0.8 s faster', why: 'The biggest image at the top of the page is set to load late, so the page looks empty for longer.', how: 'Ask your web person to turn off “lazy loading” for the top banner image and mark it as high priority.' },
         { id: 'meta-description', title: 'Add a description for Google', impact: 'Medium', who: 'You', why: 'Google shows this short description under your link. Without one it picks random text from the page.', how: 'In your website’s SEO settings, write one or two sentences for each main page saying what you offer and why to choose you.' },
-        { id: 'image-alt', title: 'Describe your images', impact: 'Medium', who: 'You', why: 'Images without descriptions are invisible to Google Images and to people using screen readers.', how: 'Add a short description (alt text) to each product and banner image in your website editor.' },
-        { id: 'color-contrast', title: 'Make some text easier to read', impact: 'Medium', who: 'Your web person', why: 'Some text is too faint against its background, especially on a phone outdoors.', how: 'Darken light grey text or lighten its background until it is easy to read.' },
+        { id: 'image-alt', title: 'Describe your images', impact: 'Medium', who: 'You', why: 'Images without descriptions are invisible to Google Images and to people using screen readers.', how: 'Add a short description (alt text) to each treatment and banner image in your website editor.' },
       ],
     },
-    prices: {
-      checkedAt: iso(now - 3 * DAY),
-      competitors: [c1, ...(c2 !== c1 ? [c2] : [])],
-      rows: [
-        { item: p.offer.bestSeller || 'Hand-thrown mug', yours: { price: '£18', url: site }, theirs: [{ price: '£22', url: 'https://example.org' }, { price: '£16', url: 'https://example.net' }], note: `${c1} raised theirs from £18 last week.` },
-        { item: 'Linen tea towel', yours: { price: '£12', url: site }, theirs: [{ price: '£14', url: 'https://example.org' }, null] },
-        { item: 'Soy candle, 200g', yours: { price: '£16', url: site }, theirs: [{ price: '£15', url: 'https://example.org' }, { price: '£18', url: 'https://example.net' }] },
-        { item: 'Gift set', yours: { price: '£60', url: site }, theirs: [{ price: '£55', url: 'https://example.org' }, { price: '£65', url: 'https://example.net' }], note: 'Yours includes free gift wrapping; theirs charge extra.' },
-      ],
-    },
-    competitors: sampleCompetitors(p, comps, now),
+    prices: null,
+    competitors,
   };
 
   // The Scout
-  const query = p.goals.focus === 'Find new wholesale or B2B clients'
-    ? 'Independent shops that could stock our products'
-    : `Businesses near ${town} that could refer customers to us`;
-  const results = makeResults(41, 10, ['the linen cupboard']).map((x, i) => ({ ...x, saved: i < 3 })); // The Linen Cupboard is already a won lead
-  s.scout = [{
-    id: uid('s_'), query, area: 'South West England', createdAt: iso(now - DAY), status: 'ready', kind: 'customers',
-    summary: 'Nine businesses matched. Five are a strong fit: they already stock independent makers and have a public way to contact the buyer.',
-    results,
-  }];
+  const consumer = scoutMode(p) === 'consumer';
+  const what = String(p.offer.bestSeller || 'what we offer').split(/[,.(]/)[0].trim().toLowerCase();
+  const query = consumer ? `People asking for ${what} recommendations near ${town}` : p.goals.focus === 'Find new wholesale or B2B clients' ? 'Independent shops that could stock our products' : `Businesses near ${town} that could refer customers to us`;
+  const results = consumer ? demandResults(town, what) : makeResults(41, 10, ['the linen cupboard']).map((x, i) => ({ ...x, saved: i < 3 }));
+  const partners = consumer ? partnerResults(town) : [];
+  s.scout = [
+    { id: uid('s_'), query, area: town, createdAt: iso(now - DAY), status: 'ready', kind: consumer ? 'demand' : 'customers',
+      summary: consumer ? 'Four public posts in the last month where people around Crewe are asking for exactly what you do, with no answer from a local clinic yet. Reply to the first two today; each has a draft. In the demo these are samples; in your account each links to the real thread.' : 'Nine businesses matched. Five are a strong fit: they already stock independent makers and have a public way to contact the buyer.',
+      results },
+    ...(consumer ? [{ id: uid('s_'), query: `Hairdressers, bridal shops and gyms near ${town} that could refer clients`, area: town, createdAt: iso(now - 3 * DAY), status: 'ready' as const, kind: 'partners' as const, summary: 'Four nearby businesses whose customers are yours at the right moment, none of which offers aesthetics. Two are a strong fit and have introductions drafted. In the demo these are samples with example links.', results: partners.map((x, i) => ({ ...x, saved: i < 2 })) }] : []),
+  ];
   const today9 = new Date(); today9.setHours(9, 0, 0, 0);
   const toLead = (x: ScoutResult, extra: Partial<Lead>): Lead => ({
     id: uid('l_'), name: x.name, location: x.location, website: x.website, reason: x.reason, source: x.source,
     stage: 'to_contact', followUps: 0, createdAt: iso(now - DAY), ...extra,
   });
+  const leadSource = consumer ? partners : results;
   s.leads = [
-    toLead(results[0], { stage: 'contacted', contactedAt: iso(now - 4 * DAY), nextFollowUp: today9.toISOString() }),
-    toLead(results[1], {}),
-    toLead(results[2], { stage: 'replied', contactedAt: iso(now - 8 * DAY), followUps: 1 }),
-    { id: uid('l_'), name: 'The Linen Cupboard', location: 'Truro', website: 'https://example.com', reason: 'Stocks several small UK makers and lists a wholesale enquiries contact on its website.', source: { title: 'The Linen Cupboard – about page (sample)', url: 'https://example.com' }, stage: 'won', contactedAt: iso(now - 23 * DAY), followUps: 1, value: 1200, createdAt: iso(now - 24 * DAY) },
+    toLead(leadSource[0], { stage: 'contacted', contactedAt: iso(now - 4 * DAY), nextFollowUp: today9.toISOString() }),
+    toLead(leadSource[1], {}),
+    ...(consumer
+      ? [{ id: uid('l_'), name: 'Nantwich Road Hair Studio', location: town, website: 'https://example.com', reason: 'Salon with six stylists and no skin or injectable treatments; agreed to keep your referral cards at reception.', source: { title: 'Nantwich Road Hair Studio – website (sample)', url: 'https://example.com' }, stage: 'won' as const, contactedAt: iso(now - 23 * DAY), followUps: 1, value: 640, createdAt: iso(now - 24 * DAY) }]
+      : [toLead(results[2], { stage: 'replied', contactedAt: iso(now - 8 * DAY), followUps: 1 }),
+        { id: uid('l_'), name: 'The Linen Cupboard', location: 'Truro', website: 'https://example.com', reason: 'Stocks several small UK makers and lists a wholesale enquiries contact on its website.', source: { title: 'The Linen Cupboard – about page (sample)', url: 'https://example.com' }, stage: 'won' as const, contactedAt: iso(now - 23 * DAY), followUps: 1, value: 1200, createdAt: iso(now - 24 * DAY) }]),
   ];
 
   // Public contracts
-  s.tenders = [
-    { id: 't1', tenderId: 'sample-1', title: 'Locally made gifts and homeware for visitor centre shops', buyer: 'Heritage trust (sample)', summary: 'Supply of gifts, ceramics and textiles made in the county for resale in three visitor centre shops, with seasonal reorders.', value: 18000, deadline: iso(now + 21 * DAY), url: 'https://www.contractsfinder.service.gov.uk/', region: 'South West', sme: true, fit: 'strong', reason: 'They want locally made homeware for resale, which is exactly what you sell, and everything you stock is made within 30 miles. You would need a price list, product photos and public liability insurance.', status: 'new', foundAt: iso(now - DAY) },
-    { id: 't2', tenderId: 'sample-2', title: 'Corporate and civic gifts framework', buyer: 'County council (sample)', summary: 'Framework for locally sourced gifts for visiting dignitaries, staff awards and civic events over two years.', value: 45000, deadline: iso(now + 12 * DAY), url: 'https://www.contractsfinder.service.gov.uk/', region: 'South West', sme: true, fit: 'possible', reason: 'Your gift sets fit the brief, but they also want some branded items, so you may need a printing partner. Worth a look if you can supply gift sets in volume.', status: 'new', foundAt: iso(now - 2 * DAY) },
-    { id: 't3', tenderId: 'sample-3', title: 'Café crockery and table linen replacement', buyer: 'Hospital trust (sample)', summary: 'Replacement crockery, mugs and table linen for two hospital cafés.', value: 14000, deadline: iso(now + 30 * DAY), url: 'https://www.contractsfinder.service.gov.uk/', region: 'South West', sme: null, fit: 'possible', reason: 'Matches your ceramics and linen, and you already supply cafés. Check whether they need commercial dishwasher-safe ratings for the mugs.', status: 'new', foundAt: iso(now - 2 * DAY) },
+  s.tenders = consumer ? [
+    { id: 't1', tenderId: 'sample-1', title: 'Staff wellbeing partner offers framework', buyer: 'NHS trust (sample)', summary: 'Local businesses offering discounted health, beauty and wellbeing services to staff through the trust’s benefits platform.', value: null, deadline: iso(now + 24 * DAY), url: 'https://www.contractsfinder.service.gov.uk/', region: 'North West', sme: true, fit: 'possible', reason: 'No money changes hands with the trust; you offer a staff rate and are listed to several thousand local staff. Fits your goal of more enquiries in the quiet months.', status: 'new', foundAt: iso(now - 2 * DAY) },
+  ] : [
+    { id: 't1', tenderId: 'sample-1', title: 'Locally made gifts and homeware for visitor centre shops', buyer: 'Heritage trust (sample)', summary: 'Supply of gifts, ceramics and textiles made in the county for resale in three visitor centre shops, with seasonal reorders.', value: 18000, deadline: iso(now + 21 * DAY), url: 'https://www.contractsfinder.service.gov.uk/', region: 'South West', sme: true, fit: 'strong', reason: 'They want locally made homeware for resale, which is exactly what you sell. You would need a price list, product photos and public liability insurance.', status: 'new', foundAt: iso(now - DAY) },
   ];
 
   // The Brief
@@ -335,18 +238,18 @@ function seed(s: DemoState) {
 
   // Home
   s.actions = [
-    { id: uid('a_'), text: `Follow up with ${results[0].name} today`, agent: 'scout', done: false, createdAt: iso(now - 2 * 3_600_000) },
-    { id: uid('a_'), text: 'Reply to Mark D.’s 2-star review', agent: 'watcher', done: false, createdAt: iso(now - 3 * 3_600_000) },
+    { id: uid('a_'), text: `Follow up with ${s.leads[0].name} today`, agent: 'scout', done: false, createdAt: iso(now - 2 * 3_600_000) },
+    { id: uid('a_'), text: 'Reply to Claire M.’s 3-star review', agent: 'watcher', done: false, createdAt: iso(now - 3 * 3_600_000) },
     { id: uid('a_'), text: 'Fix your contact page so enquiries reach you', agent: 'watcher', done: false, createdAt: iso(now - 3 * 3_600_000) },
-    { id: uid('a_'), text: 'Look at the visitor centre contract before it closes', agent: 'scout', done: false, createdAt: iso(now - DAY) },
-    { id: uid('a_'), text: `Decide whether to match ${c1}’s free delivery threshold`, agent: 'watcher', done: false, createdAt: iso(now - 2 * DAY) },
+    { id: uid('a_'), text: `Decide how to answer ${c1}’s Profhilo offer`, agent: 'watcher', done: false, createdAt: iso(now - 2 * DAY) },
+    ...(consumer ? [{ id: uid('a_'), text: 'Reply to the 2 public posts asking for what you do (replies are drafted in The Scout)', agent: 'scout' as const, done: false, createdAt: iso(now - DAY) }] : []),
     ...b.actions.slice(0, 1).map((t) => ({ id: uid('a_'), text: t, agent: 'brief' as const, done: false, createdAt: iso(now - 6 * 3_600_000) })),
   ];
   s.alerts = [
-    { id: uid('al_'), agent: 'watcher', level: 'urgent', title: 'New 2-star review', body: 'Mark D. says a bowl arrived chipped and he hasn’t heard back. A reply is drafted for you.', at: iso(now - 2 * 3_600_000), read: false },
-    { id: uid('al_'), agent: 'watcher', level: 'urgent', title: 'Contact page error', body: 'Your contact page returned an error when we checked it.', at: iso(now - 3 * 3_600_000), read: false },
-    { id: uid('al_'), agent: 'scout', level: 'good', title: 'Public contract that fits you', body: 'Locally made gifts for visitor centre shops, worth £18,000.', at: iso(now - DAY), read: false },
-    { id: uid('al_'), agent: 'watcher', level: 'notice', title: `${c1} added free delivery over £40`, body: 'Their new threshold is lower than yours.', at: iso(now - 2 * DAY), read: true },
+    { id: uid('al_'), agent: 'watcher', level: 'urgent', title: 'New 3-star review', body: 'Claire M. loved the result but waited a week for a reply on Instagram. A calm reply is drafted for you.', at: iso(now - 2 * 3_600_000), read: false },
+    { id: uid('al_'), agent: 'watcher', level: 'urgent', title: 'Your contact page needs attention', body: 'No form, email link or phone link was found on it.', at: iso(now - 3 * 3_600_000), read: false },
+    { id: uid('al_'), agent: 'watcher', level: 'notice', title: `${c1} is advertising “20% off Profhilo for new clients this November”`, body: 'Their two sessions are £420 to your £390 before the discount. Details on the Competitors tab.', at: iso(now - 2 * DAY), read: false },
+    { id: uid('al_'), agent: 'scout', level: 'good', title: consumer ? '4 public posts found' : 'Public contract that fits you', body: consumer ? 'People near Crewe asking for anti-wrinkle and lip filler recommendations. Replies are drafted.' : 'Locally made gifts for visitor centre shops, worth £18,000.', at: iso(now - DAY), read: true },
   ];
 
   // Value tracker: this month and last month
@@ -355,29 +258,26 @@ function seed(s: DemoState) {
   s.values = [
     ev('issue_found', 'watcher', 'Found: your contact page returned an error', h(3)),
     ev('issue_found', 'watcher', 'Found: security certificate renews in 23 days', h(3)),
-    ev('issue_found', 'watcher', 'Found: 2 links lead to a missing page', d(2)),
-    ev('review_alert', 'watcher', 'New review from Mark D. (2 stars)', h(2)),
-    ev('review_alert', 'watcher', 'New review from Emma R. (5 stars)', d(4)),
-    ev('review_alert', 'watcher', 'New review from James T. (4 stars)', d(6)),
-    ev('reply_drafted', 'watcher', 'Drafted a reply to Emma R.', d(4)),
-    ev('competitor_change', 'watcher', `${c1} added free delivery over £40`, d(2)),
-    ev('competitor_change', 'watcher', `${c2} published a Christmas gift guide`, d(4)),
-    ev('price_check', 'watcher', 'Compared your prices with competitors', d(3)),
-    ...results.map((x) => ev('lead_found', 'scout', `Lead found: ${x.name}, ${x.location}`, d(1))),
-    ev('draft_written', 'scout', `Drafted an introduction to ${results[0].name}`, d(4)),
-    ev('lead_contacted', 'you', `You contacted ${results[0].name}`, d(4)),
-    ev('tender_found', 'scout', 'Contract found: locally made gifts for visitor centre shops', d(1), 18000),
-    ev('tender_found', 'scout', 'Contract found: corporate and civic gifts framework', d(2), 45000),
-    ev('tender_found', 'scout', 'Contract found: café crockery and table linen', d(2), 14000),
+    ev('issue_found', 'watcher', 'Found: 1 link leads to a missing page', d(2)),
+    ev('review_alert', 'watcher', 'New review from Claire M. (3 stars)', h(2)),
+    ev('review_alert', 'watcher', 'New review from Gemma T. (5 stars)', d(4)),
+    ev('review_alert', 'watcher', 'New review from Rachel P. (5 stars)', d(6)),
+    ev('reply_drafted', 'watcher', 'Drafted a reply to Gemma T.', d(4)),
+    ev('competitor_change', 'watcher', `${c1} is advertising 20% off Profhilo`, d(2)),
+    ev('competitor_change', 'watcher', `${c1} changed the price of lip filler, 1ml from £220 to £240`, d(9)),
+    ev('price_check', 'watcher', 'Compared your prices with 5 competitors, treatment by treatment', d(0)),
+    ...results.map((x) => ev(consumer ? 'opportunity_found' : 'lead_found', 'scout', `${consumer ? 'Opportunity' : 'Lead'} found: ${x.name.slice(0, 60)}${x.location ? `, ${x.location}` : ''}`, d(1))),
+    ...s.leads.slice(0, 2).map((l) => ev('lead_found', 'scout', `Lead found: ${l.name}, ${l.location}`, d(3))),
+    ev('draft_written', 'scout', `Drafted an introduction to ${s.leads[0].name}`, d(4)),
+    ev('lead_contacted', 'you', `You contacted ${s.leads[0].name}`, d(4)),
+    ...s.tenders.map((t) => ev('tender_found', 'scout', `Contract found: ${t.title.toLowerCase()}`, d(2), t.value ?? undefined)),
     ev('brief_written', 'brief', 'Weekly Brief written', h(6)),
     // Last month
-    ev('lead_found', 'scout', 'Lead found: The Linen Cupboard, Truro', d(24)),
-    ev('lead_found', 'scout', 'Lead found: Fern & Flint, Totnes', d(24)),
-    ev('lead_found', 'scout', 'Lead found: Tidewater Home, Fowey', d(24)),
-    ev('draft_written', 'scout', 'Drafted an introduction to The Linen Cupboard', d(23)),
-    ev('lead_won', 'you', 'Won: first wholesale order from The Linen Cupboard', d(15), 1200),
-    ev('issue_found', 'watcher', 'Found: product page took 6 seconds to load', d(20)),
-    ev('issue_fixed', 'you', 'Fixed: product page speed', d(18)),
+    ev('lead_found', 'scout', `Lead found: ${s.leads[s.leads.length - 1].name}, ${town}`, d(24)),
+    ev('draft_written', 'scout', `Drafted an introduction to ${s.leads[s.leads.length - 1].name}`, d(23)),
+    ev('lead_won', 'you', `Won: ${s.leads[s.leads.length - 1].name}`, d(15), s.leads[s.leads.length - 1].value ?? undefined),
+    ev('issue_found', 'watcher', 'Found: treatments page took 6 seconds to load', d(20)),
+    ev('issue_fixed', 'you', 'Fixed: treatments page speed', d(18)),
     ev('brief_written', 'brief', 'Weekly Brief written', d(14)),
     ev('brief_written', 'brief', 'Weekly Brief written', d(21)),
   ];
@@ -389,43 +289,51 @@ function seed(s: DemoState) {
 function demoReply(text: string, s: DemoState): ChatMessage {
   const p = s.profile!;
   const t = text.toLowerCase();
+  const comps = s.watcher?.competitors;
+  const cmp = comps?.comparison;
   const c = s.watcher?.changes[0];
-  const strong = s.scout[0]?.results.filter((r) => r.fit === 'strong' && !r.dismissed) ?? [];
+  const first = s.scout[0];
   const due = s.leads.find((l) => l.stage === 'contacted');
   let reply: string;
   let keys: string[] = ['profile'];
-  if (/review|rating|google/.test(t) && s.watcher?.reviews) {
+  if (/price|charge|cost|cheap|expensive|dear/.test(t) && cmp && cmp.rows.length) {
+    keys = ['prices'];
+    const rows = cmp.rows.filter((r) => r.yours && r.listedBy).slice(0, 3);
+    const gap = cmp.theyOfferYouDont[0];
+    reply = `Like for like, against the ${cmp.competitors.length} businesses the Watcher reads around ${p.business.location.split(',')[0]}:\n\n${rows.map((r) => `${r.label}: you ${r.yours!.price}, local average £${r.localAvg} (${r.position}).`).join('\n')}${gap ? `\n\n${gap.by.length} of them price ${gap.label.charAt(0).toLowerCase() + gap.label.slice(1)} (${gap.by.map((b) => `${b.name} ${b.price}`).join(', ')}) and your list doesn’t show it.` : ''}\n\nOne thing to do: where your prices are shown, say what each includes (the free two-week review, 45 minutes with a nurse prescriber). The Prices tab has every row with its source.`;
+  } else if (/busiest|bigger|busy|size|team|followers|compare|vs|versus|them/.test(t) && comps?.list.length) {
+    keys = ['competitors'];
+    const glow = comps.list[0];
+    reply = `On the public figures, ${glow.name} looks the biggest: ${glow.count} Google reviews to your ${s.watcher?.reviews?.count ?? '–'}, a team of ${glow.venue?.team ?? '–'} on Fresha and ${glow.social?.followers?.toLocaleString('en-GB') ?? '–'} Instagram followers to your ${comps.you?.instagram?.followers?.toLocaleString('en-GB') ?? '–'}. The Lip Lounge is the one gaining fastest: 8 new Google reviews in 30 days and 22 Instagram posts, on lips only.\n\nThose are signs of how busy they look, not their bookings. The You vs them tab lays every figure side by side.\n\nOne thing to do: ask your last ten happy clients for a Google review this week; you are at 6 new in 30 days to ${glow.name}’s ${reviewsSince(glow.history, 30) ?? '–'}.`;
+  } else if (/review|rating|google/.test(t) && s.watcher?.reviews) {
     keys = ['reviews'];
     const rv = s.watcher.reviews;
-    reply = `You’re on ${rv.rating} stars from ${rv.count} Google reviews, ahead of ${rv.competitors[0]?.name ?? 'your main competitor'} on ${rv.competitors[0]?.rating ?? '–'}. Three new reviews came in this week.\n\nThe one to deal with today is Mark D.’s 2-star review about a chipped bowl. A public, calm reply plus a replacement usually turns these round. I’ve drafted one on the Watcher’s Reviews tab.`;
-  } else if (/contract|tender|council|public/.test(t) && s.tenders.length) {
-    keys = ['tenders'];
-    const t1 = s.tenders[0];
-    reply = `The best public contract right now is “${t1.title}”, worth £${t1.value?.toLocaleString('en-GB')}. ${t1.reason}\n\nIt closes in about three weeks, so there’s time, but start the price list this week.`;
-  } else if (/follow|chase|reply|lead/.test(t) && due) {
+    reply = `You’re on ${rv.rating} stars from ${rv.count} Google reviews, the highest rating of the clinics the Watcher follows, though with fewer reviews than ${rv.competitors[0]?.name ?? 'your main competitor'} (${rv.competitors[0]?.count ?? '–'}). Three new reviews came in this week.\n\nThe one to deal with today is Claire M.’s 3-star review: she loved the result but waited a week for a reply on Instagram. A calm public reply is drafted on the Reviews tab, and the fix behind it is a daily ten-minute slot for messages.`;
+  } else if (/post|asking|recommend|thread|reddit|forum|scout|find customers|customers|enquir/.test(t) && first) {
+    keys = ['scout'];
+    const top = first.results.filter((r) => !r.dismissed).slice(0, 2);
+    reply = `The Scout found ${first.results.length} public posts in the last month where people near ${p.business.location.split(',')[0]} are asking for what you do, and no local clinic has answered. Start with: ${top.map((r) => `“${r.name}” (${r.platform})`).join(' and ')}.\n\nEach has a reply drafted that says you run the clinic and helps first. Post them yourself today; threads like these get read for months.`;
+  } else if (/follow|chase|lead|partner/.test(t) && due) {
     keys = ['leads'];
     reply = `${due.name} is due a follow-up today. You contacted them four days ago and haven’t heard back, which is normal. A short, friendly nudge usually gets a reply. The Scout has written it for you on the Leads tab.`;
-  } else if (/competitor|rival|cove|saltwater|deliver|price/.test(t) && c) {
-    keys = ['changes', 'profile'];
-    reply = `The biggest move this fortnight: ${c.summary} ${c.detail ?? ''}\n\nGiven that your edge is “${p.competitors.ourEdge.replace(/\.$/, '')}”, I wouldn’t race them on price. A better reply is to lower your free-delivery threshold for December only and lead with free gift-wrapping in your next two posts. That keeps your margin on the rest of the year.`;
-  } else if (/stock|wholesale|shop|prospect|scout|client/.test(t) && strong.length) {
-    keys = ['scout'];
-    reply = `Start with ${strong.slice(0, 3).map((r) => `${r.name} in ${r.location}`).join(', ')}. All three already buy from independent makers, which is the strongest sign they’ll consider you.\n\nSend each a short note with photos of your three best sellers and an offer of a small first order. The Scout has a ready-to-edit introduction for each of them.`;
-  } else if (/enquir|sales|orders|number|week|brief|revenue/.test(t) && s.briefs[0]) {
+  } else if (/competitor|rival|glow|offer|profhilo|changed/.test(t) && c) {
+    keys = ['changes', 'competitors'];
+    reply = `The biggest move this fortnight: ${c.summary} ${c.detail ?? ''}\n\nGiven that your edge is “${p.competitors.ourEdge.replace(/\.$/, '')}”, I wouldn’t race them on price.`;
+  } else if (/number|week|brief|revenue|sales|orders/.test(t) && s.briefs[0]) {
     keys = ['brief', 'numbers'];
     const b = s.briefs[0];
     reply = `${b.headline}\n\n${b.paragraphs[0]}\n\nIf you only do one thing this week: ${lower1(b.actions[0])}.`;
-  } else if (/website|site|slow|form|broken|link|speed/.test(t) && s.watcher) {
+  } else if (/website|site|slow|form|broken|link|speed|contact/.test(t) && s.watcher) {
     keys = ['site', 'speed'];
-    reply = `Two things matter most on your website. Your contact page returned an error on Sunday, so enquiries may be going missing; fix that first. Then shrink your product photos: Google’s test says it could make your site about 1.8 seconds faster on phones, and you can do it yourself.`;
+    reply = `Two things matter most on your website. Your contact page has no form, email or phone link, so people Google sends there have no way to reach you; fix that first. Then shrink your before-and-after photos: Google’s test says it could make your site about 1.4 seconds faster on phones, and you can do it yourself.`;
   } else if (/goal|target|plan|focus|priorit/.test(t)) {
-    keys = ['profile', 'leads', 'tenders'];
-    reply = `Your goal is ${lower1(p.goals.target)}. With ${p.goals.timePerWeek.toLowerCase()} a week, I’d spend it like this:\n\nFollow up with ${due?.name ?? 'your waiting leads'} today and contact two new strong-fit shops. Then put an hour into the visitor centre contract, which on its own could cover a good part of your target.`;
+    keys = ['profile', 'scout', 'competitors'];
+    reply = `Your goal is ${lower1(p.goals.target)}; you’re at 12 a week. With ${p.goals.timePerWeek.toLowerCase()} a week, I’d spend it like this:\n\nReply to the two public posts the Scout found (ten minutes, drafts ready). Fix the contact page. Then ask your last ten happy clients for a Google review: on the public figures Glow looks busier than you, and reviews are where people choosing on Google see the difference.`;
   } else {
-    keys = ['site', 'reviews', 'leads', 'tenders'];
-    reply = `Here’s where ${p.business.name} stands: one urgent website issue (the contact page), a 2-star review waiting for a reply, a follow-up due today and a public contract worth £18,000 that fits you well.\n\nAsk me about any of those, your competitors, your numbers or who to contact next.`;
+    keys = ['site', 'reviews', 'prices', 'scout'];
+    reply = `Here’s where ${p.business.name} stands: one urgent website issue (the contact page), a 3-star review waiting for a calm reply, ${cmp ? `${cmp.rows.filter((r) => r.yours && r.listedBy).length} treatments compared like for like with the clinics nearby` : 'your prices compared with the clinics nearby'}, and ${first ? `${first.results.length} public posts` : 'posts'} from people nearby asking for what you do.\n\nAsk me about any of those, your competitors, your prices or who to contact next.`;
   }
-  const cat = sourceCatalogue({ site: 'today', reviews: 'today', brief: s.briefs[0] ? `week of ${new Date(s.briefs[0].weekOf).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}` : '' });
+  const cat = sourceCatalogue({ site: 'today', reviews: 'today', prices: 'today', brief: s.briefs[0] ? `week of ${new Date(s.briefs[0].weekOf).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}` : '' });
   const sources = keys.map((k) => cat.find((c) => c.key === k)!).filter(Boolean).map(({ title, url }) => ({ title, url }));
   return { id: uid('m_'), role: 'agent', text: reply, at: new Date().toISOString(), sources };
 }
@@ -510,10 +418,19 @@ export function createDemoApi(): Api {
         const found = s.scout.find((x) => x.id === search.id);
         if (!found) return;
         found.status = 'ready';
+        const town0 = s.profile!.business.location.split(',')[0].trim() || 'your town';
+        const what0 = String(s.profile!.offer.bestSeller || 'what we offer').split(/[,.(]/)[0].trim().toLowerCase();
         if (kind === 'local') {
-          found.results = localResults(s.profile!.business.location.split(',')[0].trim() || 'your town');
-          found.summary = 'Six local opportunities in the next few months. The first three suit you best. In the demo these are samples; in your account each comes with its source.';
+          found.results = localResults(town0);
+          found.summary = 'Five local opportunities in the next few months. The first three suit you best. In the demo these are samples; in your account each comes with its source.';
           found.results.forEach((x) => addValue('opportunity_found', 'scout', `Opportunity found: ${x.name}`));
+        } else if (kind === 'demand' || kind === 'communities' || kind === 'partners' || kind === 'corporate') {
+          found.results = kind === 'demand' ? demandResults(town0, what0) : kind === 'communities' ? communityResults(town0) : kind === 'partners' ? partnerResults(town0) : corporateResults(town0);
+          found.summary = kind === 'demand' ? 'Public posts from the last month where people nearby are asking for what you do. Each has a reply drafted; you post it yourself. In the demo these are samples; in your account each links to the real thread.'
+            : kind === 'communities' ? 'Local groups where your customers talk to each other, each with an introduction to post once you have joined. In the demo these are samples.'
+            : kind === 'partners' ? 'Nearby businesses whose customers are yours at the right moment, none of which offers what you do. In the demo these are samples with example links.'
+            : 'Employers and venues nearby with staff perks or wellness programmes you could be part of. In the demo these are samples.';
+          found.results.forEach((x) => addValue(kind === 'demand' || kind === 'communities' ? 'opportunity_found' : 'lead_found', 'scout', `${kind === 'demand' || kind === 'communities' ? 'Opportunity' : 'Lead'} found: ${x.name.slice(0, 60)}`));
         } else {
           const excluded = s.feedback.filter((f) => f.verdict === 'not_relevant' && f.itemKind === 'lead').map((f) => f.text.split(',')[0].trim().toLowerCase());
           found.results = makeResults(query.length * 31 + area.length, 8, excluded);

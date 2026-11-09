@@ -748,3 +748,54 @@ tr:last-child td { border-bottom: 0; }
 .pricelist-input { min-height: 140px; font-variant-numeric: tabular-nums; }
 .pricelist-preview { border: 1px solid var(--line); border-radius: var(--r-md); padding: 12px 16px; background: var(--surface); display: grid; gap: 8px; }
 .pricelist-preview .comp-services td:last-child { font-weight: 600; }
+
+/* Prices and You vs them */
+.cmp-table th:first-child, .cmp-table td:first-child { position: sticky; left: 0; background: var(--surface); z-index: 1; box-shadow: 1px 0 0 var(--line); }
+.cmp-table th.col-you, .cmp-table td.col-you { background: var(--forest-wash); font-weight: 600; }
+.cmp-table td:first-child { white-space: normal; min-width: 160px; }
+.vs-table td { white-space: nowrap; }
+.vs-table .stars { vertical-align: -2px; }
+.cmp-why { display: block; font-size: 11px; color: var(--ink-faint); white-space: normal; max-width: 160px; line-height: 1.3; }
+.price-pos { display: inline-block; font-size: var(--t-xs); font-weight: 600; padding: 3px 8px; border-radius: 999px; background: var(--canvas); color: var(--ink-soft); white-space: normal; max-width: 220px; line-height: 1.3; }
+.price-pos.is-above { background: var(--brass-tint); color: var(--brass); }
+.price-pos.is-below { background: #E3EFE7; color: var(--good); }
+.price-you-link { font-weight: 700; }
+.row-gap td { color: var(--ink-soft); }
+.gap-row { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 14px 20px; }
+.verdict { padding: 18px 24px; }
+.comp-presence a { color: var(--ink); }
+.comp-presence .tag { margin-right: 2px; }
+.comp-distance { font-weight: 600; color: var(--ink); }
+.reach-warn { color: var(--brass); font-weight: 600; }
+.gap-6 { gap: 6px; }
+@media (max-width: 640px) { .gap-row { padding: 12px 16px; } .verdict { padding: 16px 18px; } }
+
+/* Scout: consumer focuses */
+.mode-switch-wrap { flex-wrap: wrap; }
+.lead-next { display: flex; gap: 10px; align-items: flex-start; }
+.lead-next .tag { flex-shrink: 0; margin-top: 1px; }
+.lead-actions .btn-secondary svg { width: 16px; height: 16px; }
+@media (max-width: 640px) { .mode-switch-wrap { display: flex; width: 100%; } .mode-btn { flex: 1 1 auto; justify-content: center; } }
+
+/* Prices: one row per treatment, competitors as chips beneath (fits every width) */
+.price-row { padding: 18px 24px 16px; display: grid; gap: 12px; }
+.price-row.is-gap { background: var(--forest-wash); }
+.price-row-head { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(180px, 240px); gap: 12px 24px; align-items: center; }
+.price-row-you { display: flex; flex-direction: column; gap: 2px; align-items: flex-end; min-width: 72px; }
+.price-row-figure { font-family: var(--serif); font-size: 1.5rem; font-weight: 600; line-height: 1.1; }
+.price-row-figure a { color: var(--ink); text-decoration-color: var(--line-strong); }
+.price-row-figure .price-cmp { display: inline; margin-left: 6px; font-family: var(--sans); font-size: 11px; font-weight: 600; color: var(--ink-faint); }
+.price-row-pos { display: flex; justify-content: flex-end; }
+.price-chips { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.price-chips li { display: inline-flex; align-items: baseline; gap: 8px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); font-size: var(--t-xs); }
+.price-chips li.is-none { color: var(--ink-faint); border-style: dashed; background: transparent; }
+.price-chip-name { color: var(--ink-soft); }
+.price-chip-value { font-weight: 700; color: var(--ink); }
+.price-chip-value a { color: inherit; text-decoration: none; border-bottom: 1px solid var(--line-strong); }
+.price-chip-value .price-cmp { display: inline; margin-left: 4px; font-weight: 500; color: var(--ink-faint); }
+@media (max-width: 760px) {
+  .price-row { padding: 16px 18px 14px; }
+  .price-row-head { grid-template-columns: minmax(0, 1fr) auto; }
+  .price-row-pos { grid-column: 1 / -1; justify-content: flex-start; }
+  .price-pos { max-width: none; }
+}

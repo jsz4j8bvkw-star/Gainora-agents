@@ -7,6 +7,7 @@ import { analyseWeeks, metricsFor } from '../../shared/metrics';
 import { planToday } from '../../shared/today';
 import { humanError, parseJsonBody } from './errors';
 import { POLL_DELAYS_MS } from '../../shared/chat';
+import { decodeFocus } from '../../shared/scout';
 
 declare const __SUPABASE_URL__: string;
 declare const __SUPABASE_ANON_KEY__: string;
@@ -139,7 +140,7 @@ const firstNumber = (s: string): number | null => {
 const mapAction = (r: any): Action => ({ id: r.id, text: r.text, agent: r.agent, done: r.done, createdAt: r.created_at });
 const mapAlert = (r: any): Alert => ({ id: r.id, agent: r.agent, level: r.level, title: r.title, body: r.body, link: r.link ?? undefined, at: r.created_at, read: r.read });
 const mapBrief = (r: any): BriefReport => ({ id: r.id, weekOf: r.week_of, headline: r.headline, paragraphs: r.paragraphs, actions: r.actions, createdAt: r.created_at });
-const mapSearch = (r: any): ScoutSearch => ({ id: r.id, query: r.query, area: r.area, kind: r.kind ?? 'customers', createdAt: r.created_at, status: r.status, summary: r.summary ?? undefined, error: r.error ?? undefined, results: r.results ?? [] });
+const mapSearch = (r: any): ScoutSearch => { const d = decodeFocus(r.query, r.kind); return { id: r.id, query: d.query, area: r.area, kind: d.focus, createdAt: r.created_at, status: r.status, summary: r.summary ?? undefined, error: r.error ?? undefined, results: r.results ?? [] }; };
 const mapMsg = (r: any): ChatMessage => ({ id: r.id, role: r.role, text: r.text, at: r.created_at, sources: r.sources ?? undefined });
 const mapLead = (r: any): Lead => ({
   id: r.id, name: r.name, location: r.location ?? '', website: r.website ?? '', reason: r.reason ?? '', source: r.source ?? { title: '', url: '' },

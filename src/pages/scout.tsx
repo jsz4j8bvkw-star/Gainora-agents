@@ -9,6 +9,7 @@ import { queryParam } from '../lib/router';
 import { pending } from '../components/palette';
 import { isDue } from '../../shared/leads';
 import { daysLeft } from '../../shared/tenders';
+import { defaultFocus, FOCUS, FOCUS_BY_MODE, scoutMode } from '../../shared/scout';
 import type { Lead, LeadStage, ScoutKind, ScoutResult, ScoutSearch, Tender } from '../lib/types';
 
 type Tab = 'research' | 'leads' | 'contracts';
@@ -21,6 +22,7 @@ export function Scout() {
 }
 
 function ScoutPage() {
+  const { profile } = useApp();
   const [tab, setTab] = useState<Tab>(initialTab);
   const leads = useLoad(() => api.listLeads());
   const tenders = useLoad(() => api.listTenders());
@@ -32,7 +34,9 @@ function ScoutPage() {
       <div className="page-head">
         <div>
           <h1 className="title">The Scout</h1>
-          <p className="lede">Finds people to sell to: businesses that fit, public contracts you could win and local opportunities. Then it helps you follow up until you hear back.</p>
+          <p className="lede">{scoutMode(profile) === 'consumer'
+            ? 'Finds where your next customers already are: people asking for what you do, the local groups they talk in, the businesses that could refer them, the events they go to. Every lead has a source and a next step; you do the posting and the talking.'
+            : 'Finds people to sell to: businesses that fit, public contracts you could win and local opportunities. Then it helps you follow up until you hear back.'}</p>
         </div>
       </div>
       <Tabs label="Scout sections" value={tab} onChange={setTab} tabs={[
@@ -52,22 +56,26 @@ function ScoutPage() {
 /* ---------- Research ---------- */
 function suggestionsFor(p: ReturnType<typeof useApp>['profile'], kind: ScoutKind): string[] {
   const town = p.business.location.split(',')[0].trim() || 'my area';
-  if (kind === 'local') return ['Markets and fairs in the next three months', `Business networking near ${town}`, 'Local awards worth entering', 'Events where my customers go'];
-  const list: string[] = [];
-  if (/wholesale|b2b/i.test(p.goals.focus) || p.offer.salesChannels.includes('Wholesale')) list.push('Independent shops that could stock our products');
-  list.push(`Businesses near ${town} that could refer customers to us`);
-  if (p.customers.areas.includes('Across the UK')) list.push('UK businesses that buy what we sell for staff or client gifts');
-  list.push('Cafés, hotels and venues that could use what we sell');
-  return list.slice(0, 4);
+  const what = String(p.offer.bestSeller || p.offer.products || 'what we offer').split(/[,.(]/)[0].trim().toLowerCase();
+  if (kind === 'customers') {
+    const list: string[] = [];
+    if (/wholesale|b2b/i.test(p.goals.focus) || p.offer.salesChannels.includes('Wholesale')) list.push('Independent shops that could stock our products');
+    list.push(`Businesses near ${town} that could refer customers to us`);
+    if (p.customers.areas.includes('Across the UK')) list.push('UK businesses that buy what we sell for staff or client gifts');
+    list.push('Cafés, hotels and venues that could use what we sell');
+    return list.slice(0, 4);
+  }
+  return FOCUS[kind].suggestions(town, what).slice(0, 4);
 }
 
 function Research({ onLeadAdded }: { onLeadAdded: () => void }) {
   const { profile } = useApp();
   const { data, setData, error, loading, reload } = useLoad(() => api.listScout());
+  const mode = scoutMode(profile);
   const [selected, setSelected] = useState<string | null>(null);
-  const [kind, setKind] = useState<ScoutKind>('customers');
+  const [kind, setKind] = useState<ScoutKind>(defaultFocus(mode));
   const [query, setQuery] = useState(() => { const q = pending.scout ?? ''; pending.scout = null; return q; });
-  const [area, setArea] = useState(profile.customers.areas.includes('Local') ? profile.business.location.split(',').slice(-1)[0].trim() : 'United Kingdom');
+  const [area, setArea] = useState(mode === 'consumer' || profile.customers.areas.includes('Local') ? (profile.business.location.split(',')[0].trim() || 'United Kingdom') : 'United Kingdom');
   const [starting, setStarting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [intro, setIntro] = useState<{ result: ScoutResult; text: string | null } | null>(null);
@@ -90,7 +98,7 @@ function Research({ onLeadAdded }: { onLeadAdded: () => void }) {
 
   const start = async (e?: any) => {
     e?.preventDefault();
-    const q = query.trim() || (kind === 'local' ? 'Local events, markets and opportunities for my business' : '');
+    const q = query.trim() || (kind === 'local' ? 'Local events, markets and opportunities for my business' : kind !== 'customers' ? suggestionsFor(profile, kind)[0] : '');
     if (q.length < 8) { setFormError('Describe who you’re looking for in a few words.'); return; }
     setFormError(null); setStarting(true);
     try {
@@ -121,6 +129,8 @@ function Research({ onLeadAdded }: { onLeadAdded: () => void }) {
   };
 
   const openIntro = async (r: ScoutResult) => {
+    // Public posts and groups come with their reply or introduction already written; partners get one drafted now.
+    if (r.draft) { setIntro({ result: r, text: r.draft }); return; }
     setIntro({ result: r, text: null });
     try { setIntro({ result: r, text: await api.draftIntro(current!.id, r.id) }); }
     catch { setIntro(null); toast('Couldn’t write the introduction. Try again.'); }
@@ -138,27 +148,34 @@ function Research({ onLeadAdded }: { onLeadAdded: () => void }) {
   const visible = (current?.results ?? []).filter((r) => !r.dismissed);
   const strong = visible.filter((r) => r.fit === 'strong');
   const possible = visible.filter((r) => r.fit !== 'strong');
-  const isLocal = current?.kind === 'local';
+  const focus: ScoutKind = current?.kind ?? 'customers';
+  const isLocal = focus === 'local';
+  const isPeople = focus === 'demand' || focus === 'communities';
+  const toLeads = focus === 'customers' || focus === 'partners' || focus === 'corporate';
+  const meta = FOCUS[focus];
 
   const Row = ({ r }: { r: ScoutResult }) => (
     <article className="lead">
       <div className="stack gap-4" style={{ minWidth: 0 }}>
-        <h3 className="lead-name">{r.name}</h3>
-        <div className="small muted">{r.when ? <><Icon name="clock" className="inline-icon" />{r.when}{r.location ? `, ${r.location}` : ''}</> : <>{r.location}{r.website && <>, <a href={r.website} target="_blank" rel="noreferrer">{hostOf(r.website)}</a></>}</>}</div>
+        <h3 className="lead-name">{focus === 'demand' ? `“${r.name}”` : r.name}</h3>
+        <div className="small muted row gap-8 wrap">
+          {r.platform && <span className="tag tag-plain">{r.platform}</span>}
+          {r.when ? <span><Icon name="clock" className="inline-icon" />{r.when}{r.location ? `, ${r.location}` : ''}</span> : <span>{r.location}{r.website && <>, <a href={r.website} target="_blank" rel="noreferrer">{hostOf(r.website)}</a></>}</span>}
+        </div>
       </div>
       <div className="lead-actions">
-        {isLocal
+        <a className="btn btn-secondary btn-small" href={r.source.url} target="_blank" rel="noreferrer"><Icon name="external" />{focus === 'demand' ? 'Open the post' : focus === 'communities' ? 'Open the group' : isLocal ? 'Open the event' : 'Open the page'}</a>
+        {meta.draftLabel && <Button kind="secondary" small icon="send" onClick={() => openIntro(r)}>{meta.draftLabel}</Button>}
+        {isLocal || isPeople
           ? <Button kind={r.saved ? 'primary' : 'secondary'} small icon={r.saved ? 'check' : 'bookmark'} onClick={() => saveOpportunity(r)}>{r.saved ? 'Saved' : 'Save'}</Button>
-          : <>
-            <Button kind="secondary" small icon="send" onClick={() => openIntro(r)}>Draft introduction</Button>
-            <Button kind={r.saved ? 'primary' : 'secondary'} small icon={r.saved ? 'check' : 'plus'} busy={adding === r.id} disabled={r.saved} onClick={() => addLead(r)}>{r.saved ? 'In your leads' : 'Add to leads'}</Button>
-          </>}
+          : toLeads && <Button kind={r.saved ? 'primary' : 'secondary'} small icon={r.saved ? 'check' : 'plus'} busy={adding === r.id} disabled={r.saved} onClick={() => addLead(r)}>{r.saved ? 'In your leads' : 'Add to leads'}</Button>}
       </div>
       <p className="lead-reason voice">{r.reason}</p>
       {r.how && <p className="lead-reason small"><strong>How to take part:</strong> {r.how}</p>}
+      {r.next && <p className="lead-reason small lead-next"><span className="tag tag-forest">Next step</span><span>{r.next}</span></p>}
       <div className="lead-foot">
         <span className="xsmall faint">Source: <a href={r.source.url} target="_blank" rel="noreferrer">{r.source.title}</a></span>
-        <Feedback agent="scout" kind={isLocal ? 'opportunity' : 'lead'} id={r.id} text={`${r.name}, ${r.location}`} host={hostOf(r.website)} onNotRelevant={() => setTimeout(() => hide(r), 1200)} />
+        <Feedback agent="scout" kind={isLocal || isPeople ? 'opportunity' : 'lead'} id={r.id} text={`${r.name}, ${r.location}`} host={hostOf(r.website)} onNotRelevant={() => setTimeout(() => hide(r), 1200)} />
       </div>
     </article>
   );
@@ -166,17 +183,18 @@ function Research({ onLeadAdded }: { onLeadAdded: () => void }) {
   return (
     <>
       <form className="panel composer" onSubmit={start} noValidate aria-label="New search">
-        <div className="mode-switch" role="radiogroup" aria-label="What to look for">
-          {([['customers', 'Find customers'], ['local', 'Local opportunities']] as [ScoutKind, string][]).map(([k, label]) => (
+        <div className="mode-switch mode-switch-wrap" role="radiogroup" aria-label="What to look for">
+          {FOCUS_BY_MODE[mode].map((k) => (
             <button key={k} type="button" role="radio" aria-checked={kind === k} className="mode-btn" onClick={() => { setKind(k); setFormError(null); }}>
-              <Icon name={k === 'local' ? 'pin' : 'scout'} />{label}
+              <Icon name={k === 'local' ? 'pin' : k === 'demand' ? 'ask' : k === 'communities' ? 'profile' : k === 'partners' ? 'send' : k === 'corporate' ? 'contract' : 'scout'} />{FOCUS[k].label}
             </button>
           ))}
         </div>
+        <p className="small muted" style={{ maxWidth: '70ch', marginTop: -6 }}>{FOCUS[kind].blurb}</p>
         <div className="composer-row">
-          <Field label={kind === 'local' ? 'What kind of opportunities?' : 'Who are you looking for?'} error={formError ?? undefined} optional={kind === 'local'}>
+          <Field label={kind === 'local' ? 'What kind of opportunities?' : kind === 'demand' ? 'What are people asking for?' : kind === 'communities' ? 'What kind of groups?' : 'Who are you looking for?'} error={formError ?? undefined} optional={kind !== 'customers'}>
             {(id, d) => <input id={id} className="input" value={query} aria-describedby={d} aria-invalid={!!formError} onChange={(e: any) => setQuery(e.target.value)}
-              placeholder={kind === 'local' ? 'For example: markets, fairs and business events' : 'For example: gift shops that stock independent makers'} />}
+              placeholder={FOCUS[kind].placeholder} />}
           </Field>
           <Field label="Where">
             {(id) => <input id={id} className="input" value={area} onChange={(e: any) => setArea(e.target.value)} />}
@@ -188,7 +206,7 @@ function Research({ onLeadAdded }: { onLeadAdded: () => void }) {
         </div>
       </form>
 
-      {data.length === 0 && <div className="panel empty section"><h2 className="heading">No research yet</h2><p className="muted">Start with one of the suggestions above. Most searches take two to four minutes.</p></div>}
+      {data.length === 0 && <div className="panel empty section"><h2 className="heading">No research yet</h2><p className="muted">Start with one of the suggestions above. Most searches take two to four minutes. {mode === 'consumer' ? 'The Scout only reads public pages: no Facebook groups, no private profiles, and never a list of individuals. It finds the places where people are already asking, and you reply as yourself.' : ''}</p></div>}
 
       {data.length > 0 && (
         <section className="section" aria-labelledby="res-h">
@@ -197,7 +215,8 @@ function Research({ onLeadAdded }: { onLeadAdded: () => void }) {
             <div className="searches" role="group" aria-label="Past searches">
               {data.map((s) => (
                 <button key={s.id} className="search-pill" aria-pressed={s.id === current?.id} onClick={() => setSelected(s.id)}>
-                  <div className="q">{s.kind === 'local' && <Icon name="pin" className="inline-icon" />}{s.query}</div>
+                  <div className="xsmall faint">{FOCUS[s.kind ?? 'customers'].short}</div>
+                  <div className="q">{s.query}</div>
                   <div className="xsmall faint">{s.status === 'running' ? 'Researching now' : `${s.results.filter((r) => !r.dismissed).length} found, ${relative(s.createdAt)}`}</div>
                 </button>
               ))}
@@ -219,7 +238,7 @@ function Research({ onLeadAdded }: { onLeadAdded: () => void }) {
               {current.status === 'ready' && (
                 <>
                   {current.summary && <p className="voice" style={{ padding: '22px 24px 6px', maxWidth: '70ch' }}>{current.summary}</p>}
-                  {strong.length > 0 && <div style={{ padding: '18px 24px 0' }}><span className="tag tag-forest">{isLocal ? 'Best for you' : 'Strong fit'}</span></div>}
+                  {strong.length > 0 && <div style={{ padding: '18px 24px 0' }}><span className="tag tag-forest">{isLocal || isPeople ? 'Best for you' : 'Strong fit'}</span></div>}
                   <div className="rows">{strong.map((r) => <Row r={r} key={r.id} />)}</div>
                   {possible.length > 0 && <div style={{ padding: '18px 24px 0', borderTop: '1px solid var(--line)' }}><span className="tag tag-plain">Worth a look</span></div>}
                   <div className="rows">{possible.map((r) => <Row r={r} key={r.id} />)}</div>
@@ -231,22 +250,25 @@ function Research({ onLeadAdded }: { onLeadAdded: () => void }) {
       )}
 
       {intro && (
-        <DraftModal title={`Introduction to ${intro.result.name}`} text={intro.text} onClose={() => setIntro(null)}
-          note="Read it through and make it sound like you before sending. Gainora never sends emails for you. Add it to your leads and the Scout reminds you to follow up on day 4 and day 9."
-          extra={!isLocal && !intro.result.saved && <Button kind="secondary" icon="plus" busy={adding === intro.result.id} onClick={async () => { await addLead(intro.result); setIntro((x) => (x ? { ...x, result: { ...x.result, saved: true } } : x)); }}>Add to leads</Button>} />
+        <DraftModal title={focus === 'demand' ? 'Your reply, ready to post' : focus === 'communities' ? `Introduction for ${intro.result.name}` : `Introduction to ${intro.result.name}`} text={intro.text} onClose={() => setIntro(null)}
+          note={focus === 'demand' ? 'Read it through, make it sound like you, and post it yourself on the thread (the link is on the card). It says you run the business, which keeps it honest and within most sites’ rules. Gainora never posts for you.'
+            : focus === 'communities' ? 'Join the group first and read its rules on businesses posting; many have a set day for it. Then post this yourself, in your own words. Gainora never posts for you.'
+            : 'Read it through and make it sound like you before sending. Gainora never sends emails for you. Add it to your leads and the Scout reminds you to follow up on day 4 and day 9.'}
+          extra={toLeads && !intro.result.saved && <Button kind="secondary" icon="plus" busy={adding === intro.result.id} onClick={async () => { await addLead(intro.result); setIntro((x) => (x ? { ...x, result: { ...x.result, saved: true } } : x)); }}>Add to leads</Button>}
+          copyLabel={focus === 'demand' || focus === 'communities' ? 'Copy the post' : 'Copy text'} />
       )}
     </>
   );
 }
 
-function DraftModal({ title, text, note, onClose, extra }: { title: string; text: string | null; note: string; onClose: () => void; extra?: any }) {
+function DraftModal({ title, text, note, onClose, extra, copyLabel = 'Copy text' }: { title: string; text: string | null; note: string; onClose: () => void; extra?: any; copyLabel?: string }) {
   const toast = useToast();
   return (
     <Modal title={title} onClose={onClose}
       footer={text && <>
         {extra}
         <Button kind="secondary" onClick={onClose}>Close</Button>
-        <Button icon="copy" onClick={async () => toast((await copyText(text)) ? 'Copied. Paste it into your email.' : 'Select the text and copy it manually.')}>Copy text</Button>
+        <Button icon="copy" onClick={async () => toast((await copyText(text)) ? 'Copied. Paste it where you post or send it.' : 'Select the text and copy it manually.')}>{copyLabel}</Button>
       </>}>
       {text ? <pre>{text}</pre> : <Loading label="Writing" />}
       {text && <p className="xsmall faint" style={{ padding: '0 28px 20px' }}>{note}</p>}

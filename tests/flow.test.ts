@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { SAMPLE_PROFILE } from '../src/lib/demo';
+import { SAMPLE_PROFILE_SHOP as SAMPLE_PROFILE } from '../src/lib/demo';
 
 // A tiny in-memory stand-in for Supabase (auth + the PostgREST filters these functions use),
 // so the lead pipeline, feedback and contract functions run end to end without a real database.

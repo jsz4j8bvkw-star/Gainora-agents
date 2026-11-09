@@ -9,6 +9,7 @@ import { fallbackReply, type ReviewItem } from '../../shared/reviews';
 import type { Learned } from '../../shared/learning';
 import { ASK_SOURCE_LINE, block, parseSources, sourceCatalogue } from '../../shared/ask';
 import { failureReply } from '../../shared/chat';
+import { decodeFocus, looksLikeAPerson, PRIVATE_HOSTS, scrubPeople, type ScoutFocus } from '../../shared/scout';
 
 const rid = () => 'r_' + Math.random().toString(36).slice(2, 10);
 const isHttp = (u: unknown) => { try { const x = new URL(String(u)); return x.protocol === 'https:' || x.protocol === 'http:'; } catch { return false; } };
@@ -21,34 +22,44 @@ const learnedLines = (l: Learned | null | undefined) => (l && l.rules.length ? `
 export interface ScoutResultIn {
   name: string; location: string; website: string; fit: 'strong' | 'possible'; reason: string;
   source_url: string; source_title?: string; when?: string; how?: string;
+  platform?: string; next?: string; draft?: string;
 }
 
-/** Keeps only results that are real, sourced, not personal data, and not something the owner has ruled out. */
-export function cleanScoutResults(raw: ScoutResultIn[], profile: any, citedHosts: Set<string>, learned?: Learned | null): any[] {
+/**
+ * Keeps only results that are real, sourced, not personal data, and not something the owner has
+ * ruled out. For public posts and groups: no usernames, nothing that names a person, nothing cited
+ * from a page behind a login.
+ */
+export function cleanScoutResults(raw: ScoutResultIn[], profile: any, citedHosts: Set<string>, learned?: Learned | null, focus: ScoutFocus = 'customers'): any[] {
   const own = host(profile?.business?.website || '');
   const comps = new Set((profile?.competitors?.list || []).map((c: any) => host(c.url)));
   const excludedHosts = new Set(learned?.excludedHosts ?? []);
   const excludedNames = new Set(learned?.excludedNames ?? []);
   const seen = new Set<string>();
   const out: any[] = [];
-  for (const r of Array.isArray(raw) ? raw : []) {
-    if (!r || typeof r.name !== 'string' || !r.name.trim()) continue;
+  const people = focus === 'demand' || focus === 'communities';
+  for (const r0 of Array.isArray(raw) ? raw : []) {
+    if (!r0 || typeof r0.name !== 'string' || !r0.name.trim()) continue;
+    const r: ScoutResultIn = people ? { ...r0, name: scrubPeople(r0.name), reason: scrubPeople(r0.reason), draft: r0.draft ? scrubPeople(r0.draft) : r0.draft, next: r0.next ? scrubPeople(r0.next) : r0.next } : r0;
     if (!isHttp(r.source_url)) continue;
+    if (focus === 'demand' && PRIVATE_HOSTS.test(r.source_url)) continue; // a post behind a login was never read
+    if (people && looksLikeAPerson(r.name)) continue;
     const site = isHttp(r.website) ? r.website : '';
     const h = host(site);
     if (h && (h === own || comps.has(h) || excludedHosts.has(h))) continue;
     if (excludedNames.has(r.name.trim().toLowerCase())) continue;
-    const key = (h || r.name).toLowerCase();
+    const key = (focus === 'demand' ? r.source_url : h || r.name).toLowerCase();
     if (seen.has(key)) continue;
-    if (PERSONAL.test(`${r.reason} ${r.name}`)) continue;
+    if (PERSONAL.test(`${r.reason} ${r.name} ${r.draft || ''} ${r.next || ''}`)) continue;
     if (citedHosts.size && !citedHosts.has(host(r.source_url)) && !(h && citedHosts.has(h))) continue; // must come from what the search actually returned
-    if (hasBanned(r.reason)) continue;
+    if (hasBanned(`${r.reason} ${r.draft || ''}`)) continue;
     seen.add(key);
     out.push({
-      id: rid(), name: r.name.trim().slice(0, 120), location: String(r.location || '').slice(0, 80), website: site,
+      id: rid(), name: r.name.trim().slice(0, 160), location: String(r.location || '').slice(0, 80), website: site,
       fit: r.fit === 'strong' ? 'strong' : 'possible', reason: String(r.reason || '').slice(0, 400),
       // "How to take part" may quote an organiser's email or phone: point to the source page instead.
       ...(r.when ? { when: String(r.when).slice(0, 80) } : {}), ...(r.how ? { how: String(r.how).replace(new RegExp(PERSONAL.source, 'gi'), 'the contact details on the event page').slice(0, 300) } : {}),
+      ...(r.platform ? { platform: String(r.platform).slice(0, 60) } : {}), ...(r.next ? { next: String(r.next).slice(0, 300) } : {}), ...(r.draft ? { draft: String(r.draft).slice(0, 1200) } : {}),
       source: { title: String(r.source_title || host(r.source_url)).slice(0, 140), url: r.source_url }, saved: false,
     });
   }
@@ -75,28 +86,72 @@ Rules:
 Finish with JSON only, in this shape:
 {"summary": "two sentences", "results": [{"name": "", "location": "town", "website": "https:// (organiser or event page)", "fit": "strong|possible", "when": "date or timing as published", "how": "how to take part", "reason": "why it suits this business", "source_url": "https://", "source_title": ""}]}`;
 
+const PEOPLE_RULES = `People rules (strict): never include a person's name, username, handle, photo, email or phone; never quote more of a post than the question itself; nothing from Facebook groups, Instagram, TikTok, WhatsApp or any page that needs a login. The owner replies or posts in person, as themselves, and says they run the business.`;
+
+const DEMAND_PROMPT = `You are The Scout, researching for a UK business whose customers are the public. Use web search to find PUBLIC posts and threads where people near the owner's area are asking for recommendations, prices or advice about what the owner offers: Reddit (local subreddits), public forums, Mumsnet and Netmums threads, Nextdoor public pages, Quora, Google and Yell Q&A, local news comment sections.
+Rules:
+- Every result is a public post or thread, found in search, with source_url the exact page. Prefer the last 12 months; give when it was posted if the page says.
+- name = the question as asked (short); platform = where ("Reddit r/Crewe", "Mumsnet", "Nextdoor"); location = the place mentioned.
+- reason = why this is worth answering for this owner, from the post itself.
+- next = the concrete step: "Reply on the thread with…", "Comment with your price range and a link to your booking page".
+- draft = a short, honest public reply (under 70 words) the owner can post themselves: helpful first, declares that they run the business, no hard sell, no invented prices or claims.
+${PEOPLE_RULES}
+Finish with JSON only: {"summary": "two sentences", "results": [{"name": "", "platform": "", "location": "", "when": "", "fit": "strong|possible", "reason": "", "next": "", "draft": "", "source_url": "https://", "source_title": ""}]}`;
+
+const COMMUNITY_PROMPT = `You are The Scout, researching for a UK business whose customers are the public. Use web search to find local groups and communities where the owner's customers talk to each other: community Facebook groups (by public name and link only), local forums, Nextdoor neighbourhoods, WhatsApp community pages, women's and mums' networks, WI and village groups, business networking groups, local subreddits.
+Rules:
+- Only groups you found in search; source_url is the public page that shows the group exists (its public landing page, a directory, a council or news page). Never read or quote anything from inside a group.
+- name = the group; platform = Facebook group, forum, Nextdoor…; location = its area; website = its public link if there is one.
+- reason = why its members are likely customers, from what the page says (area, who it is for, size if published).
+- next = the step: "Join, read the rules on self-promotion, then post the introduction when the group allows it".
+- draft = a short, honest introduction (under 80 words) the owner posts themselves after joining: who they are, where, what they do, one useful offer of help (a free question or advice), no discount unless the owner's profile mentions one.
+${PEOPLE_RULES}
+Finish with JSON only: {"summary": "two sentences", "results": [{"name": "", "platform": "", "location": "", "website": "", "fit": "strong|possible", "reason": "", "next": "", "draft": "", "source_url": "https://", "source_title": ""}]}`;
+
+const PARTNER_PROMPT = `You are The Scout, finding REFERRAL PARTNERS for a UK business whose customers are the public: nearby businesses whose customers are the owner's customers at the right moment (for an aesthetics clinic: hairdressers and salons that do not offer injectables, bridal shops, wedding venues and planners, photographers, gyms and personal trainers, physios, dentists, boutiques, spas and hotels). Use web search.
+Rules:
+- Only real, independent businesses in or near the owner's area, found in search, with the page as source_url. Never the owner's own business or their competitors.
+- reason = the evidence on the page that makes them a fit (who their customers are, what they offer, that they don't do what the owner does) and the referral idea in one sentence.
+- next = the concrete step ("Email the owner with the introduction and offer a referral card for their clients").
+- Do not guess revenue, size or contact names. No personal contact details.
+Finish with JSON only: {"summary": "two sentences", "results": [{"name": "", "location": "town", "website": "https://", "fit": "strong|possible", "reason": "", "next": "", "source_url": "https://", "source_title": ""}]}`;
+
+const CORPORATE_PROMPT = `You are The Scout, finding WORKPLACE AND WELLNESS TIE-UPS for a UK business whose customers are the public: employers, hotels, gyms, members' clubs and wellbeing providers near the owner's area that run staff perks, wellness days, member offers or partner programmes the owner could join or pitch. Use web search.
+Rules:
+- Only real organisations found in search, with the page as source_url. Point to the page that shows the programme (a wellbeing page, a perks scheme, an events page).
+- reason = the evidence on the page and the idea (a staff discount day, a wellness-day stand, a member offer).
+- next = the concrete step and who to approach by role (HR, general manager), never by name.
+- No personal contact details, no guesses about budgets.
+Finish with JSON only: {"summary": "two sentences", "results": [{"name": "", "location": "town", "website": "https://", "fit": "strong|possible", "reason": "", "next": "", "source_url": "https://", "source_title": ""}]}`;
+
+const PROMPT_BY_FOCUS: Record<ScoutFocus, string> = { customers: CUSTOMER_PROMPT, local: LOCAL_PROMPT, demand: DEMAND_PROMPT, communities: COMMUNITY_PROMPT, partners: PARTNER_PROMPT, corporate: CORPORATE_PROMPT };
+const NOUN_BY_FOCUS: Record<ScoutFocus, string> = { customers: 'matches', local: 'opportunities', demand: 'public posts', communities: 'groups', partners: 'partners', corporate: 'organisations' };
+
 export async function runScout(search: any, profile: any) {
-  const local = search.kind === 'local';
+  const { query, focus } = decodeFocus(search.query, search.kind);
+  const local = focus === 'local';
   try {
     const learned = await learnedFor(search.user_id);
     const r = await ai({
-      userId: search.user_id, agent: 'scout', maxTokens: 4000, webSearch: { maxUses: 8, country: 'GB' },
-      system: `${HOUSE_STYLE}\n${local ? LOCAL_PROMPT : CUSTOMER_PROMPT}${learnedLines(learned)}`,
-      messages: [{ role: 'user', content: `${profileContext(profile)}\n\nRequest: ${search.query}\nArea: ${search.area}\nFind up to 10 good matches.` }],
+      userId: search.user_id, agent: 'scout', maxTokens: 4500, webSearch: { maxUses: 8, country: 'GB' },
+      system: `${HOUSE_STYLE}\n${PROMPT_BY_FOCUS[focus]}${learnedLines(learned)}`,
+      messages: [{ role: 'user', content: `${profileContext(profile)}\n\nRequest: ${query}\nArea: ${search.area}\nFind up to 10 good ${NOUN_BY_FOCUS[focus]}.` }],
     });
     let parsed: any;
     try { parsed = extractJson(r.text); } catch { throw new Error('The research came back in an unexpected format.'); }
     const cited = new Set(r.citations.map((c) => host(c.url)).filter(Boolean));
-    const results = cleanScoutResults(parsed.results, profile, cited, learned);
+    const results = cleanScoutResults(parsed.results, profile, cited, learned, focus);
     const strong = results.filter((x) => x.fit === 'strong').length;
-    const noun = local ? 'opportunities' : 'matches';
+    const noun = NOUN_BY_FOCUS[focus];
     const summary = typeof parsed.summary === 'string' && !hasBanned(parsed.summary) ? parsed.summary.slice(0, 600) : `${results.length} ${noun} found. ${strong} are a strong fit.`;
     await db(`scout_searches?id=eq.${search.id}`, { method: 'PATCH', body: { status: results.length ? 'ready' : 'failed', results, summary, error: results.length ? null : 'Nothing found with a reliable public source. Try a broader description or area.' } });
     if (results.length) {
-      for (const x of results) await addValue(search.user_id, 'scout', local ? 'opportunity_found' : 'lead_found', `${local ? 'Opportunity' : 'Lead'} found: ${x.name}${x.location ? `, ${x.location}` : ''}`);
-      await addNote(search.user_id, 'scout', `For “${search.query}” I found ${results.length} ${noun}${strong ? `, ${strong} of them a strong fit` : ''}. The best place to start is ${results[0].name}${results[0].location ? ` in ${results[0].location}` : ''}.`);
-      await addAlert(search.user_id, 'scout', 'good', `${results.length} ${noun} found`, `For “${search.query}”. ${strong} strong fit.`);
-      if (strong && !local) await addActions(search.user_id, 'scout', [`Add the ${strong} strong-fit match${strong > 1 ? 'es' : ''} from “${search.query.slice(0, 60)}” to your leads`]);
+      const kind = local || focus === 'demand' || focus === 'communities' ? 'opportunity_found' : 'lead_found';
+      for (const x of results) await addValue(search.user_id, 'scout', kind, `${kind === 'opportunity_found' ? 'Opportunity' : 'Lead'} found: ${x.name}${x.location ? `, ${x.location}` : ''}`);
+      await addNote(search.user_id, 'scout', `For “${query}” I found ${results.length} ${noun}${strong ? `, ${strong} of them a strong fit` : ''}. The best place to start is ${results[0].name}${results[0].location ? ` in ${results[0].location}` : ''}.`);
+      await addAlert(search.user_id, 'scout', 'good', `${results.length} ${noun} found`, `For “${query}”. ${strong} strong fit.`);
+      if (strong && (focus === 'customers' || focus === 'partners' || focus === 'corporate')) await addActions(search.user_id, 'scout', [`Add the ${strong} strong-fit ${noun} from “${query.slice(0, 60)}” to your leads`]);
+      if (strong && focus === 'demand') await addActions(search.user_id, 'scout', [`Reply to the ${strong} public post${strong > 1 ? 's' : ''} asking for what you do (replies are drafted in The Scout)`]);
     }
   } catch (e: any) {
     await db(`scout_searches?id=eq.${search.id}`, { method: 'PATCH', body: { status: 'failed', error: e instanceof HttpError ? e.message : 'The research didn’t finish. Try again or reword your request.' } });

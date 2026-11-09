@@ -312,7 +312,7 @@ export function addSample(history: ReviewPoint[] | undefined, rating: number | n
 
 /* ---------- Booking platforms ---------- */
 /** Public booking sites a business's website often links to. Pages are read, never submitted. */
-export const BOOKING_HOSTS = ['fresha.com', 'treatwell.co.uk', 'treatwell.com', 'booksy.com', 'phorest.me', 'phorest.com', 'gettimely.com', 'bookedin.com', 'setmore.com', 'squareup.com', 'square.site', 'vagaro.com', 'ovatu.com', 'mindbodyonline.com', 'acuityscheduling.com', 'simplybook.it', 'simplybook.me', 'salonized.com', 'booking.timify.com', 'nailsbyme.com', 'bookwhen.com', 'resurva.com'];
+export const BOOKING_HOSTS = ['fresha.com', 'treatwell.co.uk', 'treatwell.com', 'booksy.com', 'phorest.me', 'phorest.com', 'pabau.com', 'pabau.me', 'gettimely.com', 'bookedin.com', 'setmore.com', 'squareup.com', 'square.site', 'vagaro.com', 'ovatu.com', 'mindbodyonline.com', 'acuityscheduling.com', 'simplybook.it', 'simplybook.me', 'salonized.com', 'booking.timify.com', 'nailsbyme.com', 'bookwhen.com', 'resurva.com'];
 
 const bookingHost = (h: string) => BOOKING_HOSTS.some((b) => h === b || h.endsWith('.' + b));
 const BOOKING_SKIP = /\/(login|signin|sign-in|account|cart|checkout)\b/i;
@@ -339,7 +339,7 @@ export function bookingLinks(html: string, pageUrl: string, max = 3): string[] {
 
 export const bookingPlatform = (url: string): string => {
   const h = hostOf(url);
-  const names: Record<string, string> = { 'fresha.com': 'Fresha', 'treatwell.co.uk': 'Treatwell', 'treatwell.com': 'Treatwell', 'booksy.com': 'Booksy', 'phorest.me': 'Phorest', 'phorest.com': 'Phorest', 'gettimely.com': 'Timely', 'setmore.com': 'Setmore', 'squareup.com': 'Square', 'square.site': 'Square', 'vagaro.com': 'Vagaro', 'ovatu.com': 'Ovatu', 'mindbodyonline.com': 'Mindbody', 'acuityscheduling.com': 'Acuity', 'simplybook.it': 'SimplyBook', 'simplybook.me': 'SimplyBook', 'salonized.com': 'Salonized', 'bookwhen.com': 'Bookwhen' };
+  const names: Record<string, string> = { 'fresha.com': 'Fresha', 'treatwell.co.uk': 'Treatwell', 'treatwell.com': 'Treatwell', 'booksy.com': 'Booksy', 'phorest.me': 'Phorest', 'phorest.com': 'Phorest', 'pabau.com': 'Pabau', 'pabau.me': 'Pabau', 'gettimely.com': 'Timely', 'setmore.com': 'Setmore', 'squareup.com': 'Square', 'square.site': 'Square', 'vagaro.com': 'Vagaro', 'ovatu.com': 'Ovatu', 'mindbodyonline.com': 'Mindbody', 'acuityscheduling.com': 'Acuity', 'simplybook.it': 'SimplyBook', 'simplybook.me': 'SimplyBook', 'salonized.com': 'Salonized', 'bookwhen.com': 'Bookwhen' };
   const hit = Object.keys(names).find((k) => h === k || h.endsWith('.' + k));
   return hit ? names[hit] : h;
 };
@@ -497,7 +497,8 @@ export function mergeTracked(
 
 /* ---------- What changed ---------- */
 const eid = (kind: string, key: string, at: string, extra = '') => `${kind}:${key}:${at.slice(0, 10)}${extra ? ':' + slug(extra).slice(0, 30) : ''}`;
-const lower1 = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
+/** Lower-cases a leading capital unless the word is a brand or an acronym (HydraFacial, LED, HIFU, BIAB, RF). */
+const lower1 = (s: string) => (/^[A-Z][A-Z]|^(HydraFacial|HIFU|LED|IPL|BIAB|PRP|RF|Profhilo|Sculptra|Morpheus8|Olaplex)\b/.test(s) ? s : s.charAt(0).toLowerCase() + s.slice(1));
 
 /** Events worth telling the owner about, from one competitor's previous and current state. */
 export function diffCompetitor(prev: TrackedCompetitor | undefined, next: TrackedCompetitor, you: { reviews30: number | null }, now = new Date()): ReachEvent[] {
@@ -584,7 +585,7 @@ export function adviseReach(list: TrackedCompetitor[], you: YouForAdvice, events
       out.push({ text: `${r.label}: you charge ${r.yours!.price}; the ${r.listedBy} nearby businesses that list it average ${money(r.localAvg!)} (from ${money(r.localMin!)} to ${money(r.localMax!)}). You are ${r.position}.`, action: gap.diff > 0 ? 'Make sure the page where that price is shown says what it includes (time, product, aftercare, your qualifications); a higher price with a clear reason holds. If there is no reason, decide whether the gap is deliberate.' : 'You are the cheaper option for this. Check the price still covers your time and product before you leave it; the gap is room to add value rather than a reason to cut further.' });
     }
     const missing = comparison.theyOfferYouDont.find((t) => t.by.length >= 2);
-    if (missing) out.push({ text: `${missing.by.length} businesses nearby price ${missing.label.charAt(0).toLowerCase() + missing.label.slice(1)} (${missing.by.slice(0, 3).map((b) => `${b.name} ${b.price}`).join(', ')}) and your list doesn’t show it.`, action: 'If you offer it, add it to your price list or booking page with a price; if you don’t, it is a sign of what people around you are being sold.' });
+    if (missing) out.push({ text: `${missing.by.length} businesses nearby price ${lower1(missing.label)} (${missing.by.slice(0, 3).map((b) => `${b.name} ${b.price}`).join(', ')}) and your list doesn’t show it.`, action: 'If you offer it, add it to your price list or booking page with a price; if you don’t, it is a sign of what people around you are being sold.' });
   }
 
   for (const c of list) {
@@ -622,4 +623,72 @@ export function newlyFound(prev: TrackedCompetitor[] | undefined, next: TrackedC
     summary: `New on Google near you: ${c.name}${c.distanceKm != null ? `, ${distanceLabel(c.distanceKm)}` : ''}${c.count != null ? ` (${c.count} review${c.count === 1 ? '' : 's'})` : ''}.`,
     detail: c.count != null && c.count < 10 ? 'A listing with few reviews is often a recent opening.' : undefined,
   }));
+}
+
+/* ---------- Size signals: how big or busy a business looks, from public figures only ---------- */
+export interface SizeSignals {
+  googleRating: number | null; googleReviews: number | null; reviews30: number | null;
+  venuePlatform: string | null; venueRating: number | null; venueReviews: number | null; team: number | null; treatments: number | null;
+  startingPrice: number | null;            // the lowest priced treatment listed (£0 and skipped lines never count)
+  igFollowers: number | null; igPosts30: number | null; igState: 'ok' | 'private' | 'unavailable' | 'none';
+  website: boolean; distanceKm: number | null;
+}
+
+const lowestPrice = (services: ServiceLine[]): number | null => {
+  const vals = services.map((s) => priceValue(s.price)).filter((v): v is number => v != null && v > 0);
+  return vals.length ? Math.min(...vals) : null;
+};
+
+/** The signals for a competitor, each from where the Watcher read it. */
+export function signalsFor(c: TrackedCompetitor, now = new Date()): SizeSignals {
+  const ig = c.social;
+  return {
+    googleRating: c.rating, googleReviews: c.count, reviews30: reviewsSince(c.history, 30, now),
+    venuePlatform: c.venue?.platform ?? null, venueRating: c.venue?.rating ?? null, venueReviews: c.venue?.reviews ?? null, team: c.venue?.team ?? null,
+    treatments: c.venue?.serviceCount ?? (c.services.length || null),
+    startingPrice: lowestPrice(c.services),
+    igFollowers: ig && !ig.error ? ig.followers : null, igPosts30: ig && !ig.error ? ig.postsLast30 : null,
+    igState: !c.instagram ? 'none' : ig?.error === 'not-business' ? 'private' : ig && !ig.error ? 'ok' : 'unavailable',
+    website: !!c.url, distanceKm: c.distanceKm ?? null,
+  };
+}
+
+/** The client's own signals, from their Google listing, booking page, Instagram and price list. */
+export function signalsForYou(input: { rating: number | null; count: number | null; history?: ReviewPoint[] | null; you?: CompetitorsState['you']; website?: string; instagram?: string }, now = new Date()): SizeSignals {
+  const y = input.you ?? {};
+  const ig = y.instagram;
+  return {
+    googleRating: input.rating, googleReviews: input.count, reviews30: reviewsSince(input.history, 30, now),
+    venuePlatform: y.venue?.platform ?? null, venueRating: y.venue?.rating ?? null, venueReviews: y.venue?.reviews ?? null, team: y.venue?.team ?? null,
+    treatments: y.venue?.serviceCount ?? (y.services?.length || null),
+    startingPrice: lowestPrice(y.services ?? []),
+    igFollowers: ig && !ig.error ? ig.followers : null, igPosts30: ig && !ig.error ? ig.postsLast30 : null,
+    igState: !input.instagram ? 'none' : ig?.error === 'not-business' ? 'private' : ig && !ig.error ? 'ok' : 'unavailable',
+    website: !!input.website, distanceKm: 0,
+  };
+}
+
+/**
+ * Plain words on how a competitor looks next to the client, from the signals both sides have.
+ * Never a claim about bookings or revenue: "looks" is the verb, and the reasons are listed.
+ */
+export function sizeVerdict(you: SizeSignals, them: SizeSignals): { text: string; bigger: string[]; smaller: string[] } {
+  const bigger: string[] = []; const smaller: string[] = [];
+  const cmp = (a: number | null, b: number | null, more: string, fewer: string, ratio = 1.25) => {
+    if (a == null || b == null) return;
+    if (b >= a * ratio && b - a >= 1) bigger.push(more); else if (a >= b * ratio && a - b >= 1) smaller.push(fewer);
+  };
+  cmp(you.googleReviews, them.googleReviews, 'more Google reviews', 'fewer Google reviews');
+  cmp(you.reviews30, them.reviews30, 'more new reviews this month', 'fewer new reviews this month', 1.5);
+  cmp(you.team, them.team, 'a bigger team', 'a smaller team');
+  cmp(you.igFollowers, them.igFollowers, 'more Instagram followers', 'fewer Instagram followers');
+  cmp(you.treatments, them.treatments, 'more treatments listed', 'fewer treatments listed');
+  cmp(you.venueReviews, them.venueReviews, `more ${them.venuePlatform || 'booking-page'} reviews`, `fewer ${them.venuePlatform || 'booking-page'} reviews`);
+  const known = [you.googleReviews != null && them.googleReviews != null, you.team != null && them.team != null, you.igFollowers != null && them.igFollowers != null, you.treatments != null && them.treatments != null].filter(Boolean).length;
+  const list = (xs: string[]) => xs.slice(0, 3).join(', ').replace(/, ([^,]*)$/, ' and $1');
+  if (!known) return { text: 'Not enough public figures on both sides to compare size yet.', bigger, smaller };
+  if (bigger.length && !smaller.length) return { text: `Looks bigger or busier than you: ${list(bigger)}.`, bigger, smaller };
+  if (smaller.length && !bigger.length) return { text: `Looks smaller or quieter than you: ${list(smaller)}.`, bigger, smaller };
+  if (bigger.length && smaller.length) return { text: `Mixed: ${list(bigger)}, but ${list(smaller)}.`, bigger, smaller };
+  return { text: 'Looks about the same size as you on the public figures.', bigger, smaller };
 }

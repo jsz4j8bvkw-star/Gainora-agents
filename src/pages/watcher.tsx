@@ -7,10 +7,12 @@ import { Feedback } from '../components/feedback';
 import { hostOf, relative, shortDate } from '../lib/format';
 import { Link, queryParam } from '../lib/router';
 import { priceValue } from '../../shared/prices';
-import { bookingPlatform, distanceLabel, reviewsSince } from '../../shared/competitors';
+import { bookingPlatform, distanceLabel, reviewsSince, signalsFor, signalsForYou, sizeVerdict, type SizeSignals } from '../../shared/competitors';
+import { locationSourceLabel, RADII_KM, townOf } from '../../shared/geo';
+import type { PriceSource } from '../../shared/treatments';
 import { socialLabel } from '../../shared/social';
 import { scoreLabel } from '../../shared/speed';
-import type { CompetitorChange, PlaceSummary, ReachEvent, ReviewItem, TrackedCompetitor, WatcherState } from '../lib/types';
+import type { CompetitorChange, CompetitorsState, PlaceSummary, ReachEvent, ReviewItem, TrackedCompetitor, WatcherState } from '../lib/types';
 
 const KIND: Record<CompetitorChange['kind'], { label: string; cls: string }> = {
   price: { label: 'Price change', cls: 'tag-brass' },
@@ -19,8 +21,8 @@ const KIND: Record<CompetitorChange['kind'], { label: string; cls: string }> = {
   'new-page': { label: 'New page', cls: 'tag-plain' },
 };
 
-type Tab = 'overview' | 'reviews' | 'speed' | 'competitors';
-const TABS: Tab[] = ['overview', 'reviews', 'speed', 'competitors'];
+type Tab = 'overview' | 'reviews' | 'speed' | 'competitors' | 'prices' | 'compare';
+const TABS: Tab[] = ['overview', 'reviews', 'speed', 'competitors', 'prices', 'compare'];
 const initialTab = (): Tab => { const t = queryParam('tab') as Tab | null; return t && TABS.includes(t) ? t : 'overview'; };
 
 export function Watcher() {
@@ -50,13 +52,15 @@ function WatcherPage() {
   const recentChanges = data.changes.filter((c) => Date.now() - new Date(c.at).getTime() < 7 * 86_400_000).length
     + (data.competitors?.events ?? []).filter((e) => Date.now() - new Date(e.at).getTime() < 7 * 86_400_000).length;
   const watched = data.competitors?.list.length ?? profile.competitors.list.filter((c) => c.name).length;
+  const cmp = data.competitors?.comparison;
+  const gaps = cmp ? cmp.theyOfferYouDont.length : 0;
 
   return (
     <div className="page">
       <div className="page-head">
         <div>
           <h1 className="title">The Watcher</h1>
-          <p className="lede">Keeps an eye on {(data.site || profile.business.website) ? `${hostOf(data.site || profile.business.website)}, ` : ''}your Google reviews and {watched} competitor{watched === 1 ? '' : 's'}, and tells you what to do about what it finds.</p>
+          <p className="lede">Keeps an eye on {(data.site || profile.business.website) ? `${hostOf(data.site || profile.business.website)}, ` : ''}your Google reviews and {watched} competitor{watched === 1 ? '' : 's'} around {townOf(profile.business.location) || 'you'}: their prices, reviews, team and Instagram, and what to do about what it finds.</p>
         </div>
         <div className="stack gap-4" style={{ alignItems: 'flex-end' }}>
           <Button kind="secondary" icon="refresh" busy={running} onClick={run}>{running ? (data.site ? 'Checking your site' : 'Checking') : 'Check now'}</Button>
@@ -69,6 +73,8 @@ function WatcherPage() {
         { id: 'reviews', label: 'Reviews', badge: newReviews ? `${newReviews} new` : null },
         { id: 'speed', label: 'Speed and Google', badge: bigFixes || null },
         { id: 'competitors', label: 'Competitors', badge: recentChanges || null },
+        { id: 'prices', label: 'Prices', badge: gaps || null },
+        { id: 'compare', label: 'You vs them' },
       ]} />
 
       <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`} className="tab-panel" key={tab}>
@@ -76,6 +82,8 @@ function WatcherPage() {
         {tab === 'reviews' && <Reviews data={data} setData={setData} />}
         {tab === 'speed' && <Speed data={data} setData={setData} />}
         {tab === 'competitors' && <Competitors data={data} setData={setData} />}
+        {tab === 'prices' && <PricesView data={data} />}
+        {tab === 'compare' && <CompareView data={data} />}
       </div>
     </div>
   );
@@ -415,8 +423,18 @@ const REACH_KIND: Record<ReachEvent['kind'], { label: string; cls: string }> = {
   offer: { label: 'New offer', cls: 'tag-forest' }, post: { label: 'Instagram post', cls: 'tag-forest' }, 'new-nearby': { label: 'New nearby', cls: 'tag-danger' }, followers: { label: 'Followers', cls: 'tag-plain' },
 };
 const n = (v: number | null | undefined) => (v == null ? '–' : v.toLocaleString('en-GB'));
+const money = (v: number | null | undefined) => (v == null ? '–' : `£${Number.isInteger(v) ? v : v.toFixed(2)}`);
 
 type TimelineItem = { id: string; at: string; competitor: string; label: string; cls: string; summary: string; detail?: string; url?: string; changeKind?: string; key?: string };
+
+/** Where the Watcher searched from and how far, in plain words; or why it has not searched yet. */
+function searchLine(comps: CompetitorsState | null | undefined, town: string): { text: string; tone: 'ok' | 'wait' | 'warn' } {
+  if (!comps) return { text: `The Watcher looks for businesses like yours around ${town || 'your location'} on its first check. Press Check now to run it.`, tone: 'wait' };
+  if (comps.foundFrom === 'none') return { text: 'The Watcher could not work out where you are, so it has not searched for businesses nearby yet. Add your postcode under Your business, or connect your Google listing on the Reviews tab, then press Check now.', tone: 'warn' };
+  if (!comps.foundAt) return { text: `The first search of businesses around ${town || 'you'} runs with your next check. Press Check now to run it.`, tone: 'wait' };
+  const radius = comps.foundRadiusKm ? `within ${comps.foundRadiusKm} km of ${locationSourceLabel(comps.foundFrom)}` : `around ${town || 'you'}`;
+  return { text: `Searched Google ${radius}${comps.foundRadiusKm && comps.foundRadiusKm > RADII_KM[0] ? ` (widened because fewer than five comparable businesses were found closer)` : ''}, ${relative(comps.foundAt)}. It searches again every month and whenever you press Find more nearby.`, tone: 'ok' };
+}
 
 function Competitors({ data, setData }: { data: WatcherState; setData: (w: WatcherState) => void }) {
   const { profile } = useApp();
@@ -435,9 +453,9 @@ function Competitors({ data, setData }: { data: WatcherState; setData: (w: Watch
   ].sort((a, b) => b.at.localeCompare(a.at));
   const names = ['All', ...new Set(timeline.map((c) => c.competitor))];
   const shown = (filter === 'All' ? timeline : timeline.filter((c) => c.competitor === filter)).filter((c) => !hidden.includes(c.id)).slice(0, 40);
-  const pt = data.prices;
-  const town = profile.business.location.split(',')[0].trim();
+  const town = townOf(profile.business.location);
   const typedN = list.filter((c) => c.source === 'typed').length; const foundN = list.length - typedN;
+  const search = searchLine(comps, town);
 
   const act = async (op: 'dismiss' | 'watch' | 'restore' | 'instagram', key: string, handle?: string, done?: string) => {
     setBusy(key + op);
@@ -456,14 +474,15 @@ function Competitors({ data, setData }: { data: WatcherState; setData: (w: Watch
     <>
       <section className="panel panel-pad reach-intro" aria-label="Who the Watcher follows">
         <div className="split" style={{ alignItems: 'flex-start' }}>
-          <div className="stack gap-4" style={{ maxWidth: '68ch' }}>
+          <div className="stack gap-8" style={{ maxWidth: '68ch' }}>
             <h2 className="heading">{list.length ? `Watching ${list.length} competitor${list.length === 1 ? '' : 's'}` : 'Finding your competition'}</h2>
-            <p className="muted">
-              {list.length
-                ? `${typedN ? `${typedN} you named` : ''}${typedN && foundN ? ' and ' : ''}${foundN ? `${foundN} found on Google near ${town || 'you'}` : ''}. Every day the Watcher reads their websites and public booking pages, follows their Google reviews${comps?.list.some((c) => c.social && !c.social.error) ? ' and their public Instagram posts' : ''}, and tells you what changed.`
-                : `The Watcher looks for businesses like yours around ${town || 'your location'} on Google and follows the closest ones, alongside any you name under Your business. The first search runs with your next check.`}
-              {comps?.checkedAt ? ` Checked ${relative(comps.checkedAt)}.` : ''}
-            </p>
+            {list.length > 0 && (
+              <p className="muted">
+                {`${typedN ? `${typedN} you named` : ''}${typedN && foundN ? ' and ' : ''}${foundN ? `${foundN} found on Google near ${town || 'you'}` : ''}. Every day the Watcher reads their websites and public booking pages, follows their Google reviews${list.some((c) => c.social && !c.social.error) ? ' and their public Instagram posts' : ''}, and tells you what changed.`}
+                {comps?.checkedAt ? ` Checked ${relative(comps.checkedAt)}.` : ''}
+              </p>
+            )}
+            <p className={`small ${search.tone === 'warn' ? 'reach-warn' : 'muted'}`}>{search.text}</p>
           </div>
           <Button kind="secondary" small icon="search" busy={finding} onClick={find}>Find more nearby</Button>
         </div>
@@ -514,46 +533,16 @@ function Competitors({ data, setData }: { data: WatcherState; setData: (w: Watch
         </div>
       </section>
 
-      <section className="section" aria-labelledby="price-h">
-        <div className="section-head"><h2 className="heading" id="price-h">Your prices against theirs</h2>{pt && <span className="small faint">Checked {relative(pt.checkedAt)}</span>}</div>
-        {!pt || pt.rows.length === 0 ? (
-          <div className="panel empty"><p className="muted">The Watcher compares your prices with your competitors’ once a week. It only shows prices it found on their websites or public booking pages, with a link to each one.</p></div>
-        ) : (
-          <div className="panel table-wrap">
-            <table className="price-table">
-              <caption className="sr-only">Your prices compared with competitors</caption>
-              <thead><tr><th>Product or service</th><th>You</th>{pt.competitors.map((c) => <th key={c}>{c}</th>)}</tr></thead>
-              <tbody>
-                {pt.rows.map((r) => {
-                  const mine = r.yours ? priceValue(r.yours.price) : null;
-                  return (
-                    <tr key={r.item}>
-                      <td><span className="price-item">{r.item}</span>{r.note && <span className="price-note">{r.note}</span>}</td>
-                      <td className="tabular price-you">{r.yours ? <a href={r.yours.url} target="_blank" rel="noreferrer">{r.yours.price}</a> : '–'}</td>
-                      {r.theirs.map((c, i) => {
-                        const v = c ? priceValue(c.price) : null;
-                        const cmp = mine != null && v != null ? (v < mine ? 'cheaper than you' : v > mine ? 'dearer than you' : 'same as you') : '';
-                        return <td key={i} className="tabular">{c ? <><a href={c.url} target="_blank" rel="noreferrer">{c.price}</a>{cmp && <span className={`price-cmp ${v! < mine! ? 'is-lower' : ''}`}>{cmp}</span>}</> : <span className="faint">–</span>}</td>;
-                      })}
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
-
       <section className="section" aria-labelledby="who-h">
         <div className="section-head"><h2 className="heading" id="who-h">Who you’re up against</h2><span className="small faint">{you.count != null ? `You: ${you.rating?.toFixed(1) ?? '–'} stars, ${n(you.count)} reviews${you.reviews30 != null ? `, ${you.reviews30} new in 30 days` : ''}` : ''}</span></div>
         {list.length === 0 ? (
-          <div className="panel empty"><p className="muted">Nobody yet. Name competitors under Your business, or wait for the Watcher’s first search of businesses near you.</p></div>
+          <div className="panel empty"><h3 className="heading">Nobody yet</h3><p className="muted mt-8">{search.tone === 'warn' ? search.text : 'Name competitors under Your business, or press Check now and the Watcher searches Google for businesses like yours around you, including ones with no website.'}</p></div>
         ) : (
           <div className="comp-grid">
             {list.map((c) => <CompetitorCard key={c.key} c={c} you={you} busy={busy} act={act} />)}
           </div>
         )}
-        <p className="xsmall faint mt-16">Everything here comes from a public page or a Google listing, with the link and the date it was seen. The Watcher never contacts a competitor, never logs in anywhere and never guesses a price. New Google reviews are a sign of how busy a business looks, not a count of their bookings.</p>
+        <p className="xsmall faint mt-16">Everything here comes from a public page, a public booking page or a Google listing, with the link and the date it was seen. The Watcher never contacts a competitor, never logs in anywhere and never guesses a price. Review counts, team size and followers are signs of how big or busy a business looks, not a count of their bookings.</p>
       </section>
 
       {(comps?.nearby.length || comps?.dismissed.length) ? (
@@ -564,7 +553,7 @@ function Competitors({ data, setData }: { data: WatcherState; setData: (w: Watch
               <div className="place-row" key={p.key}>
                 <div className="stack gap-4" style={{ minWidth: 0 }}>
                   <span className="subhead">{p.name}</span>
-                  <span className="small muted">{[p.address, distanceLabel(p.distanceKm)].filter(Boolean).join(' · ')}</span>
+                  <span className="small muted">{[distanceLabel(p.distanceKm), p.address, !p.url && !p.booking?.length ? (p.instagram ? 'Instagram only' : 'no website') : ''].filter(Boolean).join(' · ')}</span>
                   {p.rating != null && <span className="row gap-8 small"><Stars value={p.rating} />{p.rating.toFixed(1)} from {n(p.count)} reviews</span>}
                 </div>
                 <div className="row gap-8 wrap">
@@ -587,6 +576,22 @@ function Competitors({ data, setData }: { data: WatcherState; setData: (w: Watch
   );
 }
 
+/** Where a business can be found online, as links: website, booking page, Instagram, Facebook, Google listing. */
+function Presence({ c }: { c: TrackedCompetitor }) {
+  const items: { label: string; url: string }[] = [];
+  if (c.url) items.push({ label: hostOf(c.url), url: c.url });
+  for (const b of c.bookingPages.slice(0, 2)) items.push({ label: bookingPlatform(b), url: b });
+  if (c.instagram) items.push({ label: socialLabel('instagram', c.instagram), url: c.instagram });
+  if (c.facebook) items.push({ label: 'Facebook', url: c.facebook });
+  if (c.mapsUrl) items.push({ label: 'Google listing', url: c.mapsUrl });
+  return (
+    <div className="row gap-8 wrap small comp-presence">
+      {!c.url && <span className="tag tag-plain">No website</span>}
+      {items.map((i) => <a key={i.url} href={i.url} target="_blank" rel="noreferrer">{i.label}<span className="sr-only"> (opens in a new tab)</span></a>)}
+    </div>
+  );
+}
+
 function CompetitorCard({ c, you, busy, act }: { c: TrackedCompetitor; you: { rating: number | null; count: number | null; reviews30: number | null }; busy: string | null; act: (op: 'dismiss' | 'watch' | 'restore' | 'instagram', key: string, handle?: string, done?: string) => Promise<void> }) {
   const [more, setMore] = useState(false);
   const [editIg, setEditIg] = useState(false);
@@ -595,6 +600,7 @@ function CompetitorCard({ c, you, busy, act }: { c: TrackedCompetitor; you: { ra
   const ig = c.social;
   const services = more ? c.services : c.services.slice(0, 5);
   const igFindings = ig && !ig.error ? ig.findings.slice(0, more ? 8 : 2) : [];
+  const unreadable = (c.unreadable ?? []).map(bookingPlatform);
   return (
     <article className="panel comp-card" aria-label={c.name}>
       <div className="comp-head">
@@ -602,13 +608,15 @@ function CompetitorCard({ c, you, busy, act }: { c: TrackedCompetitor; you: { ra
           <h3 className="subhead">{c.name}</h3>
           <div className="row gap-8 wrap small muted">
             <span className={`tag ${c.source === 'found' ? 'tag-forest' : 'tag-plain'}`}>{c.source === 'found' ? 'Found nearby' : 'You named'}</span>
-            {(c.distanceKm != null || c.address) && <span>{[distanceLabel(c.distanceKm), c.address].filter(Boolean).join(' · ')}</span>}
+            {c.distanceKm != null ? <span className="comp-distance">{distanceLabel(c.distanceKm)}</span> : <span className="faint">distance not known</span>}
+            {c.address && <span>{c.address}</span>}
           </div>
         </div>
         {c.source === 'found'
           ? <Button kind="quiet" small busy={busy === c.key + 'dismiss'} onClick={() => act('dismiss', c.key, undefined, `${c.name} removed. The Watcher won’t suggest them again.`)}>Not a competitor</Button>
           : <Link to="/business" className="btn btn-quiet btn-small">Edit</Link>}
       </div>
+      <Presence c={c} />
 
       <div className="comp-facts">
         <div className="comp-fact">
@@ -616,6 +624,13 @@ function CompetitorCard({ c, you, busy, act }: { c: TrackedCompetitor; you: { ra
           <span className="comp-fact-value">{c.rating != null ? <><Stars value={c.rating} /> {c.rating.toFixed(1)}</> : <span className="faint">No listing matched</span>}</span>
           <span className="stat-note">{c.count != null ? `${n(c.count)} reviews` : ''}{theirs30 != null ? ` · ${theirs30} new in 30 days${you.reviews30 != null ? ` (you: ${you.reviews30})` : ''}` : ''}</span>
         </div>
+        {c.venue ? (
+          <div className="comp-fact">
+            <span className="stat-label">{c.venue.platform} page</span>
+            <span className="comp-fact-value">{c.venue.rating != null ? <>{c.venue.rating.toFixed(1)} <span className="small muted">from {n(c.venue.reviews)} reviews</span></> : <span className="small">{n(c.venue.reviews)} reviews</span>}</span>
+            <span className="stat-note">{[c.venue.team != null ? `team of ${c.venue.team}` : '', c.venue.serviceCount != null ? `${c.venue.serviceCount} treatments` : '', c.venue.priceRange ?? ''].filter(Boolean).join(' · ')}</span>
+          </div>
+        ) : null}
         <div className="comp-fact">
           <span className="stat-label">Instagram</span>
           {ig && !ig.error ? (
@@ -625,7 +640,7 @@ function CompetitorCard({ c, you, busy, act }: { c: TrackedCompetitor; you: { ra
           ) : c.instagram ? (
             <><span className="comp-fact-value small">{socialLabel('instagram', c.instagram)}</span><span className="stat-note">{ig?.error === 'unavailable' ? 'Instagram didn’t answer today; trying again tomorrow.' : 'Link only; public posts are read when Instagram reading is switched on.'}</span></>
           ) : (
-            <><span className="comp-fact-value small faint">Not found on their website</span><button type="button" className="link-btn xsmall" onClick={() => setEditIg(true)}>Add their handle</button></>
+            <><span className="comp-fact-value small faint">Not found on their pages</span><button type="button" className="link-btn xsmall" onClick={() => setEditIg(true)}>Add their handle</button></>
           )}
         </div>
       </div>
@@ -648,15 +663,21 @@ function CompetitorCard({ c, you, busy, act }: { c: TrackedCompetitor; you: { ra
       ) : null}
 
       <div className="comp-block">
-        <span className="stat-label">Services and prices{c.bookingPages.length ? ` (website and ${c.bookingPages.map(bookingPlatform).join(', ')})` : ''}</span>
+        <span className="stat-label">Treatments and prices{c.bookingPages.length ? ` (${[c.url ? 'website' : '', ...c.bookingPages.map(bookingPlatform)].filter(Boolean).join(', ')})` : ''}</span>
         {c.services.length === 0 ? (
-          <p className="small faint">{c.url ? (c.sourcesCheckedAt ? 'No prices published on the pages the Watcher could read.' : 'Pages not read yet; they are read with the next check.') : 'No website known, so no prices to read.'}</p>
+          <p className="small faint">
+            {unreadable.length ? `Their ${unreadable.join(' and ')} booking page only shows prices once a browser runs it, so the Watcher can’t read it.`
+              : c.url || c.bookingPages.length ? (c.sourcesCheckedAt ? 'No prices published on the pages the Watcher could read.' : 'Pages not read yet; they are read with the next check.')
+              : c.instagram ? 'No website or booking page known; prices are only read from public pages, not from Instagram posts.' : 'No website or booking page known, so no prices to read.'}
+          </p>
         ) : (
           <table className="comp-services"><tbody>
-            {services.map((s) => <tr key={s.url + s.name}><td>{s.name}</td><td className="tabular"><a href={s.url} target="_blank" rel="noreferrer">{s.price}</a></td></tr>)}
+            {services.map((s) => <tr key={s.url + s.name}><td>{s.name}{s.duration ? <span className="faint"> · {s.duration}</span> : null}</td><td className="tabular"><a href={s.url} target="_blank" rel="noreferrer" title={`${s.via === 'fresha' ? 'Fresha page' : s.via === 'schema' ? 'Page data' : 'Page text'}, seen ${shortDate(s.seenAt)}`}>{s.price}</a></td></tr>)}
           </tbody></table>
         )}
-        {(c.services.length > 5 || (ig && !ig.error && ig.findings.length > 2)) && <button type="button" className="link-btn small" onClick={() => setMore(!more)}>{more ? 'Show less' : `Show all ${c.services.length} services`}</button>}
+        {c.services.length > 0 && unreadable.length > 0 && <p className="xsmall faint">Their {unreadable.join(' and ')} page could not be read; prices above are from their other pages.</p>}
+        {c.venue?.partial && <p className="xsmall faint">Their {c.venue.platform} page lists {c.venue.serviceCount} treatments; the public page shows a selection.</p>}
+        {(c.services.length > 5 || (ig && !ig.error && ig.findings.length > 2)) && <button type="button" className="link-btn small" onClick={() => setMore(!more)}>{more ? 'Show less' : `Show all ${c.services.length} treatments`}</button>}
       </div>
 
       {ig && !ig.error && ig.posts.length > 0 && (
@@ -671,11 +692,7 @@ function CompetitorCard({ c, you, busy, act }: { c: TrackedCompetitor; you: { ra
       )}
 
       <div className="row gap-16 wrap comp-links">
-        {c.url && <a className="small" href={c.url} target="_blank" rel="noreferrer">Website<span className="sr-only"> (opens in a new tab)</span></a>}
-        {c.mapsUrl && <a className="small" href={c.mapsUrl} target="_blank" rel="noreferrer">Google listing</a>}
-        {c.instagram && <a className="small" href={c.instagram} target="_blank" rel="noreferrer">Instagram</a>}
-        {c.facebook && <a className="small" href={c.facebook} target="_blank" rel="noreferrer">Facebook</a>}
-        {c.instagram && !editIg && <button type="button" className="link-btn small" onClick={() => { setHandle(socialLabel('instagram', c.instagram!)); setEditIg(true); }}>Change handle</button>}
+        {c.instagram && !editIg && <button type="button" className="link-btn small" onClick={() => { setHandle(socialLabel('instagram', c.instagram!)); setEditIg(true); }}>Change Instagram handle</button>}
         {c.sourcesCheckedAt && <span className="xsmall faint">Pages read {relative(c.sourcesCheckedAt)}</span>}
       </div>
     </article>
@@ -687,4 +704,238 @@ function trend(h: { at: string; n: number }[]): string {
   const diff = last - first;
   if (!first || Math.abs(diff) < 5) return 'steady';
   return `${diff > 0 ? '+' : ''}${diff.toLocaleString('en-GB')} in ${Math.max(1, Math.round((new Date(h[h.length - 1].at).getTime() - new Date(h[0].at).getTime()) / 86_400_000))} days`;
+}
+
+/* ---------- Prices: your prices against theirs, treatment by treatment ---------- */
+function PricesView({ data }: { data: WatcherState }) {
+  const { profile } = useApp();
+  const comps = data.competitors;
+  const cmp = comps?.comparison;
+  const [group, setGroup] = useState('All');
+  const yourLines = comps?.you?.services?.length ?? 0;
+  const theirLines = (comps?.list ?? []).reduce((a, c) => a + c.services.length, 0);
+  const unreadable = (comps?.list ?? []).filter((c) => c.unreadable?.length).map((c) => `${c.name} (${c.unreadable!.map(bookingPlatform).join(', ')})`);
+  const ownUnreadable = comps?.you?.unreadable?.length ? bookingPlatform(comps.you.unreadable[0]) : '';
+  const priceEvents = (comps?.events ?? []).filter((e) => e.kind === 'price').slice(0, 12);
+  const legacy = data.prices && data.prices.rows.length > 0;
+
+  // Honest states before there is a table.
+  if (!cmp || (!cmp.rows.length && !cmp.theyOfferYouDont.length && !cmp.onlyYou.length)) {
+    return (
+      <>
+        <section className="panel panel-pad" aria-label="Prices">
+          <h2 className="heading">Your prices against the businesses nearby</h2>
+          {!yourLines ? (
+            <>
+              <p className="muted mt-8" style={{ maxWidth: '68ch' }}>The Watcher has none of your prices yet. {profile.offer.bookingUrl || profile.business.website ? 'It reads your booking page and website on each check; if they publish no prices,' : 'Add your public booking page or'} paste your price list under Your business and every treatment is compared with the clinics nearby, like for like.</p>
+              {ownUnreadable && <p className="booking-note is-warn mt-16"><Icon name="alert" /><span>Your {ownUnreadable} booking page only shows prices once a browser runs it, so the Watcher can’t read it. Paste your price list under Your business instead.</span></p>}
+              <Link to="/business" className="btn btn-secondary btn-small mt-16">Add my price list</Link>
+            </>
+          ) : !theirLines ? (
+            <p className="muted mt-8" style={{ maxWidth: '68ch' }}>{comps?.list.length ? `The Watcher has your ${yourLines} prices and is watching ${comps.list.length} competitor${comps.list.length === 1 ? '' : 's'}, but has not been able to read a price from any of them yet${unreadable.length ? ` (${unreadable.join('; ')} only show prices in a browser)` : ''}. It tries again on every check.` : 'Once the Watcher has found competitors nearby, their prices appear here next to yours.'}</p>
+          ) : (
+            <p className="muted mt-8" style={{ maxWidth: '68ch' }}>The Watcher has {yourLines} of your prices and {theirLines} from competitors, but none describe the same treatment at the same amount yet. Lines are matched by rule (1ml with 1ml, one area with one area), so nothing is compared loosely.</p>
+          )}
+        </section>
+        {legacy && <LegacyPrices data={data} />}
+      </>
+    );
+  }
+
+  const groups = ['All', ...new Set(cmp.rows.map((r) => r.group))];
+  const rows = group === 'All' ? cmp.rows : cmp.rows.filter((r) => r.group === group);
+  const compared = cmp.rows.filter((r) => r.yours && r.listedBy).length;
+  const above = cmp.rows.filter((r) => r.yours && r.localAvg != null && r.yours.value > r.localAvg).length;
+  const below = cmp.rows.filter((r) => r.yours && r.localAvg != null && r.yours.value < r.localAvg).length;
+  return (
+    <>
+      <section className="panel" aria-label="How your prices sit">
+        <div className="stats">
+          <div className="stat"><span className="stat-label">Treatments compared</span><span className="stat-value tabular">{compared}</span><span className="stat-note">{cmp.matched.yours} of your {cmp.matched.yoursTotal} prices matched a treatment someone nearby also lists</span></div>
+          <div className="stat"><span className="stat-label">Above the local average</span><span className="stat-value tabular">{above}</span><span className="stat-note">of {compared}</span></div>
+          <div className="stat"><span className="stat-label">Below the local average</span><span className="stat-value tabular">{below}</span><span className="stat-note">of {compared}</span></div>
+          <div className="stat"><span className="stat-label">They list, you don’t</span><span className="stat-value tabular">{cmp.theyOfferYouDont.length}</span><span className="stat-note">treatments priced nearby but not on your list</span></div>
+        </div>
+      </section>
+
+      <section className="section" aria-labelledby="pt-h">
+        <div className="section-head">
+          <h2 className="heading" id="pt-h">Treatment by treatment</h2>
+          <div className="row gap-12 wrap">
+            {groups.length > 2 && (
+              <label className="row gap-8 small"><span className="faint">Show</span>
+                <select className="select" style={{ minHeight: 36, padding: '4px 34px 4px 10px', width: 'auto' }} value={group} onChange={(e: any) => setGroup(e.target.value)}>{groups.map((g) => <option key={g}>{g}</option>)}</select>
+              </label>
+            )}
+            <span className="small faint">Checked {relative(cmp.checkedAt)}</span>
+          </div>
+        </div>
+        <div className="panel rows">
+          {rows.map((r) => (
+            <article className={`price-row ${!r.yours ? 'is-gap' : ''}`} key={r.id} aria-label={r.label}>
+              <div className="price-row-head">
+                <div className="stack gap-4" style={{ minWidth: 0 }}>
+                  <span className="price-item">{r.label}</span>
+                  <span className="price-note">{r.group}{r.localAvg != null ? ` · local average ${money(r.localAvg)}${r.localMin !== r.localMax ? ` (${money(r.localMin)} to ${money(r.localMax)})` : ''}, ${r.listedBy} nearby` : ' · nobody nearby lists a price'}</span>
+                </div>
+                <div className="price-row-you">
+                  <span className="stat-label">You</span>
+                  <span className="price-row-figure tabular">{r.yours ? <PriceCellLink p={r.yours} you /> : <span className="faint" title="You don’t list a price for this">—</span>}</span>
+                </div>
+                <div className="price-row-pos">
+                  {r.position ? <span className={`price-pos ${/above|dearest/.test(r.position) ? 'is-above' : /below|cheapest/.test(r.position) ? 'is-below' : ''}`}>{r.position.charAt(0).toUpperCase() + r.position.slice(1)}</span> : <span className="price-pos">Not on your list</span>}
+                </div>
+              </div>
+              <ul className="price-chips" aria-label={`${r.label}: competitors`}>
+                {cmp.competitors.map((c, i) => {
+                  const t = r.theirs[i];
+                  return (
+                    <li key={c.key} className={t ? '' : 'is-none'} title={t ? undefined : `${c.name} lists no price for this treatment on the pages the Watcher could read`}>
+                      <span className="price-chip-name">{c.name}</span>
+                      <span className="price-chip-value tabular">{t ? <PriceCellLink p={t} /> : '—'}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </article>
+          ))}
+        </div>
+        <p className="xsmall faint mt-16">Each price links to the page it was read from (hover for the date). “From” prices are minimums. Only the same treatment at the same amount is compared; consultations, deposits and top-ups never count. Averages are over the businesses nearby that list that treatment.</p>
+      </section>
+
+      <div className="grid-2 section">
+        <section aria-labelledby="gap-h">
+          <div className="section-head"><h2 className="heading" id="gap-h">They offer, you don’t</h2></div>
+          <div className="panel rows">
+            {cmp.theyOfferYouDont.length === 0 && <div className="empty"><p className="muted">Nothing priced nearby that your list doesn’t cover.</p></div>}
+            {cmp.theyOfferYouDont.slice(0, 12).map((t) => (
+              <div className="gap-row" key={t.id}>
+                <div className="stack gap-4"><span className="subhead">{t.label}</span><span className="small muted">{t.by.map((b) => `${b.name} ${b.price}`).join(' · ')}</span></div>
+                <span className="small tabular faint">{t.localAvg != null && t.by.length > 1 ? `avg ${money(t.localAvg)}` : ''}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+        <section aria-labelledby="only-h">
+          <div className="section-head"><h2 className="heading" id="only-h">You offer, nobody nearby lists a price</h2></div>
+          <div className="panel rows">
+            {cmp.onlyYou.length === 0 && <div className="empty"><p className="muted">Every treatment you price is also priced by someone nearby.</p></div>}
+            {cmp.onlyYou.slice(0, 12).map((t) => <div className="gap-row" key={t.id}><span className="subhead">{t.label}</span><span className="tabular">{t.price}</span></div>)}
+          </div>
+        </section>
+      </div>
+
+      <section className="section" aria-labelledby="moves-h">
+        <div className="section-head"><h2 className="heading" id="moves-h">Price changes</h2></div>
+        <div className="panel rows">
+          {priceEvents.length === 0 && <div className="empty"><p className="muted">No competitor price has changed since the Watcher started reading them. Changes appear here with the date and a link to the page.</p></div>}
+          {priceEvents.map((e) => (
+            <article className="change" key={e.id}>
+              <div className="change-when"><time dateTime={e.at}>{shortDate(e.at)}</time></div>
+              <div className="stack gap-4"><p className="voice">{e.summary}</p>{e.url && <a className="small" href={e.url} target="_blank" rel="noreferrer">See their page</a>}</div>
+            </article>
+          ))}
+        </div>
+      </section>
+    </>
+  );
+}
+
+function PriceCellLink({ p, you }: { p: PriceSource; you?: boolean }) {
+  const title = `${p.name}${p.via === 'owner' ? ', from your price list' : p.via === 'fresha' ? ', from their Fresha page' : ''}, read ${shortDate(p.seenAt)}`;
+  const inner = <>{p.price}{p.from ? <span className="price-cmp">minimum</span> : null}</>;
+  return p.url ? <a href={p.url} target="_blank" rel="noreferrer" title={title} className={you ? 'price-you-link' : undefined}>{inner}</a> : <span title={title}>{inner}</span>;
+}
+
+/** The older AI-paired table, shown only when there is no treatment-matched comparison yet (non-beauty businesses). */
+function LegacyPrices({ data }: { data: WatcherState }) {
+  const pt = data.prices!;
+  return (
+    <section className="section" aria-labelledby="price-h">
+      <div className="section-head"><h2 className="heading" id="price-h">Your prices against theirs</h2><span className="small faint">Checked {relative(pt.checkedAt)}</span></div>
+      <div className="panel table-wrap">
+        <table className="price-table">
+          <caption className="sr-only">Your prices compared with competitors</caption>
+          <thead><tr><th>Product or service</th><th>You</th>{pt.competitors.map((c) => <th key={c}>{c}</th>)}</tr></thead>
+          <tbody>
+            {pt.rows.map((r) => {
+              const mine = r.yours ? priceValue(r.yours.price) : null;
+              return (
+                <tr key={r.item}>
+                  <td><span className="price-item">{r.item}</span>{r.note && <span className="price-note">{r.note}</span>}</td>
+                  <td className="tabular price-you">{r.yours ? <a href={r.yours.url} target="_blank" rel="noreferrer">{r.yours.price}</a> : '–'}</td>
+                  {r.theirs.map((c, i) => {
+                    const v = c ? priceValue(c.price) : null;
+                    const cmp = mine != null && v != null ? (v < mine ? 'cheaper than you' : v > mine ? 'dearer than you' : 'same as you') : '';
+                    return <td key={i} className="tabular">{c ? <><a href={c.url} target="_blank" rel="noreferrer">{c.price}</a>{cmp && <span className={`price-cmp ${v! < mine! ? 'is-lower' : ''}`}>{cmp}</span>}</> : <span className="faint">–</span>}</td>;
+                  })}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+/* ---------- You vs them: the same public figures for you and each competitor ---------- */
+function CompareView({ data }: { data: WatcherState }) {
+  const { profile } = useApp();
+  const comps = data.competitors;
+  const list = comps?.list ?? [];
+  const you = signalsForYou({ rating: data.reviews?.rating ?? null, count: data.reviews?.count ?? null, history: data.reviews?.history, you: comps?.you, website: profile.business.website, instagram: profile.business.instagram });
+  const them = list.map((c) => ({ c, s: signalsFor(c) }));
+  const cols = [{ name: `${profile.business.name} (you)`, s: you, you: true, c: null as TrackedCompetitor | null }, ...them.map((t) => ({ name: t.c.name, s: t.s, you: false, c: t.c as TrackedCompetitor | null }))];
+  const dash = (why: string) => <span className="faint" title={why}>— <span className="cmp-why">{why}</span></span>;
+  const igCell = (s: SizeSignals, isYou: boolean) => s.igFollowers != null ? n(s.igFollowers) : s.igState === 'private' ? dash('personal or private account') : s.igState === 'none' ? dash(isYou ? 'no handle given' : 'no handle found') : dash('not read yet');
+  const metrics: { label: string; cell: (s: SizeSignals, isYou: boolean) => any }[] = [
+    { label: 'Distance', cell: (s, isYou) => isYou ? <span className="faint">here</span> : s.distanceKm != null ? distanceLabel(s.distanceKm).replace(' away', '') : dash('not known') },
+    { label: 'Google rating', cell: (s, isYou) => s.googleRating != null ? <span className="row gap-6"><Stars value={s.googleRating} /> {s.googleRating.toFixed(1)}</span> : dash(isYou ? 'connect your listing on the Reviews tab' : 'no listing matched') },
+    { label: 'Google reviews', cell: (s, isYou) => s.googleReviews != null ? n(s.googleReviews) : dash(isYou ? 'listing not connected' : 'no listing matched') },
+    { label: 'New Google reviews, 30 days', cell: (s) => s.reviews30 != null ? n(s.reviews30) : dash('needs a few weeks of watching') },
+    { label: 'Booking-page rating', cell: (s, isYou) => s.venueRating != null ? `${s.venueRating.toFixed(1)} (${s.venuePlatform})` : s.venueReviews != null ? dash(`${s.venuePlatform} shows no rating`) : dash(isYou ? 'add your booking page under Your business' : 'no booking page found') },
+    { label: 'Booking-page reviews', cell: (s, isYou) => s.venueReviews != null ? `${n(s.venueReviews)} (${s.venuePlatform})` : dash(isYou ? 'no booking page given' : 'no booking page found') },
+    { label: 'Team size', cell: (s, isYou) => s.team != null ? `${s.team} on ${s.venuePlatform}` : dash(isYou ? (profile.business.teamSize ? `${profile.business.teamSize} (your answer; no public figure)` : 'no public figure') : 'no public figure') },
+    { label: 'Treatments listed', cell: (s) => s.treatments != null ? n(s.treatments) : dash('no prices read') },
+    { label: 'Starting price', cell: (s) => s.startingPrice != null ? money(s.startingPrice) : dash('no prices read') },
+    { label: 'Instagram followers', cell: igCell },
+    { label: 'Instagram posts, 30 days', cell: (s) => s.igPosts30 != null ? n(s.igPosts30) : dash(s.igState === 'ok' ? 'not read yet' : 'not readable') },
+    { label: 'Website', cell: (s) => s.website ? 'Yes' : <span className="muted">No</span> },
+  ];
+  if (!list.length) {
+    return <section className="panel empty" aria-label="You vs them"><h2 className="heading">Nobody to compare with yet</h2><p className="muted mt-8">{searchLine(comps, townOf(profile.business.location)).text}</p></section>;
+  }
+  return (
+    <>
+      <section className="panel table-wrap" aria-label="You against each competitor">
+        <table className="cmp-table vs-table">
+          <caption className="sr-only">Public figures for you and each competitor</caption>
+          <thead><tr><th>Figure</th>{cols.map((c) => <th key={c.name} className={c.you ? 'col-you' : ''}>{c.name}</th>)}</tr></thead>
+          <tbody>
+            {metrics.map((m) => (
+              <tr key={m.label}><td>{m.label}</td>{cols.map((c) => <td key={c.name} className={`tabular ${c.you ? 'col-you' : ''}`}>{m.cell(c.s, c.you)}</td>)}</tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+      <section className="section" aria-labelledby="verdict-h">
+        <div className="section-head"><h2 className="heading" id="verdict-h">How each one looks next to you</h2><span className="small faint">From the public figures above, nothing else</span></div>
+        <div className="panel rows">
+          {them.map(({ c, s }) => {
+            const v = sizeVerdict(you, s);
+            return (
+              <div className="verdict" key={c.key}>
+                <div className="stack gap-4" style={{ minWidth: 0 }}>
+                  <span className="subhead">{c.name} <span className="small muted">{c.distanceKm != null ? `· ${distanceLabel(c.distanceKm)}` : ''}</span></span>
+                  <p className="voice" style={{ fontSize: '1.0625rem' }}>{v.text}</p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <p className="xsmall faint mt-16">“Looks bigger” means more public reviews, a bigger team shown on their booking page, more followers or more treatments listed. None of these is a count of their bookings or revenue, which no public page shows. Where a figure is missing, the reason is shown in its place.</p>
+      </section>
+    </>
+  );
 }

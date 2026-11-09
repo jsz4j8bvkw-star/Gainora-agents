@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { actionLink, planToday } from '../shared/today';
-import { SAMPLE_PROFILE } from '../src/lib/demo';
+import { SAMPLE_PROFILE_SHOP as SAMPLE_PROFILE } from '../src/lib/demo';
 import type { Lead, Tender, WatcherState } from '../src/lib/types';
 
 const DAY = 86_400_000;

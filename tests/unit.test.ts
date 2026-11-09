@@ -8,7 +8,7 @@ import { SECTIONS, emptyProfile, isValidUrl, validateSection, setPath } from '..
 import { verifyStripeSignature, agentForProduct, agentsForProduct } from '../netlify/lib/stripe';
 import { cleanScoutResults } from '../netlify/lib/agents';
 import { extractJson, hasBanned } from '../netlify/lib/ai';
-import { SAMPLE_PROFILE } from '../src/lib/demo';
+import { SAMPLE_PROFILE_SHOP as SAMPLE_PROFILE } from '../src/lib/demo';
 
 test('extractLinks keeps same-site http links, drops mailto/tel/fragments', () => {
   const html = `<a href="/about">A</a><a href='contact#form'>C</a><a href="https://other.com/x">X</a><a href="mailto:a@b.com">M</a><a href=tel:123>T</a><a href="https://www.shop.co.uk/p?x=1&amp;y=2">P</a>`;

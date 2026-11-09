@@ -10,7 +10,7 @@ import { countWeekAgo, fallbackReply, markNew, parsePlace, parseSearch, pickComp
 import { cleanScoutResults } from '../netlify/lib/agents';
 import { fetchNewTenders } from '../netlify/lib/contracts';
 import { checkReviews } from '../netlify/lib/watcher';
-import { SAMPLE_PROFILE } from '../src/lib/demo';
+import { SAMPLE_PROFILE_SHOP as SAMPLE_PROFILE } from '../src/lib/demo';
 
 const DAY = 86_400_000;
 const at = (iso: string) => new Date(iso);
