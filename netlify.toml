@@ -10,6 +10,11 @@
   status = 301
 
 [[redirects]]
+  from = "/login/"
+  to = "/signin/"
+  status = 301
+
+[[redirects]]
   from = "/contact/"
   to = "/book/"
   status = 301

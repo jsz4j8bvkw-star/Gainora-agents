@@ -1,5 +1,6 @@
 # Honoured by Netlify drag-and-drop deploys of dist/. Mirrors netlify.toml.
 /diagnosis/          /audit/               301
+/login/              /signin/              301
 /contact/            /book/                301
 /solutions/*         /packages/            301
 /custom-solutions/   /packages/#partner    301

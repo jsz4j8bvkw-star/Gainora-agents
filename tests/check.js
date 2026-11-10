@@ -201,7 +201,7 @@ for (const gone of ["shop/index.html", "solutions/index.html", "ai-training/inde
 
 // Required pages exist
 for (const p of ["index.html", "packages/index.html", "audit/index.html", "how-we-work/index.html", "calculator/index.html", "book/index.html",
-  "about/index.html", "privacy/index.html", "terms/index.html", "cookies/index.html", "thanks/index.html", "404.html", "robots.txt", "_headers", "_redirects",
+  "about/index.html", "privacy/index.html", "terms/index.html", "cookies/index.html", "thanks/index.html", "signin/index.html", "404.html", "robots.txt", "_headers", "_redirects",
   "assets/calc-data.js", "assets/calc.js", "assets/home.js", "assets/book.js"]) {
   check(fs.existsSync(path.join(DIST, p)), `missing ${p}`);
 }
