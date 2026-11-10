@@ -10,17 +10,18 @@ function run() {
   const calc = require(path.join(__dirname, "..", "src", "assets", "calc.js"));
   const data = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "calculator.json"), "utf8"));
   data.prices = {
-    commandCentre: 299, launchGrowMonthly: 595, launchGrowSetup: 1995,
-    cc: { never: { setup: 595, monthly: 249, minutes: 300 }, booking: { setup: 995, monthly: 399, minutes: 600 }, desk: { setup: 1995, monthly: 599, minutes: 1200 } },
+    launchGrowMonthly: 599, launchGrowSetup: 1995,
+    cc: { setup: 595, monthly: 399, minutes: 600, extraPer100: 25 },
     partnerMonthly: 950
   };
 
   // Tier picking follows the minutes included
-  check(calc.pickTier(0, data.prices.cc).id === "never", "0 minutes should pick Never Miss a Call");
-  check(calc.pickTier(300, data.prices.cc).id === "never", "300 minutes should still fit Never Miss a Call");
-  check(calc.pickTier(301, data.prices.cc).id === "booking", "301 minutes should pick Call to Booking");
-  check(calc.pickTier(600, data.prices.cc).id === "booking", "600 minutes should still fit Call to Booking");
-  check(calc.pickTier(601, data.prices.cc).id === "desk", "601 minutes should pick Full Front Desk");
+  // One Capture & Convert price; calls beyond the 600 minutes included cost £25 per 100
+  check(calc.pickTier(0, data.prices.cc).monthly === 399, "0 minutes is the normal price");
+  check(calc.pickTier(600, data.prices.cc).monthly === 399, "600 minutes still fits the price");
+  check(calc.pickTier(601, data.prices.cc).monthly === 424, "601 minutes adds one block of 100");
+  check(calc.pickTier(800, data.prices.cc).monthly === 449, "800 minutes adds two blocks");
+  check(calc.pickTier(800, data.prices.cc).extra === 50, "the extra is shown separately");
 
   // Worked example: a trades business, 2-5 people, with every figure given explicitly
   const input = {
@@ -37,11 +38,11 @@ function run() {
   check(near(r.cc.missedCalls, missed), `missed calls: ${r.cc.missedCalls}`);
   check(near(r.cc.lostCalls, lost), `lost calls: ${r.cc.lostCalls}`);
   check(near(r.cc.outOfHoursCalls, calls * 0.25), `out of hours calls: ${r.cc.outOfHoursCalls}`);
-  check(r.cc.tier.id === "never", `43 calls × 3 min = 130 min should pick Never Miss a Call, got ${r.cc.tier.id}`);
+  check(r.cc.tier.extra === 0, `43 calls × 3 min = 130 min fits the minutes included`);
   check(near(r.cc.high, lost * 1.0 * 0.4 * 200), `C&C high: ${r.cc.high}`);
   check(near(r.cc.low, lost * 0.5 * 0.4 * 200), `C&C low: ${r.cc.low}`);
   check(near(r.cc.likely, (r.cc.low + r.cc.high) / 2), "C&C likely is the midpoint");
-  check(r.cc.cost === 249, "C&C cost is the tier's monthly price");
+  check(r.cc.cost === 399, "C&C cost is the monthly price");
   check(r.cc.jobsToPay === 2, `jobs to pay for £249 at £200 should be 2, got ${r.cc.jobsToPay}`);
 
   // Launch & Grow uses the industry visit rate and adds the directory spend
@@ -50,7 +51,7 @@ function run() {
   check(near(r.lg.siteEnquiries, siteEnq), `site enquiries: ${r.lg.siteEnquiries}`);
   check(near(r.lg.high, siteEnq * 0.4 * 200 + 120), `L&G high: ${r.lg.high}`);
   check(near(r.lg.low, siteEnq * 0.5 * 0.4 * 200 + 120), `L&G low: ${r.lg.low}`);
-  check(r.lg.cost === 595 && r.lg.setup === 1995, "L&G prices from config");
+  check(r.lg.cost === 599 && r.lg.setup === 1995, "L&G prices from config");
 
   // Command Centre: hours back between a quarter and a half, valued at the owner's rate
   const adminMonth = 8 * 4.33;
@@ -65,7 +66,9 @@ function run() {
   check(near(team.partner.ownerHoursMonth, (8 + 7.3) * 4.33), `owner hours a month: ${team.partner.ownerHoursMonth}`);
 
   // Best package is the one with the highest value net of its monthly price
-  const nets = { "capture-convert": r.cc.likely - r.cc.cost, "launch-grow": r.lg.likely - r.lg.cost, "command-centre": r.cmd.likely - r.cmd.cost };
+  // Command Centre is included in every package, so it is never the recommendation on its own
+  check(r.cmd.cost === 0, "Command Centre costs nothing extra");
+  const nets = { "capture-convert": r.cc.likely - r.cc.cost, "launch-grow": r.lg.likely - r.lg.cost };
   const best = Object.keys(nets).sort((a, b) => nets[b] - nets[a])[0];
   check(r.best === best, `best package should be ${best}, got ${r.best}`);
 
@@ -82,7 +85,7 @@ function run() {
 
   // Zero enquiries means zero value, never an error
   const zero = calc.compute(Object.assign({}, input, { enquiriesPerWeek: 0 }), data);
-  check(zero.cc.likely === 0 && zero.cc.tier.id === "never", "zero enquiries gives zero and the smallest tier");
+  check(zero.cc.likely === 0 && zero.cc.cost === 399, "zero enquiries gives zero and the normal price");
 
   console.log(`  calculator: ${passes} passed, ${failures} failed`);
   return { passes, failures };

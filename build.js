@@ -112,14 +112,9 @@ function calculatorScript() {
   // Prices the calculator compares against come from site.config.json, never from calculator.json
   const num = s => Number(String(s).replace(/[^0-9.]/g, ""));
   data.prices = {
-    commandCentre: num(config.prices.commandCentre),
     launchGrowMonthly: num(config.prices.launchGrow.monthly),
     launchGrowSetup: num(config.prices.launchGrow.setup),
-    cc: {
-      never: { setup: num(config.prices.cc.never.setup), monthly: num(config.prices.cc.never.monthly), minutes: num(config.prices.cc.never.minutes) },
-      booking: { setup: num(config.prices.cc.booking.setup), monthly: num(config.prices.cc.booking.monthly), minutes: num(config.prices.cc.booking.minutes) },
-      desk: { setup: num(config.prices.cc.desk.setup), monthly: num(config.prices.cc.desk.monthly), minutes: num(config.prices.cc.desk.minutes) }
-    },
+    cc: { setup: num(config.prices.cc.setup), monthly: num(config.prices.cc.monthly), minutes: num(config.prices.cc.minutes), extraPer100: num(String(config.prices.cc.extraMinutes).split(" per ")[0]) },
     partnerMonthly: num(config.prices.partner.monthly)
   };
   return "window.GAINORA_CALC = " + JSON.stringify(data) + ";\n";

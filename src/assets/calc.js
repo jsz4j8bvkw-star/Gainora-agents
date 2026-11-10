@@ -15,10 +15,11 @@
     return isFinite(n) && n >= 0 ? n : fallback;
   }
 
+  /* One Capture & Convert price. Calls beyond the minutes included are charged in blocks of 100. */
   function pickTier(minutes, cc) {
-    if (minutes <= cc.never.minutes) return { id: "never", name: "Never Miss a Call", monthly: cc.never.monthly, setup: cc.never.setup, minutes: cc.never.minutes };
-    if (minutes <= cc.booking.minutes) return { id: "booking", name: "Call to Booking", monthly: cc.booking.monthly, setup: cc.booking.setup, minutes: cc.booking.minutes };
-    return { id: "desk", name: "Full Front Desk", monthly: cc.desk.monthly, setup: cc.desk.setup, minutes: cc.desk.minutes };
+    var extraBlocks = minutes > cc.minutes ? Math.ceil((minutes - cc.minutes) / 100) : 0;
+    var extra = extraBlocks * (cc.extraPer100 || 0);
+    return { id: "cc", name: "Capture & Convert", monthly: cc.monthly + extra, base: cc.monthly, extra: extra, setup: cc.setup, minutes: cc.minutes };
   }
 
   function findBy(list, id) {
@@ -106,7 +107,7 @@
       adminHoursMonth: adminMonth,
       hoursLow: adminMonth * b.hoursBackLow, hoursHigh: adminMonth * b.hoursBackHigh,
       low: adminMonth * b.hoursBackLow * hourValue, high: adminMonth * b.hoursBackHigh * hourValue,
-      cost: p.commandCentre
+      cost: 0                                         // included in every package
     };
     cmd.likely = (cmd.low + cmd.high) / 2;
 
@@ -119,8 +120,7 @@
 
     var ranked = [
       { id: "capture-convert", net: cc.likely - cc.cost },
-      { id: "launch-grow", net: lg.likely - lg.cost },
-      { id: "command-centre", net: cmd.likely - cmd.cost }
+      { id: "launch-grow", net: lg.likely - lg.cost }
     ].sort(function (a, b2) { return b2.net - a.net; });
 
     return { type: type, size: size, enquiries: enquiries, jobValue: jobValue, conversion: conv, cc: cc, lg: lg, cmd: cmd, partner: partner, best: ranked[0].id };
@@ -213,10 +213,10 @@
     var c = r.cc;
     return '<article class="calc-card' + (highlight ? " is-best" : "") + '" data-package="capture-convert">' +
       (highlight ? '<p class="calc-best">Biggest return for these figures</p>' : '') +
-      '<p class="calc-card-eyebrow">Capture &amp; Convert · ' + esc(c.tier.name) + '</p>' +
+      '<p class="calc-card-eyebrow">Capture &amp; Convert</p>' +
       '<h3>Calls you\'re losing today, answered</h3>' +
       '<p class="calc-figure"><span class="calc-amount" data-value="0"></span><span class="calc-per">a month in work, likely</span></p>' +
-      '<p class="calc-band">Between ' + money(c.low) + ' and ' + money(c.high) + ' a month, against ' + money(c.cost) + ' a month for ' + esc(c.tier.name) + '.' + (c.jobsToPay ? ' It pays for itself with ' + whole(c.jobsToPay) + (c.jobsToPay === 1 ? ' job' : ' jobs') + ' a month.' : "") + '</p>' +
+      '<p class="calc-band">Between ' + money(c.low) + ' and ' + money(c.high) + ' a month, against ' + money(c.cost) + ' a month' + (c.tier.extra ? ' (' + money(c.tier.base) + ' plus ' + money(c.tier.extra) + ' for calls beyond the ' + whole(c.tier.minutes) + ' minutes included)' : '') + ', with Command Centre included.' + (c.jobsToPay ? ' It pays for itself with ' + whole(c.jobsToPay) + (c.jobsToPay === 1 ? ' job' : ' jobs') + ' a month.' : "") + '</p>' +
       '<ul class="calc-how">' +
       '<li>About <strong>' + whole(c.calls) + '</strong> calls a month, of which <strong>' + whole(c.missedCalls) + '</strong> go unanswered and <strong>' + whole(c.lostCalls) + '</strong> callers leave no message.</li>' +
       '<li>With a receptionist answering every call, between half and all of those become enquiries; at your conversion rate that is <strong>' + one(c.customersLow) + ' to ' + one(c.customersHigh) + '</strong> extra customers a month at ' + money(r.jobValue) + ' each.</li>' +
@@ -234,7 +234,7 @@
       '<p class="calc-card-eyebrow">Launch &amp; Grow</p>' +
       '<h3>Enquiries from a website and profile you own</h3>' +
       '<p class="calc-figure"><span class="calc-amount" data-value="0"></span><span class="calc-per">a month, likely</span></p>' +
-      '<p class="calc-band">Between ' + money(l.low) + ' and ' + money(l.high) + ' a month, against ' + money(l.cost) + ' a month after ' + money(l.setup) + ' setup. Ad spend is extra and paid by you.</p>' +
+      '<p class="calc-band">Between ' + money(l.low) + ' and ' + money(l.high) + ' a month, against ' + money(l.cost) + ' a month after ' + money(l.setup) + ' setup, with Command Centre included. Ad spend is extra and paid by you.</p>' +
       '<ul class="calc-how">' +
       '<li>At <strong>' + whole(l.visits) + '</strong> visits a month and the <strong>' + esc(l.rulerIndustry) + '</strong> benchmark of ' + one(l.visitRate) + '% of visits becoming an enquiry, that is about <strong>' + one(l.siteEnquiries) + '</strong> enquiries a month from your own site.</li>' +
       '<li>At your conversion rate, <strong>' + one(l.customersLow) + ' to ' + one(l.customersHigh) + '</strong> customers a month at ' + money(r.jobValue) + ' each' + (l.directorySpend > 0 ? ', plus the <strong>' + money(l.directorySpend) + '</strong> a month you currently pay lead sites' : '') + '.</li>' +
@@ -244,20 +244,19 @@
       '</article>';
   }
 
-  function cardCmd(r, highlight) {
+  function cardCmd(r) {
     var c = r.cmd;
-    return '<article class="calc-card' + (highlight ? " is-best" : "") + '" data-package="command-centre">' +
-      (highlight ? '<p class="calc-best">Biggest return for these figures</p>' : '') +
-      '<p class="calc-card-eyebrow">Command Centre</p>' +
+    return '<article class="calc-card calc-card-quiet" data-package="command-centre">' +
+      '<p class="calc-card-eyebrow">Command Centre · included in every package</p>' +
       '<h3>Hours a month back from watching and checking</h3>' +
       '<p class="calc-figure"><span class="calc-amount" data-value="0"></span><span class="calc-per">hours a month, likely</span></p>' +
-      '<p class="calc-band">Between ' + one(c.hoursLow) + ' and ' + one(c.hoursHigh) + ' hours a month, worth ' + money(c.low) + ' to ' + money(c.high) + ' at your hourly value, against ' + money(c.cost) + ' a month.</p>' +
+      '<p class="calc-band">Between ' + one(c.hoursLow) + ' and ' + one(c.hoursHigh) + ' hours a month, worth ' + money(c.low) + ' to ' + money(c.high) + ' at your hourly value. No extra cost: it comes with Capture &amp; Convert, Launch &amp; Grow and the Partner.</p>' +
       '<ul class="calc-how">' +
       '<li>You spend about <strong>' + whole(c.adminHoursMonth) + '</strong> hours a month on admin and keeping an eye on things.</li>' +
       '<li>Command Centre takes over the watching, checking and chasing. We assume it hands back a quarter to a half of that time; the monthly report shows what it actually did.</li>' +
       '</ul>' +
       '<p class="calc-src">Source: ' + sourceLine("nerdwallet2025") + '. The quarter-to-half share is our assumption.</p>' +
-      '<a class="button ' + (highlight ? "button-primary" : "button-secondary") + '" href="' + bookHref(r, "command-centre") + '">Check these numbers on a 15-minute diagnostic</a>' +
+      '<a class="button button-secondary" href="' + bookHref(r, r.best) + '">Check these numbers on a 15-minute diagnostic</a>' +
       '</article>';
   }
 
@@ -279,9 +278,9 @@
     var best = focus || r.best;
     var html;
     if (mode === "mini") {
-      html = cardCC(r, true) + '<p class="calc-more"><a href="/calculator/?type=' + encodeURIComponent(r.type.id) + '&size=' + encodeURIComponent(r.size.id) + '">See all four packages and change every figure</a></p>';
+      html = cardCC(r, true) + '<p class="calc-more"><a href="/calculator/?type=' + encodeURIComponent(r.type.id) + '&size=' + encodeURIComponent(r.size.id) + '">See every package and change every figure</a></p>';
     } else {
-      html = cardCC(r, best === "capture-convert") + cardLG(r, best === "launch-grow") + cardCmd(r, best === "command-centre") + cardPartner(r);
+      html = cardCC(r, best === "capture-convert") + cardLG(r, best === "launch-grow") + cardCmd(r) + cardPartner(r);
     }
     box.innerHTML = html;
     var values = { "capture-convert": [r.cc.likely, money], "launch-grow": [r.lg.likely, money], "command-centre": [(r.cmd.hoursLow + r.cmd.hoursHigh) / 2, one], "partner": [r.partner.ownerHoursMonth, whole] };
@@ -297,7 +296,7 @@
     var typeId = params.get("type") || (data.types[0] && data.types[0].id);
     var sizeId = params.get("size") || "2-5";
     var focus = params.get("package");
-    if (focus && ["capture-convert", "launch-grow", "command-centre"].indexOf(focus) < 0) focus = null;
+    if (focus && ["capture-convert", "launch-grow"].indexOf(focus) < 0) focus = null;
     var state = defaultsFor(data, typeId, sizeId);
     var touched = {};
     var d = data.defaults;

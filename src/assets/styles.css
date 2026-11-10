@@ -787,3 +787,6 @@ h2 { font-weight: 500; }
   .sources-table td { border: 0; padding: 0; }
   .jump a { font-size: 0.8125rem; }
 }
+
+/* Capture & Convert: the note on custom pricing under the price cards */
+.cc-custom { margin-top: 16px; }

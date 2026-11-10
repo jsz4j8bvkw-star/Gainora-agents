@@ -134,17 +134,13 @@ const builtPrices = path.join(ROOT, ".build-prices.json");
 const P = fs.existsSync(builtPrices) ? JSON.parse(fs.readFileSync(builtPrices, "utf8")) : config.prices;
 for (const [label, price, pages] of [
   ["audit", P.audit, [home, packages, audit]],
-  ["Command Centre monthly", P.commandCentre, [home, packages]],
   ["Launch & Grow setup", P.launchGrow.setup, [home, packages]],
   ["Launch & Grow monthly", P.launchGrow.monthly, [home, packages]],
   ["bundle setup", P.bundle.setup, [packages]],
   ["bundle monthly", P.bundle.monthly, [packages]],
-  ["Never Miss a Call setup", P.cc.never.setup, [home, packages]],
-  ["Never Miss a Call monthly", P.cc.never.monthly, [home, packages]],
-  ["Call to Booking setup", P.cc.booking.setup, [home, packages]],
-  ["Call to Booking monthly", P.cc.booking.monthly, [home, packages]],
-  ["Full Front Desk setup", P.cc.desk.setup, [home, packages]],
-  ["Full Front Desk monthly", P.cc.desk.monthly, [home, packages]],
+  ["bundle monthly on home", P.bundle.monthly, [home]],
+  ["Capture & Convert setup", P.cc.setup, [home, packages]],
+  ["Capture & Convert monthly", P.cc.monthly, [home, packages]],
   ["Partner focused", P.partner.focused, [home, packages]],
   ["Partner core", P.partner.core, [home, packages]],
   ["Partner whole", P.partner.whole, [home, packages]],
@@ -225,7 +221,11 @@ for (const t of calcData.types) {
 const calcPage = read("calculator/index.html");
 for (const s of Object.values(calcData.sources)) check(calcPage.includes(s.url), `calculator page: source not listed: ${s.name}`);
 const calcDataJs = read("assets/calc-data.js");
-check(calcDataJs.includes(`"commandCentre":${Number(P.commandCentre.replace(/[^\d]/g, ""))}`), "calc-data.js: Command Centre price not taken from config");
+check(calcDataJs.includes(`"monthly":${Number(P.cc.monthly.replace(/[^\d]/g, ""))}`), "calc-data.js: Capture & Convert price not taken from config");
+// Command Centre is included in every package, never sold on its own (10 November 2026)
+check(P.commandCentre === undefined, "prices: Command Centre has its own price again");
+for (const [name, html] of [["home", home], ["packages", packages]]) check(/Command Centre included/i.test(html), `${name}: doesn't say Command Centre is included`);
+for (const t of ["Never Miss a Call", "Call to Booking", "Full Front Desk"]) check(!home.includes(t) && !packages.includes(t), `the old tier "${t}" is still shown`);
 
 // Calculator arithmetic
 const calcTests = require("./calc.test.js");

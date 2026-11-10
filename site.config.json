@@ -30,29 +30,34 @@
   "show": false
  },
  "prices": {
-  "_readme": "All prices ex-VAT. Keep them in step with the Gainora Offer Brief.",
+  "_readme": "All prices ex-VAT. The live prices come from Gainora admin → Prices; these are the fallback. Command Centre isn't sold on its own: it's included in every package.",
   "audit": "£495",
   "auditCreditDays": "30",
-  "commandCentre": "£299",
   "launchGrow": {
    "setup": "£1,995",
-   "monthly": "£595",
+   "monthly": "£599",
    "foundingSetup": "£1,495",
    "minimumMonths": "3"
   },
   "bundle": {
    "setup": "£2,295",
-   "monthly": "£795",
+   "monthly": "£849",
    "separateSetup": "£2,590",
-   "separateMonthly": "£844"
+   "separateMonthly": "£998"
   },
   "cc": {
-   "never": { "name": "Never Miss a Call", "setup": "£595", "monthly": "£249", "minutes": "300" },
-   "booking": { "name": "Call to Booking", "setup": "£995", "monthly": "£399", "minutes": "600" },
-   "desk": { "name": "Full Front Desk", "setup": "£1,995", "monthly": "£599", "minutes": "1,200" },
+   "name": "Capture & Convert",
+   "setup": "£595",
+   "monthly": "£399",
+   "minutes": "600",
    "extraMinutes": "£25 per 100 extra minutes",
    "minimumMonths": "3",
-   "founding": { "setup": "£495", "monthly": "£299", "months": "12", "clients": "3" }
+   "founding": {
+    "setup": "£495",
+    "monthly": "£299",
+    "months": "12",
+    "clients": "3"
+   }
   },
   "partner": {
    "audit": "£495",

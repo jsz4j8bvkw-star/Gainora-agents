@@ -1,8 +1,8 @@
-<!--meta {"title": "{brand} | More enquiries, none of them lost, a business that runs", "description": "Get found online, answer every call, know what is going on each week and fix how the business runs. Four packages for businesses of every kind, one fixed price each.", "path": "/", "nav": "home", "scripts": ["/assets/calc-data.js", "/assets/calc.js", "/assets/home.js"]} -->
+<!--meta {"title": "{brand} | More enquiries, none of them lost, a business that runs", "description": "Get found online, answer every call and fix how the business runs. Three packages, one fixed price each, with Command Centre included.", "path": "/", "nav": "home", "scripts": ["/assets/calc-data.js", "/assets/calc.js", "/assets/home.js"]} -->
 <section class="hero hero-statement">
   <div class="container">
     <h1>More enquiries. None of them lost. A business that runs without you doing everything.</h1>
-    <p class="lede">Four packages, one fixed price each: get found online, answer every call, know what's going on each week, and fix how the business runs. For businesses of every kind: trades, clinics, salons, agencies, shops, property and more.</p>
+    <p class="lede">Three packages, one fixed price each: get found online, answer every call and fix how the business runs, with a weekly watch on it all included. For businesses of every kind: trades, clinics, salons, agencies, shops, property and more.</p>
     <div class="actions">
       <a class="button button-primary" href="/book/">Book a 15-minute diagnostic</a>
       {{#if demo.phone}}<a class="button button-secondary" href="#receptionist">Ring our receptionist</a>{{/if}}
@@ -32,8 +32,8 @@
 <section class="section packages-home" id="packages" aria-labelledby="packages-title">
   <div class="container">
     <div class="split">
-      <h2 class="split-head" id="packages-title">Four packages. One fixed price each.</h2>
-      <p class="split-body lede">Each one solves a problem owners describe in the same words. Start with the one that sounds like you. Every price excludes VAT, and there's nothing else to buy.</p>
+      <h2 class="split-head" id="packages-title">Three packages. One fixed price each.</h2>
+      <p class="split-body lede">Each one solves a problem owners describe in the same words. Start with the one that sounds like you. Command Centre, our weekly watch on your business, is included in every package. Every price excludes VAT, and there's nothing else to buy.</p>
     </div>
 
     <div class="pkg-grid">
@@ -42,15 +42,15 @@
         <p class="pkg-quote">"I miss calls and enquiries, and I forget to follow up."</p>
         <h3 class="pkg-name">Capture &amp; Convert</h3>
         <p class="pkg-line">A receptionist that answers every call, day and night, and follow-ups that send themselves.</p>
-        <p class="pkg-price"><span class="amount">{{prices.cc.booking.monthly}}</span><span class="per">/month</span></p>
-        <p class="pkg-price-note">{{prices.cc.booking.name}}: {{prices.cc.booking.setup}} setup, {{prices.cc.booking.minutes}} minutes a month</p>
+        <p class="pkg-price"><span class="amount">{{prices.cc.monthly}}</span><span class="per">/month</span></p>
+        <p class="pkg-price-note">{{prices.cc.setup}} setup, {{prices.cc.minutes}} call minutes a month</p>
         <ul class="pkg-outcomes">
           <li>Every call answered, details taken, the customer texted a confirmation</li>
           <li>Urgent calls sent straight to your mobile</li>
           <li>Quotes chased, invoices reminded, reviews requested, automatically</li>
           <li>Appointments booked into your diary</li>
+          <li>Command Centre included</li>
         </ul>
-        <p class="pkg-tiers">Also {{prices.cc.never.name}}: {{prices.cc.never.setup}} setup, {{prices.cc.never.monthly}} a month. And {{prices.cc.desk.name}}: {{prices.cc.desk.setup}} setup, {{prices.cc.desk.monthly}} a month.</p>
         <a class="button button-primary" href="/packages/#capture-convert">See how it works</a>
       </article>
 
@@ -69,19 +69,19 @@
         <a class="button button-secondary" href="/packages/#launch-grow">See how it works</a>
       </article>
 
-      <article class="pkg-card" id="pkg-command-centre">
-        <p class="pkg-quote">"I don't know what's going on, and I have no time to find out."</p>
-        <h3 class="pkg-name">Command Centre</h3>
-        <p class="pkg-line">A weekly watch on your website, reviews and competitors, and a plain-English brief on what to do about it.</p>
-        <p class="pkg-price"><span class="amount">{{prices.commandCentre}}</span><span class="per">/month</span></p>
-        <p class="pkg-price-note">No setup fee. Cancel any time</p>
+      <article class="pkg-card" id="pkg-bundle">
+        <p class="pkg-quote">"I want more enquiries, and every one of them answered."</p>
+        <h3 class="pkg-name">Launch &amp; Grow with Capture &amp; Convert</h3>
+        <p class="pkg-line">Both packages together: found online, and every call answered and followed up.</p>
+        <p class="pkg-price"><span class="amount">{{prices.bundle.monthly}}</span><span class="per">/month</span></p>
+        <p class="pkg-price-note">{{prices.bundle.setup}} setup, instead of {{prices.bundle.separateMonthly}} a month bought separately</p>
         <ul class="pkg-outcomes">
-          <li>Website, speed and competitor checks every week</li>
-          <li>Google review replies drafted for you</li>
-          <li>Leads and follow-ups you'd otherwise forget, flagged</li>
-          <li>Weekly priorities, monthly results</li>
+          <li>Everything in Launch &amp; Grow</li>
+          <li>Everything in Capture &amp; Convert</li>
+          <li>One Command Centre showing the whole picture: visits, calls, bookings</li>
+          <li>One monthly call to go through the numbers</li>
         </ul>
-        <a class="button button-secondary" href="/packages/#command-centre">See how it works</a>
+        <a class="button button-secondary" href="/packages/#launch-grow">See how it works</a>
       </article>
 
       <article class="pkg-card" id="pkg-partner">

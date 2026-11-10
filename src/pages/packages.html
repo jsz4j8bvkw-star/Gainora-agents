@@ -1,13 +1,12 @@
-<!--meta {"title": "Packages and prices | {brand}", "description": "Four packages with fixed ex-VAT prices: Command Centre, Launch & Grow, Capture & Convert and Growth & Operations Partner, plus the £495 Business Audit.", "path": "/packages/", "nav": "packages"} -->
+<!--meta {"title": "Packages and prices | {brand}", "description": "Capture & Convert, Launch & Grow and Growth & Operations Partner at fixed ex-VAT prices, each with Command Centre included, plus the Business Audit.", "path": "/packages/", "nav": "packages"} -->
 <header class="page-head">
   <div class="container">
     <p class="breadcrumb"><a href="/">Home</a> / Packages</p>
-    <h1>Four packages. Fixed prices. Nothing else to buy.</h1>
-    <p class="lede">Every price on this page excludes VAT and is the price you pay. Each package has a 3-month minimum, then runs month to month, except Command Centre, which you can cancel any time.</p>
+    <h1>Three packages. Fixed prices. Command Centre included.</h1>
+    <p class="lede">Every price on this page excludes VAT and is the price you pay. Each package has a 3-month minimum, then runs month to month. Every package comes with Command Centre, our weekly watch on your business, at no extra cost.</p>
     <nav class="jump" aria-label="Jump to a package">
       <a href="#capture-convert">Capture &amp; Convert</a>
       <a href="#launch-grow">Launch &amp; Grow</a>
-      <a href="#command-centre">Command Centre</a>
       <a href="#partner">Growth &amp; Operations Partner</a>
       <a href="#audit">Business Audit</a>
     </nav>
@@ -17,17 +16,17 @@
 <section class="section">
   <div class="container">
     <table class="summary-table">
-      <caption class="visually-hidden">The four packages at a glance</caption>
+      <caption class="visually-hidden">The packages at a glance</caption>
       <thead><tr><th scope="col">Package</th><th scope="col">For the business that says</th><th scope="col">Setup</th><th scope="col">Monthly</th></tr></thead>
       <tbody>
-        <tr><th scope="row"><a href="#capture-convert">Capture &amp; Convert</a></th><td>"I miss calls and enquiries, and forget to follow up"</td><td>{{prices.cc.never.setup}}, {{prices.cc.booking.setup}} or {{prices.cc.desk.setup}}</td><td>{{prices.cc.never.monthly}}, {{prices.cc.booking.monthly}} or {{prices.cc.desk.monthly}}</td></tr>
+        <tr><th scope="row"><a href="#capture-convert">Capture &amp; Convert</a></th><td>"I miss calls and enquiries, and forget to follow up"</td><td>{{prices.cc.setup}}</td><td>{{prices.cc.monthly}}</td></tr>
         <tr><th scope="row"><a href="#launch-grow">Launch &amp; Grow</a></th><td>"Nobody finds me online" or "I'm paying for shared leads"</td><td>{{prices.launchGrow.setup}}</td><td>{{prices.launchGrow.monthly}}</td></tr>
-        <tr><th scope="row"><a href="#command-centre">Command Centre</a></th><td>"I don't know what's going on and have no time to find out"</td><td>None</td><td>{{prices.commandCentre}}</td></tr>
+        <tr><th scope="row"><a href="#launch-grow">Both together</a></th><td>"I want more enquiries, and every one of them answered"</td><td>{{prices.bundle.setup}}</td><td>{{prices.bundle.monthly}}</td></tr>
         <tr><th scope="row"><a href="#partner">Growth &amp; Operations Partner</a></th><td>"The business runs on me and it's breaking"</td><td>{{prices.partner.audit}} audit, then {{prices.partner.focused}}, {{prices.partner.core}} or {{prices.partner.whole}}</td><td>{{prices.partner.monthly}}</td></tr>
         <tr><th scope="row"><a href="#audit">Business Audit</a></th><td>"I need to know what to fix first"</td><td>{{prices.audit}}, credited back</td><td>None</td></tr>
       </tbody>
     </table>
-    <p class="small">All prices exclude VAT. Ad spend for Launch &amp; Grow is paid by you, directly to Google or Meta.</p>
+    <p class="small">All prices exclude VAT. <a href="#command-centre">Command Centre</a> is included in every package. Ad spend for Launch &amp; Grow is paid by you, directly to Google or Meta.</p>
   </div>
 </section>
 
@@ -43,35 +42,30 @@
       <p class="package-summary">A receptionist that answers every call, day and night, takes the details properly and texts the customer a confirmation. One inbox for calls, forms, texts and emails. Follow-ups that go out on the right day without you remembering.</p>
     </div>
 
-    <div class="tiers">
-      <table class="tier-table">
-        <caption class="visually-hidden">Capture &amp; Convert tiers, prices and what each includes</caption>
-        <thead>
-          <tr>
-            <th scope="col"><span class="visually-hidden">Feature</span></th>
-            <th scope="col">{{prices.cc.never.name}}</th>
-            <th scope="col" class="tier-pick">{{prices.cc.booking.name}} <span class="pick-tag">Most businesses pick this</span></th>
-            <th scope="col">{{prices.cc.desk.name}}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr class="tier-price-row"><th scope="row">Setup</th><td>{{prices.cc.never.setup}}</td><td class="tier-pick">{{prices.cc.booking.setup}}</td><td>{{prices.cc.desk.setup}}</td></tr>
-          <tr class="tier-price-row"><th scope="row">Monthly</th><td>{{prices.cc.never.monthly}}</td><td class="tier-pick">{{prices.cc.booking.monthly}}</td><td>{{prices.cc.desk.monthly}}</td></tr>
-          <tr><th scope="row">Call minutes included each month</th><td>{{prices.cc.never.minutes}}</td><td class="tier-pick">{{prices.cc.booking.minutes}}</td><td>{{prices.cc.desk.minutes}}</td></tr>
-          <tr><th scope="row">Answers every call, day and night</th><td><span class="tick" aria-label="Included">✓</span></td><td class="tier-pick"><span class="tick" aria-label="Included">✓</span></td><td><span class="tick" aria-label="Included">✓</span></td></tr>
-          <tr><th scope="row">Takes the details, spells the name back, texts a confirmation</th><td><span class="tick" aria-label="Included">✓</span></td><td class="tier-pick"><span class="tick" aria-label="Included">✓</span></td><td><span class="tick" aria-label="Included">✓</span></td></tr>
-          <tr><th scope="row">Urgent calls texted to your mobile</th><td><span class="tick" aria-label="Included">✓</span></td><td class="tier-pick"><span class="tick" aria-label="Included">✓</span></td><td><span class="tick" aria-label="Included">✓</span></td></tr>
-          <tr><th scope="row">One inbox for calls, website forms, texts and emails</th><td><span class="tick" aria-label="Included">✓</span></td><td class="tier-pick"><span class="tick" aria-label="Included">✓</span></td><td><span class="tick" aria-label="Included">✓</span></td></tr>
-          <tr><th scope="row">Automatic thank-yous, quote chasers, payment reminders and review requests</th><td><span class="tick" aria-label="Included">✓</span></td><td class="tier-pick"><span class="tick" aria-label="Included">✓</span></td><td><span class="tick" aria-label="Included">✓</span></td></tr>
-          <tr><th scope="row">Books into your diary, with confirmation and reminder texts</th><td><span class="no" aria-label="Not included">–</span></td><td class="tier-pick"><span class="tick" aria-label="Included">✓</span></td><td><span class="tick" aria-label="Included">✓</span></td></tr>
-          <tr><th scope="row">Recognises returning customers</th><td><span class="no" aria-label="Not included">–</span></td><td class="tier-pick"><span class="tick" aria-label="Included">✓</span></td><td><span class="tick" aria-label="Included">✓</span></td></tr>
-          <tr><th scope="row">Several staff or locations, and call transfers</th><td><span class="no" aria-label="Not included">–</span></td><td class="tier-pick"><span class="no" aria-label="Not included">–</span></td><td><span class="tick" aria-label="Included">✓</span></td></tr>
-          <tr><th scope="row">Monthly report: calls answered, caught out of hours, booked</th><td><span class="tick" aria-label="Included">✓</span></td><td class="tier-pick"><span class="tick" aria-label="Included">✓</span></td><td><span class="tick" aria-label="Included">✓</span></td></tr>
-        </tbody>
-      </table>
-      <p class="small">Prices exclude VAT. {{prices.cc.minimumMonths}}-month minimum, then monthly. Extra call time is {{prices.cc.extraMinutes}}. Ongoing care and tuning are included in every tier.</p>
-      {{#if founding.show}}<div class="founding-note"><p><strong>Founding offer, first {{prices.cc.founding.clients}} clients:</strong> {{prices.cc.booking.name}} at {{prices.cc.founding.setup}} setup and {{prices.cc.founding.monthly}} a month, fixed for {{prices.cc.founding.months}} months, in return for a named case study with real numbers.</p></div>{{/if}}
+    <div class="price-cards">
+      <div class="price-card">
+        <p class="price-card-name">Capture &amp; Convert</p>
+        <p class="pkg-price"><span class="amount">{{prices.cc.setup}}</span><span class="per">setup</span></p>
+        <p class="pkg-price"><span class="amount">{{prices.cc.monthly}}</span><span class="per">/month</span></p>
+        <p class="small">{{prices.cc.minutes}} call minutes a month included. Extra call time is {{prices.cc.extraMinutes}}. {{prices.cc.minimumMonths}}-month minimum, then monthly. Command Centre included.</p>
+      </div>
+      <div class="price-card price-card-alt">
+        <p class="price-card-name">Everything included</p>
+        <ul class="checklist">
+          <li>Answers every call, day and night</li>
+          <li>Takes the details, spells the name back, texts a confirmation</li>
+          <li>Books into your diary, with confirmation and reminder texts</li>
+          <li>Recognises returning customers</li>
+          <li>Urgent calls texted to your mobile</li>
+          <li>One inbox for calls, website forms, texts and emails</li>
+          <li>Automatic thank-yous, quote chasers, payment reminders and review requests</li>
+          <li>Monthly report: calls answered, caught out of hours, booked</li>
+          <li>Command Centre: your website, reviews and competitors watched every week</li>
+        </ul>
+      </div>
     </div>
+    <p class="small cc-custom">Several staff or locations, call transfers or a lot of calls? We'll price it with you on the diagnostic call, before you commit to anything.</p>
+    {{#if founding.show}}<div class="founding-note"><p><strong>Founding offer, first {{prices.cc.founding.clients}} clients:</strong> Capture &amp; Convert at {{prices.cc.founding.setup}} setup and {{prices.cc.founding.monthly}} a month, fixed for {{prices.cc.founding.months}} months, in return for a named case study with real numbers.</p></div>{{/if}}
 
     <div class="package-detail">
       <div>
@@ -118,13 +112,13 @@
         <p class="price-card-name">Launch &amp; Grow</p>
         <p class="pkg-price"><span class="amount">{{prices.launchGrow.setup}}</span><span class="per">setup</span></p>
         <p class="pkg-price"><span class="amount">{{prices.launchGrow.monthly}}</span><span class="per">/month</span></p>
-        <p class="small">{{prices.launchGrow.minimumMonths}}-month minimum, then monthly. Ad spend is paid by you, directly to Google or Meta, and is not included.</p>
+        <p class="small">{{prices.launchGrow.minimumMonths}}-month minimum, then monthly. Command Centre included. Ad spend is paid by you, directly to Google or Meta, and is not included.</p>
       </div>
       <div class="price-card price-card-alt">
-        <p class="price-card-name">With Capture &amp; Convert ({{prices.cc.never.name}})</p>
+        <p class="price-card-name">With Capture &amp; Convert</p>
         <p class="pkg-price"><span class="amount">{{prices.bundle.setup}}</span><span class="per">setup</span></p>
         <p class="pkg-price"><span class="amount">{{prices.bundle.monthly}}</span><span class="per">/month</span></p>
-        <p class="small">Instead of {{prices.bundle.separateSetup}} setup and {{prices.bundle.separateMonthly}} a month bought separately. Found online, and every call answered.</p>
+        <p class="small">Instead of {{prices.bundle.separateSetup}} setup and {{prices.bundle.separateMonthly}} a month bought separately. Found online, every call answered, and one Command Centre for both.</p>
       </div>
     </div>
     {{#if founding.show}}<div class="founding-note"><p><strong>Founding offer, first 2 to 3 clients:</strong> {{prices.launchGrow.foundingSetup}} setup instead of {{prices.launchGrow.setup}}, in return for a named case study.</p></div>{{/if}}
@@ -159,24 +153,16 @@
   </div>
 </section>
 
-<!-- ============================ Command Centre ============================ -->
+<!-- ============================ Command Centre: included ============================ -->
 <section class="section section-deep package" id="command-centre">
   <div class="container">
     <div class="package-head">
       <div>
-        <p class="eyebrow">Package</p>
+        <p class="eyebrow">Included in every package</p>
         <h2>Command Centre</h2>
         <p class="lede">"I don't know what's going on, and I have no time to find out."</p>
       </div>
-      <p class="package-summary">Three agents watch the business for you and turn what they find into a weekly brief you can read in five minutes. It's already live, and it works on its own or inside the other packages.</p>
-    </div>
-
-    <div class="price-cards">
-      <div class="price-card">
-        <p class="price-card-name">Command Centre</p>
-        <p class="pkg-price"><span class="amount">{{prices.commandCentre}}</span><span class="per">/month</span></p>
-        <p class="small">No setup fee. Cancel any time. Excludes VAT.</p>
-      </div>
+      <p class="package-summary">Three agents watch the business for you and turn what they find into a weekly brief you can read in five minutes. It comes with Capture &amp; Convert, Launch &amp; Grow and the Partner, at no extra cost, and it shows you every month what your package is doing.</p>
     </div>
 
     <div class="three-up">
@@ -184,7 +170,7 @@
       <div><h3>The Scout</h3><p>Finds opportunities: public contracts you could bid for, local demand, things customers are asking for that you don't yet offer. Every finding linked to its source.</p></div>
       <div><h3>The Brief</h3><p>Every week: what changed, what it might mean, and the three things worth doing. Every month: the results. Google review replies drafted for you to approve. Leads and follow-ups you'd otherwise forget, flagged.</p></div>
     </div>
-    <div class="actions"><a class="button button-primary" href="/book/?package=command-centre">Book a 15-minute diagnostic</a><a class="text-link" href="https://app.gainora.co.uk/">Already a client? Sign in</a></div>
+    <div class="actions"><a class="button button-primary" href="/book/">Book a 15-minute diagnostic</a><a class="text-link" href="https://app.gainora.co.uk/">Already a client? Sign in</a></div>
   </div>
 </section>
 
