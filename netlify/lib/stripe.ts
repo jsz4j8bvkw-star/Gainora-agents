@@ -32,6 +32,24 @@ export function agentsForProduct(productId: string): Agent[] {
   } catch { return []; }
 }
 
+/** Capture & Convert packages in the admin's price book, by key, and the plan the receptionist app uses for each. */
+const CAPTURE_PLAN: Record<string, 'answer' | 'book' | 'desk'> = { 'capture-never': 'answer', 'capture-booking': 'book', 'capture-desk': 'desk', 'capture-founding': 'book', 'launch-capture-bundle': 'answer' };
+
+/**
+ * What a subscription item switches on: STRIPE_AGENT_PRODUCTS first, otherwise the product's own metadata, written
+ * by the admin's price book: gainora_grants ("watcher,scout,brief,website", or "capture") and gainora_key.
+ * Products from the older STRIPE_CAPTURE_PRODUCTS list are still handled by the Capture & Convert app itself.
+ */
+export async function grantsFor(productId: string, product?: any): Promise<{ agent: Agent | 'capture'; plan: string | null }[]> {
+  const mapped = agentsForProduct(productId);
+  if (mapped.length || !productId) return mapped.map((agent) => ({ agent, plan: null }));
+  const meta = typeof product === 'object' && product?.metadata ? product.metadata : await stripeGet(`products/${productId}`).then((p) => p?.metadata).catch(() => null);
+  const grants = [...new Set(String(meta?.gainora_grants || '').split(',').map((g) => g.trim()))];
+  const out: { agent: Agent | 'capture'; plan: string | null }[] = grants.filter(isAgent).map((agent) => ({ agent, plan: null }));
+  if (grants.includes('capture')) out.push({ agent: 'capture', plan: CAPTURE_PLAN[String(meta?.gainora_key || '')] ?? 'book' });
+  return out;
+}
+
 /** The single agent a product unlocks (kept for older single-agent products). */
 export function agentForProduct(productId: string): Agent | null {
   const a = agentsForProduct(productId);
@@ -78,11 +96,11 @@ export async function syncSubscription(sub: any): Promise<string[]> {
   const agents: string[] = [];
   for (const item of sub.items?.data || []) {
     const product = typeof item.price?.product === 'string' ? item.price.product : item.price?.product?.id;
-    for (const agent of agentsForProduct(product)) {
+    for (const { agent, plan } of await grantsFor(product, item.price?.product)) {
     if (agents.includes(agent)) continue;
     agents.push(agent);
     await upsert('entitlements', {
-      email, agent, status, stripe_customer: customer.id, stripe_subscription: sub.id,
+      email, agent, ...(plan ? { plan } : {}), status, stripe_customer: customer.id, stripe_subscription: sub.id,
       current_period_end: sub.current_period_end ? new Date(sub.current_period_end * 1000).toISOString() : (item.current_period_end ? new Date(item.current_period_end * 1000).toISOString() : null),
       updated_at: new Date().toISOString(),
     }, 'email,agent');
@@ -94,11 +112,22 @@ export async function syncSubscription(sub: any): Promise<string[]> {
     const users = await fetch(`${env('SUPABASE_URL')}/auth/v1/admin/users?email=${enc(email)}`, { headers: sbHeaders() }).then((r) => r.json()).catch(() => null);
     const match = (users?.users || []).find((u: any) => String(u.email).toLowerCase() === email);
     if (match) await db(`entitlements?email=eq.${enc(email)}&user_id=is.null`, { method: 'PATCH', body: { user_id: match.id } });
-    if (created) {
+    const commandCentre = agents.some((a) => a !== 'capture');
+    if (created && !commandCentre) {
+      const cap = env('CAPTURE_URL', 'https://capture.gainora.co.uk');
+      await sendEmail(email, 'Your Gainora receptionist is ready to set up', [
+        'Thank you for choosing Capture & Convert.',
+        `Open ${cap} and choose “Email me a sign-in link” with this email address. The first time you sign in, you’ll choose a password; after that you sign in with your email and password.`,
+        'You’ll see a short set of questions about your business. Gainora will be in touch within one working day to book your set-up call.',
+        'If you have any questions, just reply to this email.',
+        'Gainora',
+      ]).catch((e) => console.error('[gainora] welcome email', e?.message));
+    }
+    if (created && commandCentre) {
       const app = env('APP_URL', 'https://app.gainora.co.uk');
       await sendEmail(email, 'Your Gainora agents are ready to set up', [
         'Thank you for subscribing to Gainora.',
-        `Open ${app} and sign in with this email address. We’ll send you a sign-in link, so there’s no password to remember.`,
+        `Open ${app} and choose “Email me a sign-in link” with this email address. The first time you sign in, you’ll choose a password; after that you sign in with your email and password.`,
         'The first thing you’ll see is a short set of questions about your business. It takes about eight minutes, and your agents start work as soon as you finish.',
         'If you have any questions, just reply to this email.',
         'Gainora',

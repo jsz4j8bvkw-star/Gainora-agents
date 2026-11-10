@@ -13,8 +13,10 @@ const get = (row: Row, field: string) => {
   for (const step of m[2].match(/->>?\w+/g) ?? []) v = v?.[step.replace(/^->>?/, '')];
   return v;
 };
-const test = (v: any, op: string, raw: string) => {
+const test = (v: any, op: string, raw: string): boolean => {
+  if (op === 'not') { const i = raw.indexOf('.'); return !test(v, raw.slice(0, i), raw.slice(i + 1)); }
   const val = decodeURIComponent(raw);
+  if (op === 'like' || op === 'ilike') return new RegExp(`^${val.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*')}$`, op === 'ilike' ? 'i' : '').test(String(v ?? ''));
   if (op === 'eq') return String(v) === val || (val === 'true' && v === true) || (val === 'false' && v === false);
   if (op === 'neq') return String(v) !== val;
   if (op === 'gte') return v != null && String(v) >= val;
@@ -40,6 +42,15 @@ export async function startFake(seed: Record<string, Row[]>): Promise<Fake> {
     const host = req.headers['x-fake-host'] as string | undefined;
     if (host) { const out = externals[host]?.(req.method!, url.pathname + url.search, body); res.statusCode = out?.status ?? 200; return res.end(JSON.stringify(out?.body ?? out ?? {})); }
     if (url.pathname === '/auth/v1/user') { const t = String(req.headers.authorization || '').replace(/^Bearer /, ''); const u = (tables.__users ?? []).find((x) => x.token === t); res.statusCode = u ? 200 : 401; return res.end(JSON.stringify(u ? { id: u.id, email: u.email } : {})); }
+    if (url.pathname === '/auth/v1/admin/users') {
+      const users = (tables.__users ??= []);
+      if (req.method === 'POST') {
+        if (users.some((u) => u.email === body?.email)) { res.statusCode = 422; return res.end('{}'); }
+        const u = { id: `user-${++n}`, email: body?.email, token: `t-${n}` }; users.push(u); return res.end(JSON.stringify(u));
+      }
+      const e = url.searchParams.get('email');
+      return res.end(JSON.stringify({ users: users.filter((u) => !e || u.email === e).map((u) => ({ id: u.id, email: u.email, last_sign_in_at: u.last_sign_in_at ?? null })) }));
+    }
     const admin = url.pathname.match(/^\/auth\/v1\/admin\/users\/(.+)$/);
     if (admin) { const u = (tables.__users ?? []).find((x) => x.id === admin[1]); res.statusCode = u ? 200 : 404; return res.end(JSON.stringify(u ? { id: u.id, email: u.email } : {})); }
     const m = url.pathname.match(/^\/rest\/v1\/(\w+)$/);
@@ -73,7 +84,7 @@ export async function startFake(seed: Record<string, Row[]>): Promise<Fake> {
   const realFetch = globalThis.fetch;
   globalThis.fetch = ((input: any, init: any = {}) => {
     const u = new URL(String(input));
-    if (/googleapis\.com|resend\.com|capture\.gainora\.co\.uk/.test(u.hostname)) {
+    if (/googleapis\.com|resend\.com|capture\.gainora\.co\.uk|api\.stripe\.com|api\.netlify\.com/.test(u.hostname)) {
       return realFetch(`${base}${u.pathname}${u.search}`, { ...init, headers: { ...(init.headers ?? {}), 'x-fake-host': u.hostname } });
     }
     return realFetch(input, init);

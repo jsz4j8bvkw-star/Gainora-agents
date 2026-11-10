@@ -7,6 +7,12 @@ import { PACKAGES, type Package } from '../../shared/admin/model';
 import { type Site, withDefaults } from '../../shared/site/data';
 import { checks } from '../../shared/site/kit';
 import { pagesOf } from '../../shared/site/render';
+import { randomBytes, randomUUID } from 'node:crypto';
+import { insert } from '../lib/core';
+import { blockedSet, cleanItems, cleanProspect, draftFor, getSettings, priceBook, proposalUrl, sequences } from '../lib/business';
+import { dueFollowUps, type Prospect, sameProspect, STAGES } from '../../shared/admin/sales';
+import { fromPriceItem, money, proposalTotals } from '../../shared/admin/prices';
+import { addDays } from '../../shared/admin/templates';
 
 // The Claude connector for Gainora's admin. Added once in claude.ai (Settings → Connectors → Add custom connector)
 // with the link made in admin.gainora.co.uk → Settings. Any chat with Claude can then look up clients, work
@@ -182,9 +188,100 @@ const TOOLS: Tool[] = [
       return { done: true, client: r.client };
     },
   },
+  /* ---------- Sales ---------- */
+  {
+    name: 'list_prospects',
+    description: 'Businesses on Gainora’s outreach list, with their stage (new, contacted, replied, call, proposal, won, lost), company type and when the next message is due.',
+    inputSchema: { type: 'object', properties: { stage: { ...str, enum: STAGES.map((x) => x.id) }, search: { ...str, description: 'Optional: part of a business name, town or email.' } } },
+    run: async ({ stage, search }) => {
+      const rows = await db<Prospect[]>('prospects?select=*&order=updated_at.desc&limit=5000');
+      const q = String(search || '').toLowerCase();
+      return rows.filter((p) => (!stage || p.stage === stage) && (!q || `${p.business_name} ${p.town} ${p.email}`.toLowerCase().includes(q))).slice(0, 200).map((p) => ({
+        id: p.id, business: p.business_name, contact: p.contact_name, role: p.role, email: p.email, phone: p.phone, website: p.website, town: p.town, industry: p.industry,
+        company_type: p.company_type, stage: p.stage, next_message_due: p.next_on, call_at: p.call_at, personal_line: p.personal_line, note: p.note,
+      }));
+    },
+  },
+  {
+    name: 'list_followups',
+    description: 'Outreach messages due today or earlier, each with the drafted message. You can suggest a better personal line with update_prospect; Adelin sends the messages from the admin (or they go automatically if he switched that on).',
+    inputSchema: { type: 'object', properties: {} },
+    run: async () => {
+      const [rows, seqs, settings] = await Promise.all([db<Prospect[]>('prospects?select=*&next_on=not.is.null&limit=5000'), sequences(), getSettings()]);
+      const bySeq = new Map(seqs.map((x) => [x.id, x]));
+      return dueFollowUps(rows, ukToday()).map((p) => ({ id: p.id, business: p.business_name, due: p.next_on, personal_line: p.personal_line, draft: draftFor(p, bySeq.get(p.sequence_id ?? ''), settings.outreach) }));
+    },
+  },
+  {
+    name: 'add_prospects',
+    description: 'Add businesses to the outreach list (up to 50 at a time). Businesses only, never private individuals, with details from the business’s own public website, its Google listing or Companies House. Set company_type from Companies House: limited and llp can be emailed with an opt-out; sole_trader and partnership need consent first; unknown means check before emailing. personal_line is one true, specific sentence about their business for the first message; leave it empty rather than invent one. Duplicates and do-not-contact addresses are skipped.',
+    inputSchema: { type: 'object', properties: { prospects: { type: 'array', maxItems: 50, items: { type: 'object', properties: {
+      business_name: str, contact_name: str, role: str, email: str, phone: str, website: str, instagram: str, linkedin: str, town: str, industry: str,
+      company_type: { ...str, enum: ['limited', 'llp', 'sole_trader', 'partnership', 'unknown'] }, personal_line: str, note: str, source: { ...str, description: 'Where the details came from.' },
+    }, required: ['business_name'] } } }, required: ['prospects'] },
+    run: async ({ prospects }) => {
+      const list = (Array.isArray(prospects) ? prospects : []).slice(0, 50);
+      const existing = await db<Prospect[]>('prospects?select=id,business_name,email,website,phone&limit=20000');
+      const blocked = await blockedSet();
+      const fresh: any[] = []; const skipped: string[] = [];
+      for (const raw of list) {
+        const r = cleanProspect({ ...raw, stage: 'new', source: raw?.source || 'Added by Claude' });
+        if ([...existing, ...fresh].some((x) => sameProspect(r, x))) { skipped.push(`${r.business_name}: already on the list`); continue; }
+        if (r.email && (blocked.has(r.email) || blocked.has(r.email.split('@')[1]))) { skipped.push(`${r.business_name}: asked not to be contacted`); continue; }
+        fresh.push({ id: randomUUID(), step: 0, ...r, created_at: new Date().toISOString(), updated_at: new Date().toISOString() });
+      }
+      if (fresh.length) await insert('prospects', fresh);
+      return { added: fresh.map((f) => ({ id: f.id, business: f.business_name })), skipped };
+    },
+  },
+  {
+    name: 'update_prospect',
+    description: 'Update a prospect: their stage, a note, the personal line for their first message, company type, contact details, or a booked call time (ISO date and time). Doesn’t send anything.',
+    inputSchema: { type: 'object', properties: {
+      id: str, stage: { ...str, enum: STAGES.map((x) => x.id) }, note: str, personal_line: str, company_type: { ...str, enum: ['limited', 'llp', 'sole_trader', 'partnership', 'unknown'] },
+      contact_name: str, role: str, email: str, phone: str, call_at: str, lost_reason: str,
+    }, required: ['id'] },
+    run: async ({ id: pid, ...rest }) => {
+      if (!/^[0-9a-f-]{36}$/i.test(String(pid))) throw new HttpError(400, 'Unknown prospect.');
+      const allowed = ['stage', 'note', 'personal_line', 'company_type', 'contact_name', 'role', 'email', 'phone', 'call_at', 'lost_reason'];
+      const patch = cleanProspect(Object.fromEntries(Object.entries(rest).filter(([k]) => allowed.includes(k))));
+      if (patch.stage && !['new', 'contacted'].includes(patch.stage)) (patch as any).next_on = null;
+      const [p] = await db<Prospect[]>(`prospects?id=eq.${pid}`, { method: 'PATCH', body: { ...patch, updated_at: new Date().toISOString() }, prefer: 'return=representation' });
+      if (!p) throw new HttpError(404, 'That prospect no longer exists.');
+      return { id: p.id, business: p.business_name, stage: p.stage, personal_line: p.personal_line };
+    },
+  },
+  {
+    name: 'get_prices',
+    description: 'Gainora’s price book: every package with its set-up, monthly and one-off price (excluding VAT) and minimum term. Use the keys in create_proposal.',
+    inputSchema: { type: 'object', properties: {} },
+    run: async () => (await priceBook()).filter((p) => p.active).map((p) => ({ key: p.key, name: p.name, setup_gbp: p.setup, monthly_gbp: p.monthly, one_off_gbp: p.one_off, minimum_months: p.minimum_months, included: p.included, description: p.description })),
+  },
+  {
+    name: 'create_proposal',
+    description: 'Draft a proposal from the price book. It is NOT sent: Adelin checks it and sends it from the admin (Sales → Proposals). Returns the link the client will see.',
+    inputSchema: { type: 'object', properties: {
+      business_name: str, contact_name: str, email: str, prospect_id: { ...str, description: 'Optional: the prospect it’s for (from list_prospects).' },
+      packages: { type: 'array', items: str, description: 'Price book keys, e.g. ["launch-grow"].' }, note: { ...str, description: 'A short personal note shown at the top.' }, trial_days: { type: 'number' },
+    }, required: ['business_name', 'packages'] },
+    run: async ({ business_name, contact_name, email, prospect_id, packages, note, trial_days }) => {
+      const book = new Map((await priceBook()).filter((p) => p.active).map((p) => [p.key, p]));
+      const unknown = (packages ?? []).filter((k: string) => !book.has(k));
+      if (unknown.length) throw new HttpError(400, `Not in the price book: ${unknown.join(', ')}. Use get_prices for the keys.`);
+      const items = cleanItems((packages ?? []).map((k: string) => fromPriceItem(book.get(k)!)));
+      const [p] = await insert<any>('proposals', {
+        id: randomUUID(), token: randomBytes(18).toString('base64url'), status: 'draft', created_by: CLAUDE, created_at: new Date().toISOString(),
+        email: String(email || '').trim().toLowerCase().slice(0, 200), business_name: String(business_name).slice(0, 160), contact_name: String(contact_name || '').slice(0, 120),
+        items, trial_days: Math.max(0, Math.min(90, Number(trial_days) || 0)), note: String(note || '').slice(0, 2000), expires_on: addDays(ukToday(), 14),
+        prospect_id: prospect_id && /^[0-9a-f-]{36}$/i.test(String(prospect_id)) ? prospect_id : null,
+      });
+      const t = proposalTotals(items);
+      return { draft: true, id: p.id, link: proposalUrl(p.token), due_today: money(t.today), monthly: money(t.monthly), note: 'Draft only. Adelin sends it from the admin.' };
+    },
+  },
 ];
 
-const INSTRUCTIONS = 'Gainora’s admin: Gainora’s clients (businesses), what they bought, the delivery checklist with deadlines, their websites and change requests. Start with list_clients or list_tasks. Everything you change is recorded on the client as done by Claude. Ask before publishing a website or emailing a client (complete_change_request emails them).';
+const INSTRUCTIONS = 'Gainora’s admin: Gainora’s clients (businesses), what they bought, the delivery checklist with deadlines, their websites and change requests; and sales: the outreach list, follow-ups due, the price book and draft proposals. Start with list_clients, list_tasks or list_followups. Everything you change is recorded as done by Claude. Ask before publishing a website or emailing a client (complete_change_request emails them). Nothing here sends outreach or proposals: Adelin does that from the admin.';
 
 const rpc = (id: unknown, result: unknown) => ({ jsonrpc: '2.0', id, result });
 const rpcError = (id: unknown, code: number, message: string) => ({ jsonrpc: '2.0', id, error: { code, message } });

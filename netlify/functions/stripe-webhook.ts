@@ -1,7 +1,8 @@
 import { env, json } from '../lib/core';
+import { proposalPaid } from '../lib/business';
 import { stripeGet, syncSubscription, verifyStripeSignature } from '../lib/stripe';
 
-// Stripe → agent access. Events: checkout.session.completed, customer.subscription.created/updated/deleted.
+// Stripe → agent access, and proposals paid. Events: checkout.session.completed, customer.subscription.created/updated/deleted.
 export default async (req: Request) => {
   const payload = await req.text();
   if (!verifyStripeSignature(payload, req.headers.get('stripe-signature'), env('STRIPE_WEBHOOK_SECRET'))) return json({ error: 'bad signature' }, 400);
@@ -10,6 +11,10 @@ export default async (req: Request) => {
     const obj = event.data?.object;
     if (event.type === 'checkout.session.completed' && obj?.mode === 'subscription' && obj.subscription) {
       await syncSubscription(await stripeGet(`subscriptions/${obj.subscription}?expand[]=customer`));
+    }
+    // A proposal from the admin was paid (subscription or one-off): the client's record and set-up start.
+    if (event.type === 'checkout.session.completed' && obj?.metadata?.proposal && (obj.payment_status === 'paid' || obj.payment_status === 'no_payment_required')) {
+      await proposalPaid(String(obj.metadata.proposal), obj);
     } else if (/^customer\.subscription\.(created|updated|deleted|paused|resumed)$/.test(event.type)) {
       await syncSubscription(obj);
     }

@@ -1,3 +1,4 @@
+import { saveSettings } from '../lib/business';
 import { randomUUID } from 'node:crypto';
 import { body, db, enc, handler, HttpError, insert, json } from '../lib/core';
 import {
@@ -126,8 +127,7 @@ export default handler(async (req) => {
 
   if (b.op === 'settings') return json({ rates: await rateCard(), defaults: DEFAULT_RATES, team: gainoraEmails() });
   if (b.op === 'settings-save') {
-    const rates = ratesFrom(b.rates);
-    await db('admin_settings?on_conflict=id', { method: 'POST', body: { id: 1, data: { rates }, updated_at: new Date().toISOString() }, prefer: 'resolution=merge-duplicates' });
+    const rates = (await saveSettings({ rates: ratesFrom(b.rates) })).rates;
     return json({ rates });
   }
 
