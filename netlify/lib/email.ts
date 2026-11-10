@@ -10,13 +10,13 @@ export function emailHtml(paragraphs: string[], cta?: { label: string; url: stri
   return `<!doctype html><html><body style="margin:0;background:#F4F4F2"><div style="max-width:560px;margin:0 auto;padding:32px 24px"><div style="background:#111214;border-radius:12px 12px 0 0;padding:18px 28px;font:600 19px Georgia,serif;letter-spacing:0.02em;color:#E9E5DD">Gainora<span style="color:#C9B37E">.</span></div><div style="background:#fff;border:1px solid #E4E3DF;border-top:2px solid #C9B37E;border-radius:0 0 12px 12px;padding:28px">${body}${button}</div><p style="font:12px/1.5 Arial,sans-serif;color:#6F6C66;margin-top:18px">Gainora, gainora.co.uk. You receive this because you subscribe to Gainora agents. Change alerts in Plan and settings.</p></div></body></html>`;
 }
 
-export async function sendEmail(to: string, subject: string, paragraphs: string[], cta?: { label: string; url: string }) {
+export async function sendEmail(to: string, subject: string, paragraphs: string[], cta?: { label: string; url: string }, opts: { replyTo?: string } = {}) {
   const key = env('RESEND_API_KEY');
   if (!key) { console.log('[gainora] email skipped (no RESEND_API_KEY):', subject); return; }
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from: env('EMAIL_FROM', 'Gainora <hello@gainora.co.uk>'), to: [to], subject, html: emailHtml(paragraphs, cta), text: paragraphs.join('\n\n') + (cta ? `\n\n${cta.label}: ${cta.url}` : '') }),
+    body: JSON.stringify({ from: env('EMAIL_FROM', 'Gainora <hello@gainora.co.uk>'), to: [to], ...(opts.replyTo ? { reply_to: opts.replyTo } : {}), subject, html: emailHtml(paragraphs, cta), text: paragraphs.join('\n\n') + (cta ? `\n\n${cta.label}: ${cta.url}` : '') }),
   });
   if (!res.ok) throw new Error(`Resend ${res.status}`);
 }

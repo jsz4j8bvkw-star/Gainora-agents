@@ -12,6 +12,8 @@ import { insert } from '../lib/core';
 import { blockedSet, cleanItems, cleanProspect, draftFor, getSettings, priceBook, proposalUrl, sequences } from '../lib/business';
 import { dueFollowUps, type Prospect, sameProspect, STAGES } from '../../shared/admin/sales';
 import { fromPriceItem, money, proposalTotals } from '../../shared/admin/prices';
+import { askUrl, saveAsk } from '../lib/asks';
+import { answersText, ASK_TEMPLATES, type Ask, progressOf } from '../../shared/admin/asks';
 import { addDays } from '../../shared/admin/templates';
 
 // The Claude connector for Gainora's admin. Added once in claude.ai (Settings → Connectors → Add custom connector)
@@ -75,6 +77,7 @@ const TOOLS: Tool[] = [
         ...acc, record: rec ? { contact: rec.contact_name, phone: rec.phone, started_on: rec.started_on, setup_fee: rec.setup_fee, setup_paid: rec.setup_paid, notes: rec.notes } : null,
         tasks: s.tasks.filter((t) => t.email === acc.email).map((t) => ({ id: t.id, package: t.project, title: t.title, who: t.who, due_on: t.due_on, status: t.status, ticked_automatically: !!t.auto })),
         recent_notes: notes, website: row ? siteSummary(row) : null, change_requests: s.requests.filter((r) => r.email === acc.email),
+        questions_sent: (await db<Ask[]>(`client_asks?select=*&email=eq.${enc(acc.email)}&status=neq.cancelled&order=created_at.desc&limit=20`).catch(() => [])).map(askSummary),
       };
     },
   },
@@ -188,6 +191,34 @@ const TOOLS: Tool[] = [
       return { done: true, client: r.client };
     },
   },
+  /* ---------- Asking clients for details ---------- */
+  {
+    name: 'list_client_questions',
+    description: 'Questions Gainora has sent clients (for example the website questions) and where each stands: draft, sent, opened, answered. Answered ones include every answer and the photo links, ready to build from.',
+    inputSchema: { type: 'object', properties: { client: { ...client, description: 'Optional: one client.' }, status: { type: 'string', enum: ['waiting', 'answered', 'all'] } } },
+    run: async ({ client: ref, status = 'all' }, s) => {
+      const email = ref ? findAccount(s, ref).email : null;
+      const rows = await db<Ask[]>(`client_asks?select=*&status=neq.cancelled${email ? `&email=eq.${enc(email)}` : ''}&order=created_at.desc&limit=100`);
+      const names = new Map(s.accounts.map((a) => [a.email, a.name]));
+      return rows.filter((a) => status === 'all' || (status === 'answered' ? a.status === 'answered' : a.status === 'sent' || a.status === 'opened'))
+        .map((a) => ({ client: names.get(a.email) ?? a.email, ...askSummary(a) }));
+    },
+  },
+  {
+    name: 'draft_client_questions',
+    description: `Prepare questions for a client: a template (${ASK_TEMPLATES.map((t) => t.key).join(', ')}) or your own questions. It is NOT sent: Adelin checks it and sends it from the client's page in the admin (Questions). Each question: {label, type: text | long | links | photos | yesno, help?, group?}.`,
+    inputSchema: { type: 'object', properties: {
+      client, template: { type: 'string', enum: ASK_TEMPLATES.map((t) => t.key) }, title: str, intro: str,
+      questions: { type: 'array', maxItems: 30, items: { type: 'object', properties: { label: str, type: { type: 'string', enum: ['text', 'long', 'links', 'photos', 'yesno'] }, help: str, group: str }, required: ['label'] } },
+      due_on: { ...str, description: 'YYYY-MM-DD; five days from today if left out.' },
+    }, required: ['client'] },
+    run: async ({ client: ref, template, title, intro, questions, due_on }, s) => {
+      const acc = findAccount(s, ref);
+      const a = await saveAsk({ email: acc.email, template: template || (questions?.length ? 'custom' : 'website'), title, intro, questions, due_on }, CLAUDE);
+      await log(acc.email, CLAUDE, `Drafted questions for them: ${a.title} (${a.questions.length}). Not sent yet.`, 'work');
+      return { draft: true, client: acc.name, title: a.title, questions: a.questions.length, due_on: a.due_on, note: 'Draft only. Adelin sends it from their client page in the admin (Questions).' };
+    },
+  },
   /* ---------- Sales ---------- */
   {
     name: 'list_prospects',
@@ -281,7 +312,17 @@ const TOOLS: Tool[] = [
   },
 ];
 
-const INSTRUCTIONS = 'Gainora’s admin: Gainora’s clients (businesses), what they bought, the delivery checklist with deadlines, their websites and change requests; and sales: the outreach list, follow-ups due, the price book and draft proposals. Start with list_clients, list_tasks or list_followups. Everything you change is recorded as done by Claude. Ask before publishing a website or emailing a client (complete_change_request emails them). Nothing here sends outreach or proposals: Adelin does that from the admin.';
+const INSTRUCTIONS = 'Gainora’s admin: Gainora’s clients (businesses), what they bought, the delivery checklist with deadlines, their websites and change requests; and sales: the outreach list, follow-ups due, the price book and draft proposals. Start with list_clients, list_tasks, list_client_questions or list_followups. Everything you change is recorded as done by Claude. Ask before publishing a website or emailing a client (complete_change_request emails them). Nothing here sends outreach, proposals or questions to clients: Adelin does that from the admin.';
+
+function askSummary(a: Ask) {
+  const p = progressOf(a);
+  return {
+    id: a.id, title: a.title, status: a.status, due_on: a.due_on, sent_to: a.sent_to || null, sent_at: a.sent_at, answered_at: a.answered_at,
+    progress: `${p.answered} of ${p.total} answered`, link: a.status === 'draft' ? null : askUrl(a.token),
+    answers: a.status === 'answered' || p.answered ? answersText(a) : null,
+    photos: a.files.map((f) => f.url),
+  };
+}
 
 const rpc = (id: unknown, result: unknown) => ({ jsonrpc: '2.0', id, result });
 const rpcError = (id: unknown, code: number, message: string) => ({ jsonrpc: '2.0', id, error: { code, message } });

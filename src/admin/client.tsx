@@ -10,9 +10,10 @@ import { ukToday } from '../../shared/admin/board';
 import { admin, type AccountDetail, type ClientTask } from './api';
 import { PackageChips, StartSetup, StatusChip, TaskRow } from './bits';
 import { ClientCare } from './business';
+import { QuestionsTab } from './asks';
 
-type Section = 'overview' | 'delivery' | 'website' | 'enquiries' | 'costs' | 'notes';
-const SECTIONS: Section[] = ['overview', 'delivery', 'website', 'enquiries', 'costs', 'notes'];
+type Section = 'overview' | 'delivery' | 'questions' | 'website' | 'enquiries' | 'costs' | 'notes';
+const SECTIONS: Section[] = ['overview', 'delivery', 'questions', 'website', 'enquiries', 'costs', 'notes'];
 
 export function ClientPage({ email }: { email: string }) {
   const { data: d, error, reload } = useLoad<AccountDetail>(() => admin.account(email), [email]);
@@ -36,6 +37,7 @@ export function ClientPage({ email }: { email: string }) {
       <Tabs<Section> label="Client" value={section} onChange={setSection} tabs={[
         { id: 'overview', label: 'Overview' },
         { id: 'delivery', label: 'Delivery', badge: a.overdue ? `${a.overdue} late` : open.length || null },
+        { id: 'questions', label: 'Questions' },
         { id: 'website', label: 'Website', badge: d.requests.length || null },
         { id: 'enquiries', label: 'Enquiries' },
         { id: 'costs', label: 'Costs' },
@@ -46,6 +48,7 @@ export function ClientPage({ email }: { email: string }) {
       {section === 'website' && (d.site
         ? <Website embedded={{ slug: d.site.slug, hasCapture: a.packages.includes('capture') }} />
         : <div className="panel empty"><h2 className="heading">No website yet</h2><p className="muted">{a.packages.includes('launch') ? 'It’s created the first time they open Your website in Command Centre, from their onboarding answers.' : 'Websites come with Launch & Grow.'}</p></div>)}
+      {section === 'questions' && <QuestionsTab email={a.email} name={a.name} contact={d.record?.contact_name || a.contact || ''} onChange={reload} />}
       {section === 'enquiries' && <EnquiriesTab d={d} />}
       {section === 'costs' && <CostsTab d={d} reload={reload} />}
       {section === 'notes' && <NotesTab d={d} reload={reload} />}

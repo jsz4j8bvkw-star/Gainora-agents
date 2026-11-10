@@ -51,6 +51,11 @@ export async function startFake(seed: Record<string, Row[]>): Promise<Fake> {
       const e = url.searchParams.get('email');
       return res.end(JSON.stringify({ users: users.filter((u) => !e || u.email === e).map((u) => ({ id: u.id, email: u.email, last_sign_in_at: u.last_sign_in_at ?? null })) }));
     }
+    if (url.pathname.startsWith('/storage/v1/object/') && req.method === 'POST') {
+      const key = url.pathname.replace('/storage/v1/object/', '');
+      (tables.__storage ??= []).push({ key, type: req.headers['content-type'], size: raw.length });
+      return res.end(JSON.stringify({ Key: key }));
+    }
     const admin = url.pathname.match(/^\/auth\/v1\/admin\/users\/(.+)$/);
     if (admin) { const u = (tables.__users ?? []).find((x) => x.id === admin[1]); res.statusCode = u ? 200 : 404; return res.end(JSON.stringify(u ? { id: u.id, email: u.email } : {})); }
     const m = url.pathname.match(/^\/rest\/v1\/(\w+)$/);

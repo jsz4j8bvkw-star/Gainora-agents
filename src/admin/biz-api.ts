@@ -11,6 +11,7 @@ import {
 import { DEFAULT_PRICE_BOOK, type PriceItem, type ProposalItem, toWebsitePrices } from '../../shared/admin/prices';
 import { type Health, type MonthResults, resultsEmail } from '../../shared/admin/care';
 import { type Deadline, type Expense, expensesIn, nextOccurrence, SUGGESTED_DEADLINES, sum, VAT_THRESHOLD, vatStatus, dueSoon } from '../../shared/admin/books';
+import { type Ask, cleanQuestions, templateFor } from '../../shared/admin/asks';
 
 declare const __DEMO__: boolean;
 
@@ -43,6 +44,7 @@ export interface TodayBiz {
   unpaid: Unpaid[]; deadlines: Deadline[];
 }
 export interface PricesData { prices: PriceItem[]; website: boolean; stripe: boolean }
+export type AskRow = Ask & { url: string };
 
 export interface BizApi {
   today(): Promise<TodayBiz>;
@@ -76,7 +78,14 @@ export interface BizApi {
   deadlineDone(id: string): Promise<string | null>;
   deleteDeadline(id: string): Promise<void>;
   saveAgreement(email: string, terms: string | null, dpa: string | null): Promise<void>;
+  asks(email: string): Promise<AskRow[]>;
+  saveAsk(ask: Partial<Ask> & { email: string }): Promise<AskRow>;
+  sendAsk(id: string, opts: { email: string; to?: string; message?: string }): Promise<AskRow>;
+  remindAsk(id: string): Promise<void>;
+  cancelAsk(id: string): Promise<void>;
+  emailClient(email: string, subject: string, message: string, to?: string): Promise<void>;
 }
+const Q = <T,>(body: Record<string, unknown>, doing: string) => callFunction<T>('admin-asks', body, { doing });
 
 const S = <T,>(body: Record<string, unknown>, doing: string) => callFunction<T>('admin-sales', body, { doing });
 const B = <T,>(body: Record<string, unknown>, doing: string) => callFunction<T>('admin-business', body, { doing });
@@ -114,6 +123,12 @@ function liveBiz(): BizApi {
     deadlineDone: async (id) => (await B<{ next: string | null }>({ op: 'deadline-done', id }, 'saving')).next,
     deleteDeadline: async (id) => { await B({ op: 'deadline-delete', id }, 'deleting the date'); },
     saveAgreement: async (email, terms, dpa) => { await B({ op: 'agreement-save', email, terms, dpa }, 'saving'); },
+    asks: async (email) => (await Q<{ asks: AskRow[] }>({ op: 'list', email }, 'loading their questions')).asks,
+    saveAsk: async (ask) => (await Q<{ ask: AskRow }>({ op: 'save', ask }, 'saving the questions')).ask,
+    sendAsk: async (id, o) => (await Q<{ ask: AskRow }>({ op: 'send', id, ...o }, 'sending the questions')).ask,
+    remindAsk: async (id) => { await Q({ op: 'remind', id }, 'sending the reminder'); },
+    cancelAsk: async (id) => { await Q({ op: 'cancel', id }, 'cancelling'); },
+    emailClient: async (email, subject, message, to) => { await Q({ op: 'email', email, subject, message, to }, 'sending the email'); },
   };
 }
 
@@ -210,6 +225,14 @@ function demoBiz(): BizApi {
     { email: 'mike@kmplumbing.example', name: 'K&M Plumbing', terms: null, dpa: null },
     { email: 'lou@lashstudio.example', name: 'The Lash Studio', terms: null, dpa: null },
     { email: 'ben@oakbuild.example', name: 'Oak & Stone Builders', terms: iso(40), dpa: iso(40) },
+  ];
+  const photo = (label: string, hue: number) => `data:image/svg+xml;utf8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400"><rect width="400" height="400" fill="hsl(${hue},28%,82%)"/><text x="200" y="210" font-family="Arial" font-size="26" text-anchor="middle" fill="#333">${label}</text></svg>`)}`;
+  const w = templateFor('website');
+  const asksList: AskRow[] = [
+    { id: id(), email: 'demo@clinic.example', token: 'demo-willow-q', template: 'website', title: w.title, intro: w.intro, questions: w.questions, status: 'answered', due_on: addDays(today, -4), sent_to: 'demo@clinic.example', sent_at: iso(9), opened_at: iso(8.5), answered_at: iso(7), reminded_at: null, client_task_id: null, next_task_id: null, created_by: 'Adelin', created_at: iso(9), updated_at: iso(7), url: 'https://app.gainora.co.uk/q/demo-willow-q',
+      answers: { owner: 'Hannah Price, aesthetics nurse (NMC registered), Level 7 in injectables. Practising since 2018.', insured: 'Yes, with Hamilton Fraser', where: 'Crewe town centre, happy to show the address. Clients come from Crewe, Nantwich and Sandbach.', contact: '01632 960 123, hello@willow.example. Tue to Sat, 9am to 6pm', booking: 'Online booking link (sample)', treatments: 'Skin boosters £180 (45 min)\nAnti-wrinkle injections, 3 areas £250 (30 min)\nLip filler 1ml £220 (45 min)\nChemical peel £85 (40 min)', more: 'Skin boosters and peels', why: 'Always a free consultation first\nFollow-up call two weeks after\nOne-to-one appointments, never rushed', look: 'Calm. Plum and cream. Logo attached.', reviews: 'Google review link (sample)', domain: 'willowaesthetics.co.uk (already owned)', case_study: 'yes', baseline: 'About 25 enquiries and 14 bookings a month' },
+      files: [{ url: photo('Treatment room', 330), name: 'room.jpg', question: 'photos' }, { url: photo('Hannah at work', 20), name: 'hannah.jpg', question: 'photos' }, { url: photo('Logo', 280), name: 'logo.png', question: 'photos' }] },
+    { id: id(), email: 'mike@kmplumbing.example', token: 'demo-km-q', template: 'custom', title: 'A few questions from Gainora', intro: 'Short answers are fine.', questions: cleanQuestions([{ label: 'Which areas do you cover?', type: 'text' }, { label: 'Photos of recent jobs', type: 'photos' }]), status: 'sent', due_on: addDays(today, 2), sent_to: 'mike@kmplumbing.example', sent_at: iso(3), opened_at: null, answered_at: null, reminded_at: null, client_task_id: null, next_task_id: null, created_by: 'Adelin', created_at: iso(3), updated_at: iso(3), url: 'https://app.gainora.co.uk/q/demo-km-q', answers: {}, files: [] },
   ];
   const unpaid: Unpaid[] = [{ id: 'in_demo', email: 'mike@kmplumbing.example', client: 'K&M Plumbing', amount: 498, due: addDays(today, -3), attempts: 2, link: null }];
 
@@ -318,6 +341,21 @@ function demoBiz(): BizApi {
     },
     async deadlineDone(did) { await wait(); const d = deadlines.find((x) => x.id === did)!; const next = nextOccurrence(d.due_on, d.repeat); if (next) d.due_on = next; else d.done_at = new Date().toISOString(); return next; },
     async deleteDeadline(did) { await wait(); const i = deadlines.findIndex((x) => x.id === did); if (i >= 0) deadlines.splice(i, 1); },
+    async asks(email) { await wait(); return asksList.filter((a) => a.email === email && a.status !== 'cancelled').sort((a, b) => b.created_at.localeCompare(a.created_at)); },
+    async saveAsk(a) {
+      await wait();
+      const t = templateFor(a.template || 'custom');
+      const questions = cleanQuestions(a.questions?.length ? a.questions : t.questions);
+      if (!questions.length) throw new Error('Add at least one question.');
+      if (a.id) { const cur = asksList.find((x) => x.id === a.id)!; Object.assign(cur, { title: a.title || cur.title, intro: a.intro ?? cur.intro, questions, due_on: a.due_on ?? cur.due_on }); return cur; }
+      const token = `demo-${Math.random().toString(36).slice(2, 10)}`;
+      const row: AskRow = { id: id(), email: a.email, token, template: t.key, title: a.title || t.title, intro: a.intro ?? t.intro, questions, answers: {}, files: [], status: 'draft', due_on: a.due_on || addDays(today, t.dueDays), sent_to: '', sent_at: null, opened_at: null, answered_at: null, reminded_at: null, client_task_id: null, next_task_id: null, created_by: 'Adelin', created_at: new Date().toISOString(), updated_at: new Date().toISOString(), url: `https://app.gainora.co.uk/q/${token}` };
+      asksList.unshift(row); return row;
+    },
+    async sendAsk(aid, o) { await wait(400); const a = asksList.find((x) => x.id === aid)!; Object.assign(a, { status: a.status === 'draft' ? 'sent' : a.status, sent_to: o.to || a.sent_to || o.email, sent_at: a.sent_at ?? new Date().toISOString() }); return a; },
+    async remindAsk(aid) { await wait(300); const a = asksList.find((x) => x.id === aid); if (a) a.reminded_at = new Date().toISOString(); },
+    async cancelAsk(aid) { await wait(); const a = asksList.find((x) => x.id === aid); if (a) a.status = 'cancelled'; },
+    async emailClient(_email, subject, message) { await wait(400); if (!subject.trim() || !message.trim()) throw new Error('Write a subject and a message.'); },
     async saveAgreement(email, terms, dpa) { await wait(); const a = agreements.find((x) => x.email === email); if (a) Object.assign(a, { terms: terms ? `${terms}T12:00:00Z` : null, dpa: dpa ? `${dpa}T12:00:00Z` : null }); },
   };
 }

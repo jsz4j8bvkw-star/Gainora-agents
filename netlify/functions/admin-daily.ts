@@ -36,13 +36,18 @@ export default async () => {
   try {
     const today = ukToday();
     await safe(careTasks(today), 0);
-    const [s, prospects, proposals, deadlines, unpaid] = await Promise.all([
+    const since = new Date(Date.now() - 26 * 3600_000).toISOString();
+    const [s, prospects, proposals, deadlines, unpaid, asks] = await Promise.all([
       loadState(),
       safe(db<Prospect[]>('prospects?select=*&limit=5000'), []),
       safe(db<any[]>('proposals?select=business_name,status,sent_at,viewed_at,expires_on&status=in.(sent,viewed)&limit=500'), []),
       safe(db<Deadline[]>('business_deadlines?select=*&done_at=is.null&limit=500'), []),
       unpaidInvoices(),
+      safe(db<any[]>(`client_asks?select=email,title,status,due_on,answered_at&status=in.(sent,opened,answered)&limit=500`), []),
     ]);
+    const answeredNow = asks.filter((a) => a.status === 'answered' && a.answered_at >= since);
+    const askLate = asks.filter((a) => (a.status === 'sent' || a.status === 'opened') && a.due_on && a.due_on < today);
+    const nameOf = (email: string) => s.accounts.find((x) => x.email === email)?.name || email;
     const open = s.tasks.filter((t) => t.status !== 'done' && t.who !== 'client');
     const b = board(open, today);
     const waiting = s.tasks.filter((t) => t.status !== 'done' && t.who === 'client' && t.due_on && t.due_on <= today);
@@ -54,6 +59,8 @@ export default async () => {
     const line = (t: { client: string; title: string; due_on: string | null }) => `• ${t.client}: ${t.title} (${dueLabel(t.due_on, today)})`;
     const parts: string[] = [];
     if (unpaid.length) parts.push(`Payments that failed (${unpaid.length}):\n${unpaid.slice(0, 10).map((u) => `• ${s.accounts.find((a) => a.email === u.email)?.name || u.email}: ${money(u.amount)}, ${u.attempts} attempt${u.attempts === 1 ? '' : 's'}`).join('\n')}`);
+    if (answeredNow.length) parts.push(`Clients answered your questions:\n${answeredNow.map((a) => `• ${nameOf(a.email)}: ${a.title}`).join('\n')}`);
+    if (askLate.length) parts.push(`Questions not answered by their date (send a reminder from their client page):\n${askLate.map((a) => `• ${nameOf(a.email)}: ${a.title}${a.status === 'sent' ? ' (not opened)' : ' (started)'}`).join('\n')}`);
     if (b.overdue.length) parts.push(`Late (${b.overdue.length}):\n${b.overdue.slice(0, 15).map(line).join('\n')}`);
     if (b.today.length) parts.push(`Due today (${b.today.length}):\n${b.today.slice(0, 15).map(line).join('\n')}`);
     if (calls.length) parts.push(`Sales calls today:\n${calls.map((p) => `• ${time(p.call_at!)} ${p.business_name}${p.contact_name ? ` (${p.contact_name})` : ''}`).join('\n')}`);

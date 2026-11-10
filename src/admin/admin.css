@@ -160,3 +160,18 @@
 .health-watch::before { background: var(--brass); }
 .prices-table td:first-child { min-width: 320px; width: 44%; }
 .prices-table td:first-child .input { width: 100%; }
+
+/* Questions sent to clients */
+.timeline p { white-space: pre-line; }
+.ask-card { padding: 18px 20px; display: grid; gap: 12px; }
+.ask-head { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+.answers { display: grid; gap: 14px; border-top: 1px solid var(--line); padding-top: 14px; }
+.answers-group { font: 600 var(--t-sm)/1.3 var(--sans); margin: 6px 0 0; color: var(--ink); }
+.answer { display: grid; gap: 4px; }
+.answer-text { white-space: pre-line; margin: 0; }
+.answer-photos { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px; }
+.answer-photos img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: var(--r-md); border: 1px solid var(--line); display: block; }
+.q-edit { margin: 0; padding-left: 22px; display: grid; gap: 12px; }
+.q-edit li { display: grid; gap: 6px; }
+.select-small { min-height: 36px; font-size: var(--t-sm); width: auto; }
+.rule { border: 0; border-top: 1px solid var(--line); margin: 4px 0; width: 100%; }
