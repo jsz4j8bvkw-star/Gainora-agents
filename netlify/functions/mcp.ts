@@ -1,5 +1,5 @@
 import { db, enc, HttpError } from '../lib/core';
-import { checkKey, findAccount, loadState, log, saveTask, startPackage, type AdminState } from '../lib/admin';
+import { checkKey, findAccount, loadState, log, saveRecord, saveTask, startPackage, type AdminState } from '../lib/admin';
 import { cleanSite, liveOrigin, ownerEmail, APP_ORIGIN } from '../lib/sites';
 import { sendEmail } from '../lib/email';
 import { bucketOf, ukToday } from '../../shared/admin/board';
@@ -122,6 +122,22 @@ const TOOLS: Tool[] = [
       if (!(pkg in PACKAGES)) throw new HttpError(400, 'Unknown package.');
       const made = await startPackage(acc.email, pkg as Package, /^\d{4}-\d{2}-\d{2}$/.test(String(start_date)) ? start_date : ukToday(), CLAUDE);
       return { client: acc.name, steps_created: made };
+    },
+  },
+  {
+    name: 'update_client',
+    description: 'Update what Gainora keeps about a client: their business name, contact name (used to greet them in emails), phone, status (onboarding, active, paused, left), start date, set-up fee and whether it’s paid. Only what you send changes.',
+    inputSchema: { type: 'object', properties: {
+      client, business_name: str, contact_name: str, phone: str, status: { type: 'string', enum: ['onboarding', 'active', 'paused', 'left'] },
+      started_on: { ...str, description: 'YYYY-MM-DD' }, setup_fee: { type: 'number', description: '£, 0 for no charge' }, setup_paid: { type: 'boolean' },
+    }, required: ['client'] },
+    run: async ({ client: ref, ...patch }, s) => {
+      const acc = findAccount(s, ref);
+      const keys = ['business_name', 'contact_name', 'phone', 'status', 'started_on', 'setup_fee', 'setup_paid'].filter((k) => patch[k] !== undefined);
+      if (!keys.length) throw new HttpError(400, 'Nothing to change.');
+      const rec = await saveRecord(acc.email, Object.fromEntries(keys.map((k) => [k, patch[k]])));
+      await log(acc.email, CLAUDE, `Updated their details: ${keys.map((k) => k.replace(/_/g, ' ')).join(', ')}.`, 'work');
+      return { client: rec.business_name || acc.name, contact: rec.contact_name, phone: rec.phone, status: rec.status, started_on: rec.started_on, setup_fee: rec.setup_fee, setup_paid: rec.setup_paid };
     },
   },
   {

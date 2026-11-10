@@ -99,6 +99,9 @@ test('asking a client for details, from the admin to the answers', async () => {
     assert.equal(answered[0].client, 'Alder Ease Aesthetics');
     assert.match(answered[0].answers, /nurse prescriber/);
     assert.equal(answered[0].photos.length, 1);
+    const upd = await use('update_client', { client: 'alder', contact_name: 'Mirela', setup_fee: 0 });
+    assert.equal(upd.contact, 'Mirela');
+    assert.equal(fake.tables.admin_accounts.find((r) => r.email === OWNER.email).business_name, 'Alder Ease Aesthetics', 'what wasn’t sent is kept');
     const drafted = await use('draft_client_questions', { client: 'alder', questions: [{ label: 'Which photo should go at the top of the home page?', type: 'text' }] });
     assert.equal(drafted.draft, true);
     const before = emails.length;
@@ -110,7 +113,7 @@ test('asking a client for details, from the admin to the answers', async () => {
     const draft2 = fake.tables.client_asks.find((a) => a.status === 'draft');
     await ok(call({ op: 'send', id: draft2.id }));
     await ok(call({ op: 'remind', id: draft2.id }));
-    assert.ok(emails.some((e) => /^Reminder:/.test(e.subject) && /^Hi Amy,/.test(e.text)));
+    assert.ok(emails.some((e) => /^Reminder:/.test(e.subject) && /^Hi Mirela,/.test(e.text)), 'greets them by the name Claude saved');
     await ok(call({ op: 'cancel', id: draft2.id }));
     assert.equal((await form(new Request(`https://app.gainora.co.uk/q/${draft2.token}`))).status, 404, 'a cancelled link stops working');
     assert.equal((await call({ op: 'cancel', id: ask.id })).status, 409, 'answered ones can’t be cancelled');
