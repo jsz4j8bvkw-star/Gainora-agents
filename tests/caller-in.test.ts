@@ -48,9 +48,12 @@ test('caller lookup: Retell gets the regular’s record, unknown and withheld nu
     assert.match(w.caller_record, /withheld/);
     assert.ok(!calls.some((c) => c.includes('phone=eq.anonymous')));
 
-    // A bad link is refused; other events get an empty success.
-    assert.equal((await ask('+447700900410', 'B'.repeat(32))).status, 404);
-    assert.equal((await ask('+447700900410', 'short')).status, 404);
+    // A wrong link gives nothing away and never delays the call; other events get an empty success.
+    for (const bad of ['B'.repeat(32), 'short']) {
+      const r = await ask('+447700900410', bad);
+      assert.equal(r.status, 200);
+      assert.equal((await r.json()).call_inbound.dynamic_variables.caller_known, 'no');
+    }
     assert.deepEqual(await (await ask(undefined, TOKEN, { event: 'chat_inbound', chat_inbound: {} })).json(), {});
 
     // Supabase down: the call still goes ahead, with no record.
