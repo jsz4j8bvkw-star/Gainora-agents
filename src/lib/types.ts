@@ -2,7 +2,13 @@ export type {
   CaptureSettings, EnquiryRecord, PackageId, EnquiryPatch, EnquiryStatus, EnquiryKind, Channel, Urgency, FollowItem, FollowKind, Report, HistoryItem, QuotePolicy,
 } from '../../shared/capture';
 
-export interface User { id: string; email: string }
+export interface User {
+  id: string; email: string;
+  /** They've chosen a password for their Gainora login. */
+  hasPassword?: boolean;
+  /** A password must be chosen before the app opens: 'create' the first time, 'new' after an email-link sign-in. */
+  passwordStep?: 'create' | 'new';
+}
 
 export interface Plan {
   active: boolean;

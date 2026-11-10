@@ -7,6 +7,7 @@ import { Icon, Loading, ToastProvider } from './components/ui';
 import { longDate } from './lib/format';
 import { followUps, isBeauty } from '../shared/capture';
 import { SignIn } from './pages/signin';
+import { SetPassword } from './pages/password';
 import { Setup } from './pages/setup';
 import { Today } from './pages/today';
 import { Enquiries, EnquiryDetail } from './pages/enquiries';
@@ -56,6 +57,7 @@ export function App() {
   if (error) return <div className="page"><div className="err" role="alert">{error}</div></div>;
   if (user === undefined) return <Loading label="Opening Gainora" />;
   if (!user) return <ToastProvider><SignIn onSignedIn={load} /></ToastProvider>;
+  if (user.passwordStep) return <ToastProvider><SetPassword user={user} onDone={load} /></ToastProvider>;
   if (settings === undefined || !plan) return <Loading label="Loading your business" />;
   if (!plan.active) return <NotOnPlan email={user.email} />;
   if (!settings?.completedAt) {

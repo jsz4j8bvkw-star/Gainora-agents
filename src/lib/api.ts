@@ -12,7 +12,11 @@ export interface Api {
   mode: 'demo' | 'live';
   getUser(): Promise<User | null>;
   /** In the demo, which sample business to open: a plumber or a physio clinic. */
+  /** Emails a sign-in link: the first time in, or when they've forgotten their password. (Demo: opens the demo.) */
   requestSignIn(email: string, sample?: 'trade' | 'clinic' | 'beauty'): Promise<void>;
+  signInWithPassword(email: string, password: string): Promise<void>;
+  /** Sets (or changes) the password for the signed-in user. */
+  setPassword(password: string): Promise<void>;
   signOut(): Promise<void>;
 
   getPlan(): Promise<Plan>;

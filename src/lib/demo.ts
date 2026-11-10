@@ -441,6 +441,8 @@ export function createDemoApi(): Api {
     mode: 'demo',
     async getUser() { if (s.user) ensure(); return s.user; },
     async requestSignIn(email, sample) { s.user = { id: 'demo', email }; if (sample && sample !== s.sample) { s.sample = sample; s.settings = null; } ensure(); save(); },
+    async signInWithPassword(email) { s.user = { id: 'demo', email, hasPassword: true }; ensure(); save(); },
+    async setPassword() { if (s.user) { s.user = { ...s.user, hasPassword: true, passwordStep: undefined }; save(); } },
     async signOut() { s.user = null; save(); },
     async getPlan() { return { active: true, package: 'book' as const, renewsOn: new Date(Date.now() + 19 * DAY).toISOString(), alsoCommandCentre: false }; },
     async billingUrl() { return null; },

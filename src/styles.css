@@ -512,6 +512,18 @@ tr:last-child td { border-bottom: 0; }
 .signin-card a { color: var(--sage); }
 .signin-card :focus-visible { outline-color: var(--sage); }
 .signin-foot { font-size: var(--t-xs); color: #7D7972; }
+.signin-foot .linklike { color: var(--sage); }
+.linklike { background: none; border: 0; padding: 0; font: inherit; color: var(--forest); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.linklike:hover { text-decoration-thickness: 2px; }
+.pw-wrap { position: relative; }
+.pw-wrap .input { width: 100%; padding-right: 64px; }
+.pw-toggle { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); background: none; border: 0; padding: 6px 8px; font: inherit; font-size: var(--t-xs); font-weight: 600; color: var(--forest); cursor: pointer; border-radius: 6px; }
+.pw-toggle:hover { background: var(--forest-wash); }
+.signin-card .pw-toggle { color: var(--sage); }
+.signin-card .pw-toggle:hover { background: rgba(255,255,255,.06); }
+.signin-card .field-help { color: #8E8A83; }
+.change-pw { max-width: 420px; display: grid; gap: 8px; justify-items: start; }
+.change-pw form { width: 100%; }
 @media (max-width: 960px) {
   .signin { grid-template-columns: 1fr; }
   .signin-art { padding: calc(env(safe-area-inset-top) + 28px) 22px 8px; gap: 36px; border-right: 0; }

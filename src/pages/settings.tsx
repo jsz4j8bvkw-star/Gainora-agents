@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { api } from '../lib/api';
+import { ChangePassword } from './password';
 import { useApp } from '../app';
 import { Button, Icon, useToast } from '../components/ui';
 import { applyAnswer, display, QField, SETUP, sectionErrors, type SetupSection } from './setup';
@@ -68,6 +69,12 @@ export function Settings() {
           <Button kind="secondary" icon="refresh" onClick={rerun}>Go through setup again</Button>
           <Button kind="secondary" icon="logout" onClick={async () => { await api.signOut(); location.reload(); }}>Sign out</Button>
         </div>
+        {api.mode === 'live' && (
+          <div className="mt-24">
+            <p className="small muted" style={{ margin: '0 0 12px' }}>You sign in with your email and password. The same password opens Command Centre.</p>
+            <ChangePassword email={user.email} />
+          </div>
+        )}
         <p className="xsmall faint mt-16">You control your customers’ information: delete any enquiry from its page. To close your account and delete everything, email <a href="mailto:hello@gainora.co.uk">hello@gainora.co.uk</a>. We delete it within 30 days.</p>
       </section>
     </div>
