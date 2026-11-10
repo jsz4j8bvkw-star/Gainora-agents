@@ -68,18 +68,25 @@ test('the price book matches what gainora.co.uk shows today', () => {
   const web = toWebsitePrices(DEFAULT_PRICE_BOOK);
   if (existsSync(site)) {
     const cfg = JSON.parse(readFileSync(site, 'utf8')).prices;
-    for (const k of ['audit', 'commandCentre']) assert.equal(web[k], cfg[k], k);
+    assert.equal(web.audit, cfg.audit, 'audit');
+    assert.equal(cfg.commandCentre, undefined, 'Command Centre isn’t sold on its own');
     for (const k of ['setup', 'monthly', 'foundingSetup', 'minimumMonths']) assert.equal(web.launchGrow[k], cfg.launchGrow[k], `launchGrow.${k}`);
     for (const k of ['setup', 'monthly', 'separateSetup', 'separateMonthly']) assert.equal(web.bundle[k], cfg.bundle[k], `bundle.${k}`);
-    for (const t of ['never', 'booking', 'desk']) for (const k of ['name', 'setup', 'monthly', 'minutes']) assert.equal(web.cc[t][k], cfg.cc[t][k], `cc.${t}.${k}`);
+    for (const k of ['setup', 'monthly', 'minutes', 'minimumMonths']) assert.equal(web.cc[k], cfg.cc[k], `cc.${k}`);
     assert.equal(web.cc.extraMinutes, cfg.cc.extraMinutes);
     for (const k of ['setup', 'monthly', 'months']) assert.equal(web.cc.founding[k], cfg.cc.founding[k], `cc.founding.${k}`);
     for (const k of ['audit', 'focused', 'core', 'whole', 'monthly', 'minimumMonths']) assert.equal(web.partner[k], cfg.partner[k], `partner.${k}`);
   }
-  const changed = DEFAULT_PRICE_BOOK.map((p) => (p.key === 'command-centre' ? { ...p, monthly: 349 } : p));
-  assert.equal(toWebsitePrices(changed).commandCentre, '£349');
-  const t = proposalTotals([fromPriceItem(DEFAULT_PRICE_BOOK.find((p) => p.key === 'capture-booking')!), fromPriceItem(DEFAULT_PRICE_BOOK.find((p) => p.key === 'command-centre')!)]);
-  assert.deepEqual(t, { monthly: 698, today: 995, minimum: 3, firstYear: 995 + 698 * 12 });
+  // 10 November 2026: one Capture & Convert price, Command Centre included in every package and not sold alone
+  assert.deepEqual([web.cc.setup, web.cc.monthly, web.cc.minutes, web.launchGrow.monthly, web.bundle.monthly, web.bundle.separateMonthly], ['£595', '£399', '600', '£599', '£849', '£998']);
+  assert.equal(web.commandCentre, undefined);
+  const on = DEFAULT_PRICE_BOOK.filter((p) => p.active);
+  assert.ok(!on.some((p) => ['command-centre', 'capture-never', 'capture-desk'].includes(p.key)));
+  for (const p of on.filter((x) => x.monthly)) assert.ok(['watcher', 'scout', 'brief'].every((g) => p.grants.includes(g as any)), `${p.key} includes Command Centre`);
+  const changed = DEFAULT_PRICE_BOOK.map((p) => (p.key === 'capture-booking' ? { ...p, monthly: 449 } : p));
+  assert.equal(toWebsitePrices(changed).cc.monthly, '£449');
+  const t = proposalTotals([fromPriceItem(DEFAULT_PRICE_BOOK.find((p) => p.key === 'capture-booking')!), fromPriceItem(DEFAULT_PRICE_BOOK.find((p) => p.key === 'launch-grow')!)]);
+  assert.deepEqual(t, { monthly: 998, today: 2590, minimum: 3, firstYear: 2590 + 998 * 12 });
   assert.deepEqual(packagesFromGrants(['watcher', 'scout', 'brief', 'website']), ['command', 'launch']);
 });
 

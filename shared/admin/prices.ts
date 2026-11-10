@@ -16,19 +16,21 @@ const item = (key: string, name: string, p: Partial<PriceItem>, sort: number): P
   key, name, description: '', setup: 0, monthly: 0, one_off: 0, minimum_months: 0, included: '', grants: [], stripe_product: null, active: true, sort, ...p,
 });
 
+// 10 November 2026: one Capture & Convert price, and Command Centre comes with every package instead of being sold on
+// its own. The old single packages stay in the book, switched off, so clients already paying for them are still recognised.
 export const DEFAULT_PRICE_BOOK: PriceItem[] = [
-  item('command-centre', 'Command Centre', { monthly: 299, grants: CC, description: 'The Watcher, The Scout and The Brief. Cancel any time.' }, 10),
-  item('capture-never', 'Capture & Convert: Never Miss a Call', { setup: 595, monthly: 249, minimum_months: 3, included: '300', grants: ['capture'] }, 20),
-  item('capture-booking', 'Capture & Convert: Call to Booking', { setup: 995, monthly: 399, minimum_months: 3, included: '600', grants: ['capture'] }, 21),
-  item('capture-desk', 'Capture & Convert: Full Front Desk', { setup: 1995, monthly: 599, minimum_months: 3, included: '1,200', grants: ['capture'] }, 22),
-  item('capture-founding', 'Capture & Convert: Call to Booking, founding offer', { setup: 495, monthly: 299, minimum_months: 12, included: '600', grants: ['capture'], description: 'First 3 clients, fixed for 12 months, in return for a named case study.' }, 23),
+  item('command-centre', 'Command Centre (on its own)', { monthly: 299, grants: CC, active: false, description: 'No longer sold on its own: included in every package. Kept for anyone already paying for it.' }, 10),
+  item('capture-never', 'Capture & Convert: Never Miss a Call (old tier)', { setup: 595, monthly: 249, minimum_months: 3, included: '300', grants: ['capture'], active: false, description: 'Replaced by the single Capture & Convert price.' }, 20),
+  item('capture-booking', 'Capture & Convert', { setup: 595, monthly: 399, minimum_months: 3, included: '600', grants: ['capture', ...CC], description: 'Receptionist, inbox, follow-ups and booking into the diary. Includes Command Centre. Bigger needs are priced on the call.' }, 21),
+  item('capture-desk', 'Capture & Convert: Full Front Desk (old tier)', { setup: 1995, monthly: 599, minimum_months: 3, included: '1,200', grants: ['capture'], active: false, description: 'Replaced by the single Capture & Convert price; bigger needs are priced on the call.' }, 22),
+  item('capture-founding', 'Capture & Convert, founding offer', { setup: 495, monthly: 299, minimum_months: 12, included: '600', grants: ['capture', ...CC], description: 'First 3 clients, fixed for 12 months, in return for a named case study. Includes Command Centre.' }, 23),
   item('extra-minutes', 'Extra call time, 100 minutes', { one_off: 25, included: '100', description: 'For receptionist calls beyond the minutes included.' }, 24),
-  item('launch-grow', 'Launch & Grow', { setup: 1995, monthly: 595, minimum_months: 3, grants: [...CC, 'website'], description: 'Website, Google profile, listings, reviews and one ad channel, looked after monthly. Includes Command Centre.' }, 30),
-  item('launch-grow-founding', 'Launch & Grow, founding offer', { setup: 1495, monthly: 595, minimum_months: 3, grants: [...CC, 'website'], description: 'First 2 to 3 clients, in return for a named case study.' }, 31),
-  item('launch-capture-bundle', 'Launch & Grow with Capture & Convert (Never Miss a Call)', { setup: 2295, monthly: 795, minimum_months: 3, included: '300', grants: [...CC, 'website', 'capture'] }, 32),
+  item('launch-grow', 'Launch & Grow', { setup: 1995, monthly: 599, minimum_months: 3, grants: [...CC, 'website'], description: 'Website, Google profile, listings, reviews and one ad channel, looked after monthly. Includes Command Centre.' }, 30),
+  item('launch-grow-founding', 'Launch & Grow, founding offer', { setup: 1495, monthly: 599, minimum_months: 3, grants: [...CC, 'website'], description: 'First 2 to 3 clients, in return for a named case study. Includes Command Centre.' }, 31),
+  item('launch-capture-bundle', 'Launch & Grow with Capture & Convert', { setup: 2295, monthly: 849, minimum_months: 3, included: '600', grants: [...CC, 'website', 'capture'], description: 'Both packages together, with one Command Centre.' }, 32),
   item('partner-focused', 'Growth & Operations Partner: Focused', { setup: 4950, monthly: 950, minimum_months: 3, grants: CC, description: 'One area, about 4 weeks, then monthly. Includes Command Centre.' }, 40),
-  item('partner-core', 'Growth & Operations Partner: Core', { setup: 7500, monthly: 950, minimum_months: 3, grants: CC, description: 'Two or three areas, about 8 weeks.' }, 41),
-  item('partner-whole', 'Growth & Operations Partner: Whole business', { setup: 12500, monthly: 950, minimum_months: 3, grants: CC, description: 'About 12 weeks.' }, 42),
+  item('partner-core', 'Growth & Operations Partner: Core', { setup: 7500, monthly: 950, minimum_months: 3, grants: CC, description: 'Two or three areas, about 8 weeks, then monthly. Includes Command Centre.' }, 41),
+  item('partner-whole', 'Growth & Operations Partner: Whole business', { setup: 12500, monthly: 950, minimum_months: 3, grants: CC, description: 'About 12 weeks, then monthly. Includes Command Centre.' }, 42),
   item('business-audit', 'Business Audit', { one_off: 495, description: 'Credited back if they start a package within 30 days.' }, 50),
 ];
 
@@ -38,18 +40,16 @@ export const money = (n: number) => `£${Math.round(n).toLocaleString('en-GB')}`
 export function toWebsitePrices(items: PriceItem[]): Record<string, any> {
   const by = new Map(items.filter((i) => i.active).map((i) => [i.key, i]));
   const get = (k: string) => by.get(k) ?? DEFAULT_PRICE_BOOK.find((d) => d.key === k)!;
-  const tier = (k: string, name: string) => ({ name, setup: money(get(k).setup), monthly: money(get(k).monthly), minutes: get(k).included || '' });
-  const launch = get('launch-grow'); const never = get('capture-never'); const bundle = get('launch-capture-bundle');
+  const launch = get('launch-grow'); const cc = get('capture-booking'); const bundle = get('launch-capture-bundle');
   const founding = get('capture-founding'); const partner = get('partner-core');
   return {
     audit: money(get('business-audit').one_off),
-    commandCentre: money(get('command-centre').monthly),
     launchGrow: { setup: money(launch.setup), monthly: money(launch.monthly), foundingSetup: money(get('launch-grow-founding').setup), minimumMonths: String(launch.minimum_months || 3) },
-    bundle: { setup: money(bundle.setup), monthly: money(bundle.monthly), separateSetup: money(launch.setup + never.setup), separateMonthly: money(launch.monthly + never.monthly) },
+    bundle: { setup: money(bundle.setup), monthly: money(bundle.monthly), separateSetup: money(launch.setup + cc.setup), separateMonthly: money(launch.monthly + cc.monthly) },
     cc: {
-      never: tier('capture-never', 'Never Miss a Call'), booking: tier('capture-booking', 'Call to Booking'), desk: tier('capture-desk', 'Full Front Desk'),
+      setup: money(cc.setup), monthly: money(cc.monthly), minutes: cc.included || '',
       extraMinutes: `${money(get('extra-minutes').one_off)} per ${get('extra-minutes').included || '100'} extra minutes`,
-      minimumMonths: String(never.minimum_months || 3),
+      minimumMonths: String(cc.minimum_months || 3),
       founding: { setup: money(founding.setup), monthly: money(founding.monthly), months: String(founding.minimum_months || 12) },
     },
     partner: { audit: money(get('business-audit').one_off), focused: money(get('partner-focused').setup), core: money(get('partner-core').setup), whole: money(get('partner-whole').setup), monthly: money(partner.monthly), minimumMonths: String(partner.minimum_months || 3) },

@@ -272,7 +272,7 @@ export function Prices() {
       </section>
       <section className="panel panel-pad stack gap-8 mt-24" aria-labelledby="site-h">
         <h2 className="heading" id="site-h">What gainora.co.uk will show</h2>
-        <p className="small">Command Centre {site.commandCentre}/month · Launch & Grow {site.launchGrow.setup} then {site.launchGrow.monthly}/month (founding {site.launchGrow.foundingSetup}) · Capture & Convert from {site.cc.never.setup} then {site.cc.never.monthly}/month · Business Audit {site.audit} · Partner from {site.partner.focused}</p>
+        <p className="small">Capture & Convert {site.cc.setup} then {site.cc.monthly}/month · Launch & Grow {site.launchGrow.setup} then {site.launchGrow.monthly}/month (founding {site.launchGrow.foundingSetup}) · Both {site.bundle.setup} then {site.bundle.monthly}/month · Command Centre included in every package · Business Audit {site.audit} · Partner from {site.partner.focused}</p>
         <p className="xsmall faint">Saving also updates each package’s product in Stripe, so new proposals charge these prices.{data.stripe ? '' : ' Stripe isn’t connected yet, so only proposals and the website use them for now.'}</p>
       </section>
     </div>

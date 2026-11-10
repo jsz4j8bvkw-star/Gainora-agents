@@ -33,7 +33,8 @@ export function agentsForProduct(productId: string): Agent[] {
 }
 
 /** Capture & Convert packages in the admin's price book, by key, and the plan the receptionist app uses for each. */
-const CAPTURE_PLAN: Record<string, 'answer' | 'book' | 'desk'> = { 'capture-never': 'answer', 'capture-booking': 'book', 'capture-desk': 'desk', 'capture-founding': 'book', 'launch-capture-bundle': 'answer' };
+// Since 10 November 2026 there is one Capture & Convert (capture-booking), and the bundle includes it in full.
+const CAPTURE_PLAN: Record<string, 'answer' | 'book' | 'desk'> = { 'capture-never': 'answer', 'capture-booking': 'book', 'capture-desk': 'desk', 'capture-founding': 'book', 'launch-capture-bundle': 'book' };
 
 /**
  * What a subscription item switches on: STRIPE_AGENT_PRODUCTS first, otherwise the product's own metadata, written

@@ -153,7 +153,7 @@ test('sales, proposals, prices, books and paperwork end to end', async () => {
     const page = await proposalPage(new Request(proposal.url));
     const html = await page.text();
     assert.equal(page.status, 200);
-    for (const bit of ['For Crewe Physio Ltd', '£1,995', '£595', 'Accept and pay securely', 'website first, then reviews', '3-month minimum']) assert.ok(html.includes(bit), bit);
+    for (const bit of ['For Crewe Physio Ltd', '£1,995', '£599', 'Accept and pay securely', 'website first, then reviews', '3-month minimum']) assert.ok(html.includes(bit), bit);
     assert.equal(fake.tables.proposals.find((p) => p.id === proposal.id).status, 'viewed');
     const pay = await proposalPage(new Request(proposal.url, { method: 'POST' }));
     assert.equal(pay.status, 303);
@@ -162,7 +162,7 @@ test('sales, proposals, prices, books and paperwork end to end', async () => {
     assert.equal(checkout.get('mode'), 'subscription');
     assert.equal(checkout.get('metadata[proposal]'), proposal.id);
     assert.equal(checkout.get('customer_email'), 'sam@crewephysio.example');
-    assert.equal(checkout.get('line_items[0][price_data][unit_amount]'), '59500');
+    assert.equal(checkout.get('line_items[0][price_data][unit_amount]'), '59900');
     assert.equal(checkout.get('line_items[0][price_data][recurring][interval]'), 'month');
     assert.equal(checkout.get('line_items[0][price_data][product_data][metadata][gainora_grants]'), 'watcher,scout,brief,website');
     assert.equal(checkout.get('line_items[1][price_data][unit_amount]'), '199500');
@@ -212,7 +212,8 @@ test('sales, proposals, prices, books and paperwork end to end', async () => {
     assert.ok(fake.tables.price_book.find((p) => p.key === 'launch-grow').stripe_product, 'each package keeps its Stripe product');
     const feed = await (await prices(new Request('https://app.gainora.co.uk/api/prices'))).json();
     assert.equal(feed.prices.launchGrow.monthly, '£649');
-    assert.equal(feed.prices.commandCentre, '£299');
+    assert.equal(feed.prices.cc.monthly, '£399');
+    assert.equal(feed.prices.commandCentre, undefined);
 
     /* ---------- Money and paperwork ---------- */
     await ok(B({ op: 'expense-save', expense: { supplier: 'Retell AI', category: 'AI', amount: 40, recurring: true, starts_on: `${today.slice(0, 7)}-01` } }));
