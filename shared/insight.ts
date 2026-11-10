@@ -27,7 +27,11 @@ export function whenWord(iso: string, now = new Date()): string {
 /* ---------- What the owner is looking at ---------- */
 
 /** The last thing the customer sent, if it hasn't been read, and whether a message is waiting for the owner's OK. */
-export interface Context { unreadReply?: { body: string; at: string } | null; awaitingOk?: number; now?: Date }
+export interface Context {
+  unreadReply?: { body: string; at: string } | null; awaitingOk?: number; now?: Date;
+  /** How the latest booking confirmation went: sent, failed (texting not set up, a bad number), or not yet. */
+  confirmation?: 'sent' | 'failed' | 'pending' | null;
+}
 
 export type Action = 'call' | 'reply' | 'book' | 'attended' | 'pay' | 'review' | 'rebook' | 'open' | 'none';
 export interface Step { action: Action; title: string; detail?: string }
@@ -80,7 +84,8 @@ export function nextStep(e: EnquiryRecord, s: CaptureSettings, ctx: Context = {}
     const past = new Date(e.bookedFor).getTime() < now.getTime() - 2 * 3_600_000;
     const what = `${e.bookedType ? `${e.bookedType}, ` : ''}${dayDate(e.bookedFor)} at ${time12(e.bookedFor)}${e.bookedWith ? ` with ${e.bookedWith}` : ''}.`;
     if (past) return { action: 'attended', title: `Did ${name} ${appts ? 'attend' : 'go ahead'}?`, detail: `${what} Mark it so the right message follows${appts ? ' and the no-show count stays honest' : ''}.` };
-    return { action: 'open', title: what, detail: 'Confirmation sent. The reminder goes out on its own.' };
+    const c = ctx.confirmation;
+    return { action: 'open', title: what, detail: c === 'failed' ? 'The confirmation didn’t go out: check the message below, or let them know yourself.' : c === 'sent' ? 'Confirmation sent. The reminder goes out on its own.' : 'The confirmation and reminder go out on their own.' };
   }
   if (e.status === 'won') {
     if (!e.paidAt && e.invoiceDue) return { action: 'pay', title: `${W.won}${e.jobValue ? `, £${e.jobValue.toLocaleString('en-GB')}` : ''}. Waiting to be paid.`, detail: `Due ${whenWord(e.invoiceDue, now).replace(/^on /, '')}.` };

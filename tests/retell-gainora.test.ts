@@ -125,3 +125,13 @@ test('booking page: clinics keep their wording, and a street address isn’t rem
   for (const a of ['By phone or video', 'Online', 'On Zoom', 'phone']) assert.ok(isRemote(a), a);
   for (const a of ['4 Arwenack Street, Falmouth', 'Phone Street Clinic, Leeds', 'Online House, 2 High St']) assert.ok(!isRemote(a), a);
 });
+
+test('next step: a booking whose confirmation failed says so, instead of "Confirmation sent"', async () => {
+  const { nextStep } = await import('../shared/insight');
+  const w = withDefaults(JSON.parse(JSON.stringify(s)));
+  const e: any = { id: 'e1', name: 'Test Booking', status: 'booked', bookedFor: '2026-11-12T09:00:00.000Z', bookedType: DIAGNOSTIC, bookedWith: 'Adelin', history: [], receivedAt: '2026-11-10T20:54:00.000Z', urgency: 'normal', kind: 'booking', reasons: [] };
+  const now = new Date('2026-11-10T21:00:00Z');
+  assert.match(nextStep(e, w, { now, confirmation: 'failed' }).detail!, /didn’t go out/);
+  assert.match(nextStep(e, w, { now, confirmation: 'sent' }).detail!, /Confirmation sent/);
+  assert.doesNotMatch(nextStep(e, w, { now }).detail!, /Confirmation sent/);
+});

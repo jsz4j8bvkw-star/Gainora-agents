@@ -3,6 +3,7 @@ import { hashToken, toRecord, TOKEN, withDefaults } from '../lib/capture';
 import { makeBooking, timesFor } from '../lib/diary';
 import { findType, offerTimes, sayTime, slotId } from '../../shared/diary';
 import { effectiveBookingMode } from '../../shared/capture';
+import { fromNumber, textingReady } from '../lib/messages';
 
 // The receptionist's booking tools during a live call (Retell custom functions).
 //   POST /api/diary-tool/<token>/times  { args: { treatment, team_member?, date?, part_of_day? } }
@@ -60,7 +61,7 @@ export default async (req: Request) => {
       return say({
         ok: true, booked: r.status === 'booked', say: r.when,
         note: r.status === 'booked'
-          ? `Booked. Read back the day, date, time${r.enquiry.bookedWith ? ' and who it’s with' : ''}, and say a confirmation text is on its way.${r.deposit ? ` They need to pay a deposit (${r.deposit.what}): the link comes in that text.` : ''}`
+          ? `Booked. Read back the day, date, time${r.enquiry.bookedWith ? ' and who it’s with' : ''}, and ${textingReady() && fromNumber(s) ? 'say a confirmation text is on its way' : 'say it’s all booked in (texts aren’t set up on this line yet, so don’t promise a text)'}.${r.deposit ? ` They need to pay a deposit (${r.deposit.what}): ${textingReady() && fromNumber(s) ? 'the link comes in that text' : 'the team will send the link'}.` : ''}`
           : 'Noted as a request. Say the team will confirm the time by text shortly.',
       });
     }

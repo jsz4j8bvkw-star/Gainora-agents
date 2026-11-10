@@ -191,7 +191,9 @@ export function EnquiryDetail({ id }: { id: string }) {
   const contact = { phone: e.phone || undefined, email: e.email || undefined };
   const lastIn = messages.filter((m) => m.enquiryId === e.id && m.direction === 'in').sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
   const unread = lastIn && !lastIn.read ? { body: lastIn.body, at: lastIn.createdAt } : null;
-  const step = nextStep(e, settings, { unreadReply: unread, awaitingOk: messages.filter((m) => m.enquiryId === e.id && m.status === 'awaiting_approval').length });
+  const confirm = messages.filter((m) => m.enquiryId === e.id && m.step === 'confirm' && m.direction === 'out').sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+  const step = nextStep(e, settings, { unreadReply: unread, awaitingOk: messages.filter((m) => m.enquiryId === e.id && m.status === 'awaiting_approval').length,
+    confirmation: !confirm ? null : confirm.status === 'sent' ? 'sent' : confirm.status === 'failed' || confirm.status === 'skipped' ? 'failed' : 'pending' });
   const value = enquiryValue(e, settings);
   // The same person before: matched on phone or email, so the owner sees a regular as a regular.
   const me = normPhone(e.phone);

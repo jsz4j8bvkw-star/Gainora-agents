@@ -63,7 +63,8 @@ test('the booking page, the receptionist and the diary share one set of free tim
     // She books one on the call; asking twice on the same call doesn't book twice.
     const booked = await (await call('book', { slot: offer.options[0].slot, treatment: 'Lip filler', name: 'Chloe Martin', new_client: false })).json();
     assert.equal(booked.booked, true);
-    assert.match(booked.note, /confirmation text is on its way/);
+    // Texting isn't set up in this test, so she doesn't promise a text (found on Gainora's own line before Twilio).
+    assert.match(booked.note, /don’t promise a text/);
     const twice = await (await call('book', { slot: offer.options[1].slot, treatment: 'Lip filler', name: 'Chloe Martin' })).json();
     assert.match(twice.note, /already has a booking/);
     const onCall = fake.tables.enquiries.filter((e) => e.external_id === 'call_1');
@@ -82,5 +83,14 @@ test('the booking page, the receptionist and the diary share one set of free tim
     // Unknown treatment: she's told what can be booked.
     const odd = await (await call('times', { treatment: 'tattoo removal' }, 'call_2')).json();
     assert.match(odd.note, /These can be booked: Free consultation/);
+
+    // With texting set up, she says the confirmation text is on its way.
+    Object.assign(process.env, { TWILIO_ACCOUNT_SID: 'AC_test', TWILIO_AUTH_TOKEN: 'test' });
+    try {
+      const more = await (await call('times', { treatment: 'lip filler', date: tomorrow }, 'call_3')).json();
+      const texted = await (await call('book', { slot: more.options[0].slot, treatment: 'Lip filler', name: 'Priya Shah' }, 'call_3')).json();
+      assert.equal(texted.booked, true);
+      assert.match(texted.note, /confirmation text is on its way/);
+    } finally { delete process.env.TWILIO_ACCOUNT_SID; delete process.env.TWILIO_AUTH_TOKEN; }
   } finally { fake.server.close(); }
 });
