@@ -129,7 +129,9 @@ for (const file of htmlFiles) {
 // Prices: every published price comes from config and appears where it should
 const read = p => fs.readFileSync(path.join(DIST, p), "utf8");
 const home = read("index.html"), packages = read("packages/index.html"), audit = read("audit/index.html");
-const P = config.prices;
+// The prices this build used (from Gainora admin, or site.config.json); see build.js.
+const builtPrices = path.join(ROOT, ".build-prices.json");
+const P = fs.existsSync(builtPrices) ? JSON.parse(fs.readFileSync(builtPrices, "utf8")) : config.prices;
 for (const [label, price, pages] of [
   ["audit", P.audit, [home, packages, audit]],
   ["Command Centre monthly", P.commandCentre, [home, packages]],
@@ -156,7 +158,7 @@ const configPrices = new Set(JSON.stringify(P).match(PRICE));
 for (const [name, html] of [["home", home], ["packages", packages], ["audit", audit]]) {
   const text = html.replace(/<script[\s\S]*?<\/script>/g, "").replace(/<[^>]+>/g, " ");
   for (const m of text.matchAll(PRICE)) {
-    check(configPrices.has(m[0]), `${name}: price ${m[0]} is not in site.config.json`);
+    check(configPrices.has(m[0]), `${name}: price ${m[0]} is not one of the prices (admin price book or site.config.json)`);
   }
 }
 check(/ex-VAT|exclude VAT|excludes VAT|excluding VAT/.test(packages.replace(/<[^>]+>/g, " ")), "packages: prices not marked ex-VAT");

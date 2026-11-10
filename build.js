@@ -2,8 +2,9 @@
 /*
   Static site builder. No dependencies.
 
-  node build.js          build into ./dist
-  node build.js --serve  build, then preview at http://localhost:8080
+  node build.js            build into ./dist (prices from Gainora admin, or site.config.json if it can't be reached)
+  node build.js --offline  build with the prices in site.config.json only
+  node build.js --serve    build, then preview at http://localhost:8080
 
   Pages live in src/pages/*.html and start with a meta comment:
     <!--meta {"title": "...", "description": "...", "path": "/diagnosis/", "nav": "diagnosis"} -->
@@ -21,6 +22,47 @@ const ROOT = __dirname;
 const SRC = path.join(ROOT, "src");
 const DIST = path.join(ROOT, "dist");
 const config = JSON.parse(fs.readFileSync(path.join(ROOT, "site.config.json"), "utf8"));
+// The prices the build used, for tests/check.js (site.config.json, updated from the admin's price book when reachable).
+const BUILD_PRICES = path.join(ROOT, ".build-prices.json");
+
+/*
+  Prices come from Gainora admin → Prices (https://app.gainora.co.uk/api/prices), so changing a price there and
+  pressing "Save and update the website" rebuilds this site with it. If the admin can't be reached, or answers with
+  anything unexpected, the build uses the prices in site.config.json instead. Keep those as the fallback.
+    GAINORA_PRICES=off      build with site.config.json only
+    GAINORA_PRICES_URL=…    read prices from somewhere else (for testing)
+*/
+async function livePrices() {
+  if (process.env.GAINORA_PRICES === "off" || process.argv.includes("--offline")) return "site.config.json (live prices switched off)";
+  const url = process.env.GAINORA_PRICES_URL || "https://app.gainora.co.uk/api/prices";
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(8000), headers: { Accept: "application/json" } });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const live = (await res.json()).prices;
+    const problems = [];
+    const merged = mergePrices(config.prices, live, "prices", problems);
+    if (problems.length) throw new Error(problems.slice(0, 3).join("; "));
+    config.prices = merged;
+    return `Gainora admin (${url})`;
+  } catch (e) {
+    console.warn(`Note: couldn't read prices from Gainora admin (${e.message}); using site.config.json.`);
+    return "site.config.json";
+  }
+}
+
+/** Live values replace the config's, key by key; keys only the config has (notes, counts) are kept. */
+function mergePrices(base, live, at, problems) {
+  if (!live || typeof live !== "object" || Array.isArray(live)) { problems.push(`${at} is not an object`); return base; }
+  const out = Object.assign({}, base);
+  for (const [k, v] of Object.entries(live)) {
+    if (!(k in base)) continue;                       // only prices the site already knows about
+    if (base[k] && typeof base[k] === "object") out[k] = mergePrices(base[k], v, `${at}.${k}`, problems);
+    else if (typeof v !== "string" || !v.trim()) problems.push(`${at}.${k} is empty`);
+    else if (/^£\d{1,3}(,\d{3})*$/.test(base[k]) && !/^£\d{1,3}(,\d{3})*$/.test(v)) problems.push(`${at}.${k} isn't a price (${v})`);
+    else out[k] = v;
+  }
+  return out;
+}
 
 function get(obj, keyPath) {
   return keyPath.split(".").reduce((o, k) => (o && o[k] !== undefined ? o[k] : undefined), obj);
@@ -92,7 +134,8 @@ function copyDir(from, to) {
   }
 }
 
-function build() {
+function build(pricesFrom = "site.config.json") {
+  fs.writeFileSync(BUILD_PRICES, JSON.stringify(config.prices, null, 1));
   if (config.demo.phone && !(config.demo.phoneHref && /^https:\/\//.test(config.demo.recordingUrl || ""))) {
     throw new Error("demo.phone is set but demo.phoneHref or demo.recordingUrl is missing. The 'Ring our receptionist' block needs the number, a tel: value and a recording.");
   }
@@ -162,7 +205,7 @@ function build() {
     }
   }
 
-  console.log(`Built ${pages.length} pages into dist/`);
+  console.log(`Built ${pages.length} pages into dist/ (prices from ${pricesFrom})`);
   return pages;
 }
 
@@ -184,6 +227,10 @@ function serve(port = 8080) {
   }).listen(port, () => console.log(`Preview: http://localhost:${port}`));
 }
 
-build();
-if (process.argv.includes("--serve")) serve();
-module.exports = { build };
+module.exports = { build, mergePrices };
+if (require.main === module) {
+  livePrices().then((from) => {
+    build(from);
+    if (process.argv.includes("--serve")) serve();
+  }).catch((e) => { console.error(e.message); process.exit(1); });
+}

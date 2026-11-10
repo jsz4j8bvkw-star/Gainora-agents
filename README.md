@@ -26,7 +26,7 @@ In local preview the booking form shows a "could not be sent" message. That's de
 | Redirects for removed pages | `netlify.toml` and `src/_redirects` (keep them in step; the tests check) |
 | Security headers and Content Security Policy | `src/_headers` |
 
-Prices appear on the pages only through `{{prices.…}}` tokens, and the checks fail if a page shows a price that isn't in the config. To change a price, change it once in `site.config.json` and rebuild.
+Prices appear on the pages only through `{{prices.…}}` tokens, and the checks fail if a page shows a price that isn't one of them. The build reads the current prices from Gainora admin → Prices (`https://app.gainora.co.uk/api/prices`); pressing **Save and update the website** there rebuilds this site. If the admin can't be reached, the build uses the prices in `site.config.json`, so keep those as the fallback (`node build.js --offline` builds with them only).
 
 ## Pages
 

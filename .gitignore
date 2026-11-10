@@ -3,3 +3,4 @@ preview/
 preview-refresh/
 node_modules/
 .DS_Store
+.build-prices.json
