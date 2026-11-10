@@ -12,13 +12,36 @@ import type { ReviewPoint } from './reviews';
 import { extractPrices } from './pages';
 import { priceValue } from './prices';
 import { socialUrl } from './social';
+import { comparisonFacts, moveSummary, treatmentMoves, type Comparison } from './price-compare';
 
 const DAY = 86_400_000;
 
 /* ---------- Types ---------- */
 export type CompetitorSource = 'typed' | 'found';
 
-export interface ServiceLine { name: string; price: string; url: string; seenAt: string }
+export interface ServiceLine {
+  name: string; price: string; url: string; seenAt: string;
+  /** The section it was listed under on a booking page ("Anti-wrinkle"), and its length. */
+  category?: string; duration?: string;
+  /** Read from a public booking page (structured data or text) or from the business's website. */
+  via?: 'booking' | 'website';
+  platform?: string;
+}
+
+/** What a public booking page says about a business: its rating there and how much of the menu is public. */
+export interface BookingSummary {
+  platform: string; url: string; checkedAt: string;
+  rating: number | null; reviews: number | null;
+  serviceCount: number | null; servicesRead: number; partial: boolean;
+  /** Plain words when no prices could be read ("Phorest pages only show prices inside the booking app..."). */
+  note?: string;
+}
+
+/** Where the owner's own Google listing search stands, when they haven't picked their listing yet. */
+export interface OwnPlace { placeId: string; name: string; address: string; mapsUrl: string; rating: number | null; count: number | null; history: ReviewPoint[]; at: string; checkedAt?: string }
+
+/** Why the nearby list is (or isn't) filled, so the app can say so plainly. */
+export type FindStatus = 'ok' | 'none-found' | 'no-key' | 'no-area' | 'no-terms' | 'error' | 'cap';
 export interface OfferLine { text: string; url: string; seenAt: string; from: 'website' | 'instagram' }
 
 export interface InstaPost { id: string; caption: string; at: string; likes: number | null; comments: number | null; url: string; type?: string }
@@ -63,13 +86,21 @@ export interface TrackedCompetitor {
   sourceHashes?: Record<string, string>;
   sourcesCheckedAt?: string;
   social?: InstagramSnapshot | null;
+  /** Their public booking page (Fresha, Booksy...): rating there and how much of the menu is public. */
+  booking?: BookingSummary | null;
+  /** A booking page the owner added for this competitor (read like the ones found on their website). */
+  bookingUrl?: string;
   firstSeenAt: string;
 }
 
 export interface NearbyPlace { key: string; placeId: string; name: string; address: string; url?: string; rating: number | null; count: number | null; distanceKm: number | null }
 
 export type ReachKind = 'reviews' | 'service' | 'price' | 'offer' | 'post' | 'new-nearby' | 'followers';
-export interface ReachEvent { id: string; at: string; key: string; competitor: string; kind: ReachKind; summary: string; detail?: string; url?: string }
+export interface ReachEvent {
+  id: string; at: string; key: string; competitor: string; kind: ReachKind; summary: string; detail?: string; url?: string;
+  /** Price changes: the catalogue treatment ("Anti-wrinkle, 3 areas") and the prices before and after. */
+  treatment?: string; before?: string; after?: string;
+}
 
 export interface ReachAdvice { key?: string; text: string; action: string }
 
@@ -78,7 +109,17 @@ export interface CompetitorsState {
   foundAt?: string | null;
   searchTerms?: string[];
   /** The client's own side of the comparison: where they are, their own public services and their Instagram. */
-  you?: { lat?: number; lng?: number; instagram?: InstagramSnapshot | null; services?: ServiceLine[]; offers?: OfferLine[]; sourceHashes?: Record<string, string>; sourcesCheckedAt?: string };
+  you?: {
+    lat?: number; lng?: number; instagram?: InstagramSnapshot | null; services?: ServiceLine[]; offers?: OfferLine[]; sourceHashes?: Record<string, string>; sourcesCheckedAt?: string;
+    /** The owner's own public booking page, read like a competitor's. */
+    booking?: BookingSummary | null;
+    /** The owner's Google listing as the Watcher found it by name and town, until they confirm one. */
+    place?: OwnPlace | null; placeLookupAt?: string;
+  };
+  /** Why the nearby search has or hasn't produced a list yet. */
+  findStatus?: FindStatus;
+  /** The AI's answers for service names the keyword matcher couldn't place (plain name → catalogue id or "none"). */
+  learned?: Record<string, string>;
   list: TrackedCompetitor[];
   nearby: NearbyPlace[];
   dismissed: { key: string; name: string; placeId?: string; at: string }[];
@@ -187,7 +228,7 @@ export function addSample(history: ReviewPoint[] | undefined, rating: number | n
 
 /* ---------- Booking platforms ---------- */
 /** Public booking sites a business's website often links to. Pages are read, never submitted. */
-export const BOOKING_HOSTS = ['fresha.com', 'treatwell.co.uk', 'treatwell.com', 'booksy.com', 'phorest.me', 'phorest.com', 'gettimely.com', 'bookedin.com', 'setmore.com', 'squareup.com', 'square.site', 'vagaro.com', 'ovatu.com', 'mindbodyonline.com', 'acuityscheduling.com', 'simplybook.it', 'simplybook.me', 'salonized.com', 'booking.timify.com', 'nailsbyme.com', 'bookwhen.com', 'resurva.com'];
+export const BOOKING_HOSTS = ['fresha.com', 'treatwell.co.uk', 'treatwell.com', 'booksy.com', 'phorest.me', 'phorest.com', 'gettimely.com', 'bookedin.com', 'setmore.com', 'squareup.com', 'square.site', 'vagaro.com', 'ovatu.com', 'mindbodyonline.com', 'acuityscheduling.com', 'simplybook.it', 'simplybook.me', 'salonized.com', 'booking.timify.com', 'nailsbyme.com', 'bookwhen.com', 'resurva.com', 'pabau.com', 'pabau.me'];
 
 const bookingHost = (h: string) => BOOKING_HOSTS.some((b) => h === b || h.endsWith('.' + b));
 const BOOKING_SKIP = /\/(login|signin|sign-in|account|cart|checkout)\b/i;
@@ -214,7 +255,7 @@ export function bookingLinks(html: string, pageUrl: string, max = 3): string[] {
 
 export const bookingPlatform = (url: string): string => {
   const h = hostOf(url);
-  const names: Record<string, string> = { 'fresha.com': 'Fresha', 'treatwell.co.uk': 'Treatwell', 'treatwell.com': 'Treatwell', 'booksy.com': 'Booksy', 'phorest.me': 'Phorest', 'phorest.com': 'Phorest', 'gettimely.com': 'Timely', 'setmore.com': 'Setmore', 'squareup.com': 'Square', 'square.site': 'Square', 'vagaro.com': 'Vagaro', 'ovatu.com': 'Ovatu', 'mindbodyonline.com': 'Mindbody', 'acuityscheduling.com': 'Acuity', 'simplybook.it': 'SimplyBook', 'simplybook.me': 'SimplyBook', 'salonized.com': 'Salonized', 'bookwhen.com': 'Bookwhen' };
+  const names: Record<string, string> = { 'fresha.com': 'Fresha', 'treatwell.co.uk': 'Treatwell', 'treatwell.com': 'Treatwell', 'booksy.com': 'Booksy', 'phorest.me': 'Phorest', 'phorest.com': 'Phorest', 'gettimely.com': 'Timely', 'setmore.com': 'Setmore', 'squareup.com': 'Square', 'square.site': 'Square', 'vagaro.com': 'Vagaro', 'ovatu.com': 'Ovatu', 'mindbodyonline.com': 'Mindbody', 'acuityscheduling.com': 'Acuity', 'simplybook.it': 'SimplyBook', 'simplybook.me': 'SimplyBook', 'salonized.com': 'Salonized', 'bookwhen.com': 'Bookwhen', 'pabau.com': 'Pabau', 'pabau.me': 'Pabau', 'bookedin.com': 'Bookedin' };
   const hit = Object.keys(names).find((k) => h === k || h.endsWith('.' + k));
   return hit ? names[hit] : h;
 };
@@ -321,7 +362,7 @@ export function mergeTracked(
       history: p?.history ?? [], ratingCheckedAt: p?.ratingCheckedAt, placeLookupAt: p?.placeLookupAt,
       instagram: p?.instagram, facebook: p?.facebook, instagramSetBy: p?.instagramSetBy,
       services: p?.services ?? [], offers: p?.offers ?? [], bookingPages: p?.bookingPages ?? [], pagesRead: p?.pagesRead, sourceHashes: p?.sourceHashes, sourcesCheckedAt: p?.sourcesCheckedAt,
-      social: p?.social ?? null, firstSeenAt: p?.firstSeenAt ?? stamp,
+      social: p?.social ?? null, booking: p?.booking ?? null, bookingUrl: p?.bookingUrl, firstSeenAt: p?.firstSeenAt ?? stamp,
     };
   };
   const isDismissed = (c: { name: string; url?: string; placeId?: string }) => dismissed.some((d) => d.key === competitorKey(c) || sameBusiness(d, c));
@@ -363,7 +404,7 @@ const eid = (kind: string, key: string, at: string, extra = '') => `${kind}:${ke
 const lower1 = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
 
 /** Events worth telling the owner about, from one competitor's previous and current state. */
-export function diffCompetitor(prev: TrackedCompetitor | undefined, next: TrackedCompetitor, you: { reviews30: number | null }, now = new Date()): ReachEvent[] {
+export function diffCompetitor(prev: TrackedCompetitor | undefined, next: TrackedCompetitor, you: { reviews30: number | null }, now = new Date(), learned?: Record<string, string> | null): ReachEvent[] {
   const at = now.toISOString();
   const out: ReachEvent[] = [];
   if (!prev) return out; // first sight: nothing to compare yet
@@ -376,7 +417,16 @@ export function diffCompetitor(prev: TrackedCompetitor | undefined, next: Tracke
     out.push({ ...base, id: eid('service', next.key, at), kind: 'service', url: added[0].url, summary: `${next.name} now lists ${added.length === 1 ? `“${added[0].name}” at ${added[0].price}` : `${added.length} services it didn’t before, including “${added[0].name}” (${added[0].price})`}.` });
   }
   const moves = next.services.map((s) => ({ s, o: oldByName.get(norm(s.name)) })).filter((x) => x.o && priceValue(x.o.price) !== priceValue(x.s.price) && !/^from/.test(x.s.price) === !/^from/.test(x.o!.price));
-  for (const m of moves.slice(0, 3)) out.push({ ...base, id: eid('price', next.key, at, m.s.name), kind: 'price', url: m.s.url, summary: `${next.name} changed the price of ${lower1(m.s.name)} from ${m.o!.price} to ${m.s.price}.` });
+  // The same moves by catalogue treatment: attach the treatment to a same-name move, and report a
+  // move the names hide (the service was renamed, or listed under a new name) on its own.
+  const byTreatment = treatmentMoves(prev.services, next.services, learned);
+  for (const m of moves.slice(0, 3)) {
+    const t = byTreatment.find((x) => x.sameName && x.after.name.toLowerCase().trim() === m.s.name.toLowerCase().trim());
+    out.push({ ...base, id: eid('price', next.key, at, m.s.name), kind: 'price', url: m.s.url, summary: `${next.name} changed the price of ${lower1(m.s.name)} from ${m.o!.price} to ${m.s.price}.`, ...(t ? { treatment: t.label } : {}), before: m.o!.price, after: m.s.price });
+  }
+  for (const t of byTreatment.filter((x) => !x.sameName && !moves.some((m) => norm(m.s.name) === norm(x.after.name))).slice(0, 3)) {
+    out.push({ ...base, id: eid('price', next.key, at, t.key), kind: 'price', url: t.after.url, summary: moveSummary(next.name, t.label, t.before.price, t.after.price), treatment: t.label, before: t.before.price, after: t.after.price });
+  }
 
   const oldOffers = new Set(prev.offers.map((o) => norm(o.text)));
   for (const o of next.offers.filter((o) => !oldOffers.has(norm(o.text))).slice(0, 2)) out.push({ ...base, id: eid('offer', next.key, at, o.text), kind: 'offer', url: o.url, summary: `${next.name} is advertising “${o.text}”.` });
@@ -428,7 +478,7 @@ export function comparable(a: string, b: string): boolean {
   return shared >= Math.min(wa.length, wb.length) && shared >= 1 && Math.abs(wa.length - wb.length) <= 1;
 }
 
-export function adviseReach(list: TrackedCompetitor[], you: YouForAdvice, events: ReachEvent[], now = new Date()): ReachAdvice[] {
+export function adviseReach(list: TrackedCompetitor[], you: YouForAdvice, events: ReachEvent[], now = new Date(), comparison?: Comparison | null): ReachAdvice[] {
   const out: ReachAdvice[] = [];
   const recent = events.filter((e) => now.getTime() - new Date(e.at).getTime() < 8 * DAY);
 
@@ -438,7 +488,19 @@ export function adviseReach(list: TrackedCompetitor[], you: YouForAdvice, events
   const offer = recent.find((e) => e.kind === 'offer' || e.kind === 'post');
   if (offer) out.push({ key: offer.key, text: `${offer.summary}`, action: 'Decide whether to answer it. Matching a discount is rarely the only option: a bundle, a loyalty perk or simply saying what you include works too.' });
 
-  for (const c of list) {
+  // Like-for-like prices: the treatment where the owner is furthest from the local average.
+  const rows = (comparison?.rows ?? []).filter((r) => r.count >= 2 && Math.abs(r.diff) >= Math.max(10, r.avg * 0.1)).sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff));
+  if (rows.length) {
+    const r = rows[0];
+    const cheapest = r.theirs.filter(Boolean).sort((a, b) => a!.value - b!.value)[0]!;
+    out.push(r.diff > 0
+      ? { key: cheapest.key, text: `You charge ${r.you.price} for ${lower1(r.label)}; the average of ${r.count} businesses nearby is £${Math.round(r.avg)} and ${cheapest.who} lists ${cheapest.price}. You are ${r.position}.`, action: 'Say what is included in your price (time, aftercare, product used, who treats) where customers see it. Matching their price is one option, not the only one.' }
+      : { key: cheapest.key, text: `You charge ${r.you.price} for ${lower1(r.label)}, ${r.position} of £${Math.round(r.avg)} across ${r.count} businesses nearby (${r.rank}).`, action: 'Check the price still covers your time and products. If it does, being the better-value choice is worth saying in your posts.' });
+  }
+  const gap = comparison?.theyOnly.find((g) => g.prices.length >= 2);
+  if (gap && out.length < 4) out.push({ key: gap.prices[0].key, text: `${gap.prices.length} businesses nearby list ${lower1(gap.label)} (from ${gap.prices[0].price} at ${gap.prices[0].who}), and you don’t.`, action: 'If it fits your skills and equipment, ask your regular clients whether they would book it; if not, nothing to do.' });
+
+  for (const c of comparison?.rows.length ? [] : list) {
     for (const s of c.services) {
       const mine = you.services.find((m) => comparable(m.name, s.name));
       if (!mine) continue;
