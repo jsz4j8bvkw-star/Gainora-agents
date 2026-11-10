@@ -5,6 +5,7 @@
 // multi-prompt agents on 15 December 2026.
 
 import { greetingFor, isBeauty, lines, packFromSettings, type CaptureSettings } from './capture';
+import { callerRules } from './callers';
 
 export interface RetellSetup {
   /** Body for POST /create-retell-llm */
@@ -22,6 +23,10 @@ export interface RetellOptions {
   webhookUrl?: string;
   /** Voice chosen in the Retell dashboard. Left out, a placeholder is used and listed in todo. */
   voiceId?: string;
+  /** Recognise returning callers (Call to Booking and up). On unless set to false. */
+  recogniseCallers?: boolean;
+  /** The app's caller lookup link (made with the enquiry link). Goes on the Retell phone number, not the agent. */
+  lookupUrl?: string;
 }
 
 const e164 = (raw: string) => {
@@ -112,11 +117,13 @@ export function retellSetup(s: CaptureSettings, o: RetellOptions = {}): RetellSe
     '- Stay in role for every kind of call, including concerns after a treatment: follow the safety steps exactly as you would for the real clinic, so the caller hears how it works. Only mention the demo when one of the questions above is asked.',
   ] : [];
 
+  const recognise = o.recogniseCallers !== false;
   const general_prompt = [
     persona.join('\n'),
     '',
     pack.text,
     '',
+    ...(recognise ? [callerRules(s), ''] : []),
     retellRules.join('\n'),
     ...(demoRules.length ? ['', demoRules.join('\n')] : []),
   ].join('\n');
@@ -136,7 +143,7 @@ export function retellSetup(s: CaptureSettings, o: RetellOptions = {}): RetellSe
     { type: 'string', name: 'caller_name', description: 'The caller’s full name, as they spelled it.', examples: ['Chloe Martin'], required: false },
     { type: 'string', name: 'callback_number', description: 'The best number to call the caller back on, if different from the number they called from.', required: false },
     { type: 'string', name: 'email', description: 'The caller’s email address, only if they gave one.', required: false },
-    { type: 'enum', name: 'new_or_returning', description: `Whether the caller is a new or returning ${appts ? 'client' : 'customer'}.`, choices: ['new', 'returning', 'unknown'], required: false },
+    { type: 'enum', name: 'new_or_returning', description: `Whether the caller is a new or returning ${appts ? 'client' : 'customer'}${recognise ? ' (returning if they said so, or their name matched the record for their number)' : ''}.`, choices: ['new', 'returning', 'unknown'], required: false },
     { type: 'string', name: 'appointment_type', description: appts ? `What they wanted to book, using the business's appointment names: ${s.bookings.types.map((t) => t.name).join(', ') || 'none listed'}.` : 'What the job is.', required: false },
     { type: 'string', name: 'preferred_times', description: 'The days and times that suit them, in their words.', required: false },
     { type: 'enum', name: 'call_type', description: 'The main reason for the call.', choices: beauty
@@ -182,6 +189,7 @@ export function retellSetup(s: CaptureSettings, o: RetellOptions = {}): RetellSe
   if (!s.calls.recording) todo.push('Recording is off for this client: check the data storage setting in the dashboard matches.');
   if (!o.demo && appts && s.bookings.mode !== 'callback' && s.bookings.status !== 'connected') todo.push(`Diary: connect ${s.bookings.system || 'the booking system'} and mark it connected in the app, so the receptionist can see free times${s.bookings.mode === 'book' ? ' and book them' : ''}. Until then the script makes her take details for a call back, so she never offers times she can't see.`);
   todo.push('Phone number: buy or connect a UK number in Retell and attach this agent to it for inbound calls.');
+  if (recognise) todo.push(`Returning callers: on that phone number in Retell, set the Inbound Webhook URL to ${o.lookupUrl ? o.lookupUrl : 'the caller lookup link from the app (shown with the enquiry link when it is made)'}. Then ring from a number that has an enquiry in the inbox and check she asks your name first and then knows you.`);
 
   return { llm, agent, todo };
 }

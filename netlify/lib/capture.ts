@@ -1,10 +1,10 @@
 // Capture & Convert server helpers: secret enquiry links, saving an enquiry, owner alerts and the reply drafter.
 import { createHash, randomBytes } from 'node:crypto';
-import { db, env } from './core';
+import { db, enc, env } from './core';
 import { ai, hasBanned, HOUSE_STYLE } from './ai';
 import { sendEmail } from './email';
 import {
-  isAfterHours, isBeauty, lines, normaliseEnquiry, triage, withDefaults,
+  isAfterHours, isBeauty, lines, NEW_CLIENT, normaliseEnquiry, RETURNING_CLIENT, triage, withDefaults,
   type CaptureSettings, type Channel, type EnquiryRecord,
 } from '../../shared/capture';
 import { suggestReply } from '../../shared/insight';
@@ -56,6 +56,13 @@ export async function intake(userId: string, sourceId: string | null, raw: any, 
   // goes out (if that automation is on) and the owner has nothing to re-type. Only when the time is sane.
   const bookedOnCall = t.kind !== 'spam' && t.urgency !== 'emergency' && e.facts.booked && !!e.facts.bookedFor;
   if (bookedOnCall) history.push({ at: e.receivedAt, text: `Booked in on the call for ${new Date(e.facts.bookedFor!).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Europe/London' })}${e.facts.appointmentType ? `: ${e.facts.appointmentType}` : ''}${e.facts.bookedWith ? ` with ${e.facts.bookedWith}` : ''}` });
+  // New or returning, as the receptionist found out on the call. Someone who says they're new but has an
+  // attended visit from the same number is counted as returning (so they're never asked for a new-client deposit).
+  if (e.facts.newOrReturning && t.kind !== 'spam') {
+    let returning = e.facts.newOrReturning === 'returning';
+    if (!returning && e.phone) returning = (await db<any[]>(`enquiries?select=id&user_id=eq.${userId}&phone=eq.${enc(e.phone)}&status=eq.won&is_test=eq.false&limit=1`).catch(() => [])).length > 0;
+    history.push({ at: e.receivedAt, text: returning ? RETURNING_CLIENT : NEW_CLIENT });
+  }
 
   const rows = await db<any[]>(e.externalId ? 'enquiries?on_conflict=user_id,external_id' : 'enquiries', {
     method: 'POST', prefer: 'resolution=ignore-duplicates,return=representation',

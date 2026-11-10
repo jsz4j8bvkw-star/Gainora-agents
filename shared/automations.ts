@@ -3,7 +3,7 @@
 //
 // The owner doesn't build flows. Gainora ships a fixed set of well-made workflows; the owner switches
 // each one on or off, edits the wording and timing, and marks any step "ask me first".
-import { applyPatch, bookedOnCall, findPostcode, normPhone, rebookWeeksFor, type BusinessKind, type CaptureSettings, type EnquiryPatch, type EnquiryRecord } from './capture';
+import { applyPatch, bookedOnCall, depositText, findPostcode, isNewClient, normPhone, rebookWeeksFor, type BusinessKind, type CaptureSettings, type EnquiryPatch, type EnquiryRecord } from './capture';
 
 export type WorkflowId = 'ack' | 'booking' | 'quote' | 'payment' | 'review' | 'aftercare' | 'rebook';
 export type StepId = 'ack' | 'confirm' | 'reminder' | 'chase1' | 'chase2' | 'pay1' | 'pay2' | 'pay3' | 'review' | 'checkin' | 'rebook';
@@ -347,25 +347,36 @@ export function dueNow(e: EnquiryRecord, s: CaptureSettings, msgs: MessageLite[]
     if (!/^(confirm|reminder)$/.test(d.step) && recent >= WEEKLY_CAP) continue;
     const phone = normPhone(e.phone);
     const channels: ('text' | 'email')[] = st.channel === 'both' ? ['text', 'email'] : [st.channel];
+    const body = render(st.text, f, !!def.marketing) + (d.step === 'confirm' ? depositLine(e, s, others) : '');
     let made = false;
     for (const ch of channels) {
       const to = ch === 'text' ? (optedOut ? '' : phone) : e.email;
       if (!to) continue;
       out.push({
         enquiryId: e.id, workflow: d.wf, step: d.step, key, channel: ch, to,
-        subject: render(st.subject || def.subject(s.business.kind), f), body: render(st.text, f, !!def.marketing),
+        subject: render(st.subject || def.subject(s.business.kind), f), body,
         ask: st.ask, sendAt, patch: made ? null : d.patch,
       });
       made = true;
     }
     // Text wanted but no number (or opted out): fall back to email when there is one.
     if (!made && st.channel === 'text' && e.email) {
-      out.push({ enquiryId: e.id, workflow: d.wf, step: d.step, key, channel: 'email', to: e.email, subject: render(st.subject || def.subject(s.business.kind), f), body: render(st.text, f, !!def.marketing), ask: st.ask, sendAt, patch: d.patch });
+      out.push({ enquiryId: e.id, workflow: d.wf, step: d.step, key, channel: 'email', to: e.email, subject: render(st.subject || def.subject(s.business.kind), f), body, ask: st.ask, sendAt, patch: d.patch });
       made = true;
     }
     if (made && !/^(confirm|reminder)$/.test(d.step)) recent++;
   }
   return out;
+}
+
+/**
+ * The deposit request added to a new client's booking confirmation, when the owner set a deposit and a link
+ * to pay it. Returning clients never get it. Gainora never takes the payment: the link is the owner's own.
+ */
+export function depositLine(e: EnquiryRecord, s: CaptureSettings, others: EnquiryRecord[] = []): string {
+  const what = depositText(s.bookings);
+  if (s.business.kind !== 'appointments' || !what || !isNewClient(e, others)) return '';
+  return `\n\nAs a new client, please pay your deposit (${what.replace(/[‘’]/g, "'")}) to secure your booking: ${String(s.bookings.depositLink).trim()}`;
 }
 
 /** What's coming up next for an enquiry, for the app to show ("Reminder: Mon 9am"). */

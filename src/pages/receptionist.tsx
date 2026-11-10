@@ -145,7 +145,13 @@ function Connect() {
           <div className="panel-pad stack gap-16">
             <p className="muted">Copy this now and paste it into your receptionist platform as the webhook address. For your security we only show it once. If you lose it, make a new one and switch this one off.</p>
             <div className="secret"><code>{made.url}</code><Button small icon="copy" onClick={async () => toast((await copyText(made.url!)) ? 'Link copied.' : 'Select it and copy.')}>Copy</Button></div>
-            <p className="xsmall faint">Anyone with this link can add enquiries to your inbox, so keep it private.</p>
+            {made.lookupUrl && (
+              <>
+                <p className="muted"><strong>Returning callers.</strong> Paste this one into the receptionist’s phone number as its inbound webhook (in Retell: Phone Numbers, then Inbound Webhook URL). When someone rings, your receptionist is told their first name, their last visit and any booking, so regulars don’t have to explain themselves. She only uses it once the caller has given a name that matches.</p>
+                <div className="secret"><code>{made.lookupUrl}</code><Button small icon="copy" onClick={async () => toast((await copyText(made.lookupUrl!)) ? 'Link copied.' : 'Select it and copy.')}>Copy</Button></div>
+              </>
+            )}
+            <p className="xsmall faint">Anyone with {made.lookupUrl ? 'these links' : 'this link'} can add enquiries to your inbox{made.lookupUrl ? ' or look up a number' : ''}, so keep {made.lookupUrl ? 'them' : 'it'} private.</p>
           </div>
         </Modal>
       )}

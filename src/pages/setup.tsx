@@ -66,6 +66,8 @@ export const SETUP: SetupSection[] = [
       { path: 'bookings.noticeHours', label: 'Shortest notice for a booking', kind: 'select', options: [0, 1, 2, 4, 24, 48].map((h) => ({ value: h, label: h === 0 ? 'Any time' : h < 24 ? `${h} ${h === 1 ? 'hour' : 'hours'}` : `${h / 24} ${h === 24 ? 'day' : 'days'}` })), showIf: (s) => s.bookings.mode !== 'callback' },
       { path: 'bookings.aheadWeeks', label: 'How far ahead people can book', kind: 'select', options: [1, 2, 4, 6, 8, 12].map((w) => ({ value: w, label: `${w} ${w === 1 ? 'week' : 'weeks'}` })), showIf: (s) => s.bookings.mode !== 'callback' },
       { path: 'bookings.cancellation', label: 'Cancellation policy', kind: 'text', wide: true, placeholder: 'Please give 24 hours’ notice to cancel or move an appointment.', help: 'Optional. Mentioned when booking and in the confirmation text.' },
+      { path: 'bookings.deposit', label: 'Deposit for new clients', kind: 'text', wide: true, placeholder: '£30, taken off the treatment price', help: 'Optional. Your receptionist tells new clients when they book, and their confirmation text asks them to pay it with your link. Returning clients are never asked.', showIf: isAppts },
+      { path: 'bookings.depositLink', label: 'Link to pay the deposit', kind: 'url', wide: true, required: true, placeholder: 'https://', help: 'Your own payment link, from Stripe, SumUp, Fresha or similar. Gainora never takes payments.', showIf: (s) => isAppts(s) && !!String(s.bookings.deposit ?? '').trim() },
     ],
   },
   {
@@ -159,6 +161,7 @@ export function sectionErrors(sec: SetupSection, s: CaptureSettings): Record<str
     if (f.required && (str === '' || str == null)) { e[f.path] = 'This is needed.'; continue; }
     if (str && f.kind === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(str)) e[f.path] = 'Enter a full email address.';
     if (str && f.kind === 'url' && !/^https?:\/\/\S+\.\S+/.test(str)) e[f.path] = 'Enter the full address, starting https://';
+    else if (str && f.path === 'bookings.depositLink' && !/^https:\/\//.test(str)) e[f.path] = 'Use the secure link, starting https://';
     if (str && f.kind === 'tel' && String(str).replace(/\D/g, '').length < 10) e[f.path] = 'Enter the full number.';
   }
   return e;

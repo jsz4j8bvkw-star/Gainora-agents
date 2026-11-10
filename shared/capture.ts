@@ -101,6 +101,10 @@ export function effectiveBookingMode(bk: Pick<Bookings, 'mode' | 'status' | 'sys
   return bk.status === 'connected' ? bk.mode : 'callback';
 }
 
+/** The deposit new clients pay, when the owner set one with a link to pay it; otherwise ''. */
+export const depositText = (bk: Pick<Bookings, 'deposit' | 'depositLink'>) =>
+  clean(bk.deposit ?? '', 120) && /^https:\/\//.test(String(bk.depositLink ?? '').trim()) ? clean(bk.deposit ?? '', 120) : '';
+
 /** The script and knowledge for the receptionist. Plain text, so it pastes into any platform. */
 export function packFromSettings(s: CaptureSettings): ReceptionistPack {
   const b = s.business;
@@ -155,6 +159,7 @@ export function packFromSettings(s: CaptureSettings): ReceptionistPack {
         : mode === 'offer' ? `Check the diary and offer two free times. Take their choice and say ${team} will confirm it by text shortly.`
         : `Don't book a time. Take the details and say ${team} will call back to arrange it.`,
       ...(bk.cancellation ? [`Cancellation policy, mention it when booking: ${clean(bk.cancellation, 200)}`] : []),
+      ...(appts && depositText(bk) ? [`Deposit: new ${who}s pay a deposit to secure their booking (${depositText(bk)}). When you book a new ${who}, say so kindly and that a secure link to pay it comes with their confirmation text. Returning ${who}s don't pay one. Never take card details.`] : []),
       `Tell them they'll get a text confirming the details.`,
       'At the end, sum up what happens next in one sentence and thank them for calling.',
     ] },
@@ -219,7 +224,9 @@ function beautyCalls(s: CaptureSettings, team: string): string[] {
     `Aftercare questions: don't give advice. If what they describe is on the safety list, follow the safety steps straight away. Otherwise take the details and say ${team} will call back today.`,
     `Unhappy with a result, or a complaint: listen, be kind and say sorry they feel that way. Don't argue, explain or offer refunds, discounts or free treatment. Take their name, number, the treatment and date, and say ${team} will call them back personally, today if possible.`,
     `Gift vouchers: take the buyer's name, number, the amount or treatment, and who it's for. Say ${team} will send a payment link. Never take card details.`,
-    'Deposits and payments: never take card details. Say a secure payment link will come by text.',
+    depositText(bk)
+      ? `Deposits: new clients pay ${depositText(bk)} to secure a booking, by the secure link in their confirmation text. Returning clients don't. Never take card details.`
+      : 'Deposits and payments: never take card details. Say a secure payment link will come by text.',
     'Group bookings (bridal parties, birthdays): take the date, how many people, the treatments and a contact number. Say the team will put a plan together and call back.',
     `Fully booked: offer the next free time. If nothing suits, add them to the call-back list with the days and times that work, and say ${team} will be in touch if a space comes up.`,
     'Asking for a particular person: book with them if they have a free time. If not, offer their next free time or someone else, and let the caller choose.',
@@ -514,6 +521,10 @@ export interface Bookings {
   staff: string;
   noticeHours: number; aheadWeeks: number;
   cancellation: string;
+  /** Deposit new clients pay to secure a booking, in the owner's words ("£30, taken off the treatment price"). '' for none. */
+  deposit?: string;
+  /** Where they pay it: the owner's own payment link. Gainora never takes payments. */
+  depositLink?: string;
   status: 'not_connected' | 'requested' | 'connected';
 }
 
@@ -568,7 +579,7 @@ export function emptySettings(email = ''): CaptureSettings {
     business: { kind: 'trade', name: '', ownerName: '', trade: '', location: '', website: '', phone: '', alertEmail: email, alertMobile: '' },
     work: { services: '', notDone: '', areas: '' },
     calls: { days: [1, 2, 3, 4, 5], open: '08:00', close: '17:30', emergencies: '', transferTo: '', quotePolicy: 'never', priceNotes: '', booking: 'callback', gasWork: false, recording: true, notify: 'urgent', greeting: DEFAULT_GREETING, announceAi: false, safety: '', alertText: 'urgent', emergencyLine: '', transferEmergency: true },
-    bookings: { system: '', systemOther: '', account: '', mode: 'callback', address: '', arrival: '', types: [], staff: '', noticeHours: 2, aheadWeeks: 4, cancellation: '', status: 'not_connected' },
+    bookings: { system: '', systemOther: '', account: '', mode: 'callback', address: '', arrival: '', types: [], staff: '', noticeHours: 2, aheadWeeks: 4, cancellation: '', deposit: '', depositLink: '', status: 'not_connected' },
     followUps: { reviewLink: '', payLink: '', paymentDays: 14 },
     provider: { name: '', aiNumber: '' },
     automations: defaultAutomations('trade', new Date(0).toISOString()),
@@ -725,6 +736,21 @@ export function applyPatch(e: EnquiryRecord, p: EnquiryPatch, settings: (Pick<Ca
   if (p.paid === false && e.paidAt) { next.paidAt = null; log('Marked as unpaid'); }
   if (p.reviewAsked && !e.reviewAskedAt) { next.reviewAskedAt = at; log('Review requested'); }
   return next;
+}
+
+/** History lines the receptionist's call analysis leaves, so a new client is known without a new column. */
+export const NEW_CLIENT = 'New client';
+export const RETURNING_CLIENT = 'Returning client';
+
+/**
+ * A new client: the receptionist recorded them as new on the call, and nothing in the inbox says they've been
+ * before (an attended visit from the same number or email). Used for the deposit line in the confirmation,
+ * so a regular is never asked for a deposit by mistake.
+ */
+export function isNewClient(e: EnquiryRecord, others: EnquiryRecord[] = []): boolean {
+  if (!e.history.some((h) => h.text === NEW_CLIENT)) return false;
+  const me = normPhone(e.phone);
+  return !others.some((o) => o.id !== e.id && !o.isTest && o.status === 'won' && ((me && normPhone(o.phone) === me) || (!!e.email && o.email === e.email)));
 }
 
 /** Booked by the receptionist during the call itself (or within minutes of it), rather than by the owner later. */

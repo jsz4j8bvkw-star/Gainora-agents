@@ -3,7 +3,7 @@
 import type { Api } from './api';
 import type { CaptureSettings, EnquiryRecord, MessageRecord, Source, User } from './types';
 import { afterSend, defaultAutomations, dueNow, fieldsFor, ownerAlert, patchForStep, render, stepDef, type MessageLite, type StepId, type WorkflowId } from '../../shared/automations';
-import { applyPatch, bookedOnCall, DEFAULT_BEAUTY_SAFETY, DEFAULT_GREETING, DEFAULT_SAFETY, greetingFor, isAfterHours, isBeauty, lines, normaliseEnquiry, rebookWeeksFor, triage } from '../../shared/capture';
+import { applyPatch, bookedOnCall, NEW_CLIENT, DEFAULT_BEAUTY_SAFETY, DEFAULT_GREETING, DEFAULT_SAFETY, greetingFor, isAfterHours, isBeauty, lines, normaliseEnquiry, rebookWeeksFor, triage } from '../../shared/capture';
 import { suggestReply } from '../../shared/insight';
 import { uid } from './format';
 
@@ -84,7 +84,7 @@ export const BEAUTY_SETTINGS: CaptureSettings = {
       { name: 'Lash lift and tint', minutes: 45, price: '£55', who: 'Jess', rebookWeeks: 6 },
       { name: 'Gel nails', minutes: 60, price: '£35', who: 'Jess', rebookWeeks: 3 },
     ],
-    staff: 'Amy Carter\nLeah Price\nJess Morgan', noticeHours: 2, aheadWeeks: 8, cancellation: 'Please give 48 hours’ notice to cancel or move, or the deposit is kept.', status: 'connected',
+    staff: 'Amy Carter\nLeah Price\nJess Morgan', noticeHours: 2, aheadWeeks: 8, cancellation: 'Please give 48 hours’ notice to cancel or move, or the deposit is kept.', deposit: '£30, taken off your treatment', depositLink: 'https://pay.example/willow-skin/deposit', status: 'connected',
   },
   followUps: { reviewLink: 'https://g.page/r/willow-skin/review', payLink: 'https://pay.example/willow-skin', paymentDays: 0 },
   provider: { name: 'Retell', aiNumber: '01326 000201' },
@@ -161,6 +161,7 @@ function seed(settings: CaptureSettings): EnquiryRecord[] {
     const after = isAfterHours(e.receivedAt, settings.calls);
     const history = [{ at: e.receivedAt, text: `${x.channel === 'call' ? 'Call answered by your receptionist' : x.channel === 'form' ? 'Website form received' : 'Email received'}${after ? ' (out of hours)' : ''}` }];
     if (t.urgency !== 'normal') history.push({ at: e.receivedAt, text: `${t.urgency === 'emergency' ? 'Flagged as an emergency' : 'Flagged as urgent'}: ${t.reasons.join('; ')}` });
+    if (x.channel === 'call' && /\bnew client\b/i.test(x.summary)) history.push({ at: e.receivedAt, text: NEW_CLIENT });
     let rec: EnquiryRecord = {
       id: uid('e_'), channel: x.channel, name: e.name, phone: e.phone, email: e.email, postcode: e.postcode, summary: e.summary,
       transcript: x.channel === 'call' && t.kind !== 'spam' ? demoTranscript(x.name, e.summary, settings, rec0Booked(x)) : '', recordingUrl: '',
@@ -481,7 +482,8 @@ export function createDemoApi(): Api {
       await wait(300);
       const src: Source = { id: uid('src_'), label, channel, active: true, createdAt: new Date().toISOString(), lastUsedAt: null };
       s.sources = [src, ...s.sources]; save();
-      return { ...src, url: `https://capture.gainora.co.uk/api/enquiry-in/${token32()}` };
+      const t = token32();
+      return { ...src, url: `https://capture.gainora.co.uk/api/enquiry-in/${t}`, ...(channel === 'call' ? { lookupUrl: `https://capture.gainora.co.uk/api/caller-in/${t}` } : {}) };
     },
     async revokeSource(id) { s.sources = s.sources.map((x) => (x.id === id ? { ...x, active: false } : x)); save(); },
 

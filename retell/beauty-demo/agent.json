@@ -67,7 +67,7 @@
     {
       "type": "enum",
       "name": "new_or_returning",
-      "description": "Whether the caller is a new or returning client.",
+      "description": "Whether the caller is a new or returning client (returning if they said so, or their name matched the record for their number).",
       "choices": [
         "new",
         "returning",

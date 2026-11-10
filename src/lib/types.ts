@@ -19,6 +19,7 @@ export interface Source {
   createdAt: string;
   lastUsedAt: string | null;
   url?: string;                  // only straight after it's made
+  lookupUrl?: string;            // call links: the returning-caller lookup, same secret, shown once
 }
 
 export interface NewEnquiry { channel: 'call' | 'form' | 'email' | 'text'; name: string; phone: string; email: string; postcode: string; summary: string }

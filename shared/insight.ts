@@ -3,7 +3,7 @@
 // the demo and the server agree. Nothing here invents a price, a figure or a fact: every number comes from the
 // owner's own settings or their own enquiries.
 import {
-  enquiryValue, isBeauty, isNoShow, lines, normPhone, rebookWeeksFor, typePrice, words,
+  depositText, enquiryValue, isBeauty, isNoShow, lines, normPhone, rebookWeeksFor, report, typePrice, words,
   type CaptureSettings, type EnquiryRecord, type Report,
 } from './capture';
 
@@ -260,7 +260,7 @@ export function advice(r: Report, list: EnquiryRecord[], s: CaptureSettings, ran
   if (r.noShows >= 1) {
     const rem = a?.booking?.on && a.booking.steps?.reminder?.on;
     out.push({ title: `${plural(r.noShows, 'no-show or late cancellation', 'no-shows and late cancellations')}`, detail: rem
-      ? `Reminders are already going out. ${s.bookings.cancellation ? 'Your cancellation policy is read out when the receptionist books and sent in the reminder; a deposit for new clients is the usual next step.' : 'Adding a cancellation policy in Settings → Bookings puts it in every booking call and reminder.'}`
+      ? `Reminders are already going out. ${depositText(s.bookings) ? 'New clients already pay a deposit; if regulars are the ones missing appointments, a reminder 2 hours before (Automations) can help.' : s.bookings.cancellation ? 'Your cancellation policy is read out when the receptionist books and sent in the reminder. A deposit for new clients is the usual next step: add one in Settings → Bookings and it goes in their confirmation text.' : 'Adding a cancellation policy in Settings → Bookings puts it in every booking call and reminder.'}`
       : 'The reminder before the appointment is switched off. Switching it on is the simplest fix.', to: rem ? '/settings' : '/automations' });
   }
   // 4. Price questions that went nowhere.
@@ -292,4 +292,63 @@ export function advice(r: Report, list: EnquiryRecord[], s: CaptureSettings, ran
   // 8. Spam filtered, as a quiet reassurance.
   if (r.spam >= 3 && out.length < 4) out.push({ title: `${plural(r.spam, 'sales call', 'sales calls')} kept out of your inbox`, detail: 'Filed as spam by the receptionist and the inbox, so they never reached you. If one was real, open the Spam tab and move it back.', to: '/enquiries' });
   return out.slice(0, 4);
+}
+
+/* ---------- Monday: last week, at the owner's own prices ---------- */
+
+export interface WeeklyNote { subject: string; lines: string[] }
+
+const money = (n: number) => `£${Math.round(n).toLocaleString('en-GB')}`;
+
+/**
+ * The Monday email: what the receptionist and inbox did in the last seven days, valued at the owner's own
+ * prices, what's still open, and the week ahead. Every figure is from their own inbox; nothing is estimated
+ * from anyone else's numbers. Null when there's nothing to say.
+ */
+export function weeklyNote(list: EnquiryRecord[], s: CaptureSettings, now = new Date()): WeeklyNote | null {
+  const appts = s.business.kind === 'appointments';
+  const W = words(s.business.kind);
+  const from = new Date(now.getTime() - 7 * DAY);
+  const r = report(list, from, now, s, now);
+  const real = list.filter((e) => !e.isTest && e.status !== 'spam');
+  const ahead = real.filter((e) => e.status === 'booked' && e.bookedFor && new Date(e.bookedFor) >= now && new Date(e.bookedFor).getTime() < now.getTime() + 7 * DAY);
+  const aheadValue = ahead.reduce((a, e) => a + (enquiryValue(e, s)?.amount ?? 0), 0);
+  if (!r.caught && !ahead.length) return null;
+
+  // Still open: last week's enquiries that haven't booked, been quoted or been closed.
+  const open = real.filter((e) => new Date(e.receivedAt) >= from && (e.status === 'new' || e.status === 'replied') && (e.kind === 'booking' || e.kind === 'quote') && e.urgency !== 'emergency');
+  const back = rebookDue(list, s, now, 7);
+  const backValue = back.reduce((a, b) => a + (b.value?.amount ?? 0), 0);
+  const calls = r.byChannel.call;
+  const others = r.caught - calls;
+
+  const out: string[] = [`Good morning${s.business.ownerName ? ` ${clean(s.business.ownerName, 40).split(' ')[0]}` : ''}. Here’s the last seven days at ${clean(s.business.name, 80) || 'your business'}.`];
+  if (r.caught) {
+    out.push(`${calls ? `Your receptionist answered ${plural(calls, 'call', 'calls')}${others ? `, and ${plural(others, 'more enquiry', 'more enquiries')} came in by form, email or text` : ''}` : `${plural(others, 'enquiry', 'enquiries')} came in by form, email or text`}. ${r.afterHours ? `${r.afterHours === r.caught ? (r.caught === 1 ? 'It' : 'All of them') : r.afterHours} came in while you were closed.` : 'All of them came in during your opening hours.'}${r.emergencies ? ` ${plural(r.emergencies, 'urgent concern was', 'urgent concerns were')} sent straight to you.` : ''}${r.spam ? ` ${plural(r.spam, 'sales call was', 'sales calls were')} kept out of your inbox.` : ''}`);
+    if (appts) {
+      out.push(r.booked
+        ? `${plural(r.booked, 'appointment', 'appointments')} booked from them${r.bookedValue ? `, worth ${r.bookedValueFrom ? 'at least ' : ''}${money(r.bookedValue)} at your prices` : ''}${r.onCall ? ` (${r.onCall} booked by your receptionist on the call)` : ''}.${r.afterHoursBooked ? ` ${r.afterHoursBooked} of those came in out of hours${r.afterHoursValue ? `, ${money(r.afterHoursValue)}` : ''}: bookings you’d otherwise have had to chase.` : ''}`
+        : 'Nothing was marked as booked from them yet. If some did book, mark them booked in Enquiries so the value shows here.');
+    } else {
+      out.push(`${plural(r.quotes, 'quote', 'quotes')} went out and ${plural(r.won, W.job + ' was', W.jobs + ' were')} won${r.wonValue ? `, worth ${money(r.wonValue)}` : ''}.`);
+    }
+  }
+  if (open.length) {
+    const v = open.map((e) => enquiryValue({ ...e, bookedType: e.bookedType || topicMatch(e, s) }, s)).filter((x): x is NonNullable<typeof x> => !!x);
+    const total = v.reduce((a, x) => a + x.amount, 0);
+    out.push(`Still open: ${plural(open.length, 'enquiry from last week hasn’t', 'enquiries from last week haven’t')} booked yet${total ? ` (worth ${v.some((x) => x.from) || v.length < open.length ? 'at least ' : ''}${money(total)} at your prices)` : ''}. They’re in Enquiries with the next step for each.`);
+  }
+  if (back.length) out.push(`${plural(back.length, 'client is', 'clients are')} due back for their next treatment this week${backValue ? ` (${money(backValue)} at your prices)` : ''}. They’re on your Today page with a text ready to send.`);
+  if (ahead.length) out.push(`This week: ${plural(ahead.length, 'appointment', 'appointments')} in the diary from your enquiries${aheadValue ? `, worth ${money(aheadValue)}` : ''}${s.automations?.booking?.on && s.automations.booking.steps?.reminder?.on ? ', each with a reminder going out the day before' : ''}.`);
+
+  const headline = r.caught
+    ? `${plural(r.caught, 'enquiry', 'enquiries')} caught${appts && r.booked ? `, ${r.booked} booked${r.bookedValue ? ` (${money(r.bookedValue)})` : ''}` : ''}`
+    : `${plural(ahead.length, 'appointment', 'appointments')} this week`;
+  return { subject: `Your week: ${headline}`, lines: out };
+}
+
+/** The listed treatment an enquiry is about, for valuing open enquiries at the owner's own price. */
+function topicMatch(e: EnquiryRecord, s: CaptureSettings): string {
+  const t = topicOf(e, s);
+  return s.bookings.types.find((x) => x.name.toLowerCase() === t)?.name ?? '';
 }

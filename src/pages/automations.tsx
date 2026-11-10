@@ -9,6 +9,7 @@ import {
   fieldsFor, render, smsParts, WEEKLY_CAP, WORKFLOWS,
   type MsgChannel, type StepDef, type StepSetting, type WorkflowDef, type WorkflowSetting,
 } from '../../shared/automations';
+import { depositText } from '../../shared/capture';
 import type { CaptureSettings, EnquiryRecord, MessageRecord } from '../lib/types';
 
 type Tab = 'messages' | 'waiting' | 'sent';
@@ -229,6 +230,9 @@ function StepEditor({ def, kind, value, sample, settings, onChange }: { def: Ste
           <span className="xsmall faint">Preview with sample details</span>
           <div className="sms">{preview}</div>
           <span className="xsmall faint">{preview.length} characters · {smsParts(preview)} {smsParts(preview) === 1 ? 'text' : 'texts'}</span>
+          {def.id === 'confirm' && kind === 'appointments' && depositText(settings.bookings) && (
+            <span className="xsmall faint">New clients also get: “As a new client, please pay your deposit ({depositText(settings.bookings)}) to secure your booking”, with your payment link. Change it in Settings, Bookings.</span>
+          )}
         </div>
       </div>
     </div>

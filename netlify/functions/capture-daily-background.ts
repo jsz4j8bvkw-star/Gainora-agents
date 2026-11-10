@@ -2,12 +2,13 @@ import { db, requireInternal } from '../lib/core';
 import { appUrl, toRecord, withDefaults } from '../lib/capture';
 import { sendEmail } from '../lib/email';
 import { followUps, report, words } from '../../shared/capture';
-import { advice, rebookDue } from '../../shared/insight';
+import { advice, rebookDue, weeklyNote } from '../../shared/insight';
 
 // Background function (up to 15 minutes), started by the morning schedule. For each client:
 // 1. a short morning email when something needs them: enquiries not replied to, quote chasers,
 //    payment reminders and review requests due today (nothing is sent to their customers),
-// 2. on the 1st of the month, last month's report.
+// 2. on Mondays, the last seven days at their own prices and the week ahead,
+// 3. on the 1st of the month, last month's report.
 const money = (n: number) => `£${Math.round(n).toLocaleString('en-GB')}`;
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
@@ -16,6 +17,7 @@ export default async (req: Request) => {
     requireInternal(req);
     const now = new Date();
     const firstOfMonth = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', day: 'numeric' }).format(now) === '1';
+    const monday = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', weekday: 'short' }).format(now) === 'Mon';
     const ents = await db<any[]>('entitlements?select=user_id,email&agent=eq.capture&status=in.(active,trialing)&user_id=not.is.null');
     for (const ent of ents) {
       try {
@@ -48,6 +50,11 @@ export default async (req: Request) => {
             ...parts.map((p) => `• ${p[0].toUpperCase()}${p.slice(1)}.`),
             appts ? 'Each one has a message drafted for you, and the automatic ones go out on their own if they’re switched on.' : 'Each one has a message drafted for you. Nothing is sent until you send it.',
           ], { label: 'Open your follow-ups', url: `${appUrl()}/follow-ups` });
+        }
+
+        if (monday) {
+          const w = weeklyNote(list, s, now);
+          if (w) await sendEmail(to, w.subject, w.lines, { label: 'Open Gainora', url: `${appUrl()}/` });
         }
 
         if (firstOfMonth) {

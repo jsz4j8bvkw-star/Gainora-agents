@@ -49,7 +49,7 @@ export default handler(async (req) => {
     const token = newToken();
     const [src] = await insert('enquiry_sources', { user_id: user.id, label: String(b.label || 'AI receptionist').slice(0, 60), channel, token_hash: hashToken(token), active: true });
     // The full link is only ever shown here; afterwards only its hash exists.
-    return json({ id: src.id, label: src.label, channel, active: true, createdAt: src.created_at, lastUsedAt: null, url: `${appUrl()}/api/enquiry-in/${token}` });
+    return json({ id: src.id, label: src.label, channel, active: true, createdAt: src.created_at, lastUsedAt: null, url: `${appUrl()}/api/enquiry-in/${token}`, ...(channel === 'call' ? { lookupUrl: `${appUrl()}/api/caller-in/${token}` } : {}) });
   }
   if (b.op === 'revoke') {
     if (!UUID.test(String(b.id))) throw new HttpError(404, 'That link no longer exists.');

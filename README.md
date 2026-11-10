@@ -48,6 +48,16 @@ showing the receptionist’s opening line and rules.
   booking and the confirmation text goes out.
 - She never offers to check a diary that isn't connected yet: until Gainora marks the diary connected, she takes
   details for a call back whatever booking mode the owner chose.
+- **Returning callers** (`shared/callers.ts`, `netlify/functions/caller-in.ts`). When a call comes in, Retell asks
+  `POST /api/caller-in/<token>` (same secret as the enquiry link) about the calling number. She is told only a first
+  name, how many visits, the last treatment and who did it, the next booking, and an enquiry still waiting for a
+  reply. Sources: the inbox, plus the Command Centre client list when the owner keeps one (same login). Never notes,
+  summaries, prices paid or anything health-related. A number isn't proof of identity, so she keeps all of it back
+  until the caller has given a name that matches. Withheld numbers, errors and a slow database all fall back to
+  “nothing on record”: the call never waits or fails because of it.
+- **Deposits for new clients:** if the owner sets a deposit and their own payment link (Settings → Bookings), she
+  tells new clients when she books them and their confirmation text carries the link. Returning clients, and anyone
+  with an attended visit from the same number or email, are never asked. Gainora never takes payments.
 
 ## Beauty and aesthetics safety (the owner's decision)
 
@@ -91,7 +101,9 @@ trades keep the National Gas Emergency number (0800 111 999).
 - `netlify/functions/enquiries.ts` — the owner’s actions: link, revoke, add, update, draft, test, delete, reply,
   approve, skip, read.
 - `netlify/functions/sms-in.ts` — Twilio inbound texts. `automations-tick(-background).ts` — timed messages.
-- `netlify/functions/capture-daily(-background).ts` — 07:00 UTC: the morning email; on the 1st, last month’s report.
+- `netlify/functions/capture-daily(-background).ts` — 07:00 UTC: the morning email; on Mondays, the last seven days
+  valued at the owner’s own prices, what’s still open and the week ahead; on the 1st, last month’s report.
+- `netlify/functions/caller-in.ts` — `POST /api/caller-in/<token>`: Retell's inbound-call webhook for returning callers.
 - `netlify/functions/stripe-webhook.ts`, `billing-portal.ts` — subscriptions.
 - `shared/capture.ts` — every rule (triage, out of hours, script, prices from the treatment list, report),
   `shared/automations.ts` — the message engine, `shared/insight.ts` — priority, next step, drafted replies,
@@ -116,7 +128,9 @@ trades keep the National Gas Emergency number (0800 111 999).
    to polish drafted replies (the rule-based drafts are used without it).
 4. **Retell:** export the agent for the client (`node scripts/retell-export.mjs` as a starting point), create the LLM
    and agent in Retell, pick the voice and model, paste the enquiry link from Receptionist → Connect as the webhook
-   (event `call_analyzed`), attach a UK number.
+   (event `call_analyzed`), attach a UK number. For Call to Booking and up, set that number's **Inbound Webhook URL**
+   to the caller lookup link shown with the enquiry link (`/api/caller-in/<token>`). For Never Miss a Call, export
+   with `recogniseCallers: false`.
 5. **Domain:** add `capture.gainora.co.uk` in Netlify and a CNAME in Squarespace DNS.
 6. **Supabase auth:** add the new site to Authentication → URL configuration → Redirect URLs.
 
