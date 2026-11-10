@@ -18,6 +18,7 @@ import { Profile } from './pages/profile';
 import { Settings } from './pages/settings';
 import { Results } from './pages/results';
 import { Clients } from './pages/clients';
+import { Website } from './pages/website';
 
 interface AppState {
   user: User;
@@ -68,6 +69,7 @@ export function App() {
 const NAV: { path: string; label: string; icon: string; agent?: AgentId }[] = [
   { path: '/', label: 'Home', icon: 'home' },
   { path: '/clients', label: 'Your clients', icon: 'clients' },
+  { path: '/website', label: 'Your website', icon: 'globe' },
   { path: '/watcher', label: 'The Watcher', icon: 'watcher', agent: 'watcher' },
   { path: '/scout', label: 'The Scout', icon: 'scout', agent: 'scout' },
   { path: '/brief', label: 'The Brief', icon: 'brief', agent: 'brief' },
@@ -83,6 +85,7 @@ function Shell() {
   const active = (p: string) => (p === '/' ? path === '/' : path.startsWith(p)) ? 'page' : undefined;
   const page = (() => {
     if (path.startsWith('/clients')) return <Clients />;
+    if (path.startsWith('/website')) return <Website />;
     if (path.startsWith('/watcher')) return <Watcher />;
     if (path.startsWith('/scout')) return <Scout />;
     if (path.startsWith('/brief')) return <Brief />;
@@ -135,9 +138,10 @@ function Shell() {
         </div>
         <main key={path} className="route-in">{page}</main>
         <nav className="tabbar" aria-label="Sections">
-          {NAV.map((n) => (
+          {/* Six places fit on a phone: Launch & Grow clients get Website there instead of Ask (still in search). */}
+          {NAV.filter((n) => (plan.website ? n.path !== '/ask' : n.path !== '/website')).map((n) => (
             <Link key={n.path} to={n.path} aria-current={active(n.path)}>
-              <Icon name={n.icon} />{n.label.replace('The ', '').replace('Your clients', 'Clients')}
+              <Icon name={n.icon} />{n.label.replace('The ', '').replace('Your clients', 'Clients').replace('Your website', 'Website')}
             </Link>
           ))}
         </nav>

@@ -1,7 +1,10 @@
 import type { Api } from './api';
+import { siteFromProfile, slug as slugify } from '../../shared/site/data';
+import { performance } from '../../shared/site/stats';
+import { demoEnquiries, demoEvents } from './demo-site';
 import type {
   Action, Alert, BriefReport, BusinessProfile, ChatMessage, Client, ClientAction, FeedbackRecord, HomeData, Lead, Outcome, ScoutResult, ScoutSearch, Tender,
-  User, ValueEvent, ValueKind, Visit, WatcherState, WeekNumbers,
+  User, ValueEvent, ValueKind, WebsiteState, Visit, WatcherState, WeekNumbers,
 } from './types';
 import { likelyOutcomes } from '../../shared/money';
 import { uuid } from './format';
@@ -48,6 +51,8 @@ interface DemoState {
   outcomes: Outcome[];
   /** When the sample account was seeded: for the first minute and a half the demo behaves like a brand-new account (first search running, no clients yet). */
   seededAt?: string;
+  /** Launch & Grow: the sample website. */
+  website?: WebsiteState | null;
 }
 
 /** How long a freshly set-up demo behaves like a new account, so the first ten minutes can be seen. */
@@ -385,7 +390,7 @@ export function createDemoApi(): Api {
 
     async getProfile() { await wait(120); return s.profile; },
     async saveProfile(p) { await wait(250); s.profile = structuredClone(p); ensure(); save(); },
-    async getPlan() { return { agents: ['watcher', 'scout', 'brief'], status: 'active', renewsOn: iso(Date.now() + 19 * DAY), capture: true }; },
+    async getPlan() { return { agents: ['watcher', 'scout', 'brief'], status: 'active', renewsOn: iso(Date.now() + 19 * DAY), capture: true, website: true }; },
     async billingUrl() { return null; },
 
     async getHome(): Promise<HomeData> {
@@ -492,6 +497,36 @@ export function createDemoApi(): Api {
     },
 
     async getNumbers() { await wait(150); ensure(); return s.numbers; },
+    async getWebsite() {
+      await wait(250);
+      if (!s.website) {
+        const data = siteFromProfile(s.profile);
+        data.slug = slugify(data.business.name) || 'your-business';
+        data.business.phone ||= '01632 960 123';
+        data.business.email ||= 'hello@yourbusiness.example';
+        data.business.line1 ||= '14 Market Street';
+        data.business.postcode ||= 'HG1 1AA';
+        if (!data.business.differences.length) data.business.differences = ['Every treatment starts with a free consultation', 'Natural-looking results, never overdone'];
+        if (!data.business.credentials.length) data.business.credentials = ['Fully insured', 'Level 7 qualified'];
+        data.reviewLink = 'https://g.page/r/sample-review-link/review';
+        const at = new Date(Date.now() - 40 * DAY).toISOString();
+        s.website = { id: '00000000-0000-4000-8000-000000000001', slug: data.slug, domain: null, data, publishedAt: at, updatedAt: at, live: true, liveUrl: `https://app.gainora.co.uk/site/${data.slug}/`, previewUrl: `https://app.gainora.co.uk/site/${data.slug}/`, changed: false };
+        save();
+      }
+      return s.website;
+    },
+    async saveWebsite(data) { await wait(250); const w = s.website!; s.website = { ...w, data, updatedAt: new Date().toISOString(), changed: w.live }; save(); return s.website; },
+    async publishWebsite(data) { await wait(700); const at = new Date().toISOString(); s.website = { ...s.website!, data, publishedAt: at, updatedAt: at, live: true, changed: false }; save(); return s.website; },
+    async unpublishWebsite() { await wait(400); s.website = { ...s.website!, live: false, publishedAt: null, changed: false }; save(); return s.website; },
+    async setWebsiteSlug(slug) { await wait(300); s.website = { ...s.website!, slug, data: { ...s.website!.data, slug }, liveUrl: `https://app.gainora.co.uk/site/${slug}/`, previewUrl: `https://app.gainora.co.uk/site/${slug}/` }; save(); return s.website; },
+    async setWebsiteDomain(domain) { await wait(300); const d = domain.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/.*$/, ''); s.website = { ...s.website!, domain: d || null, liveUrl: d ? `https://${d}/` : s.website!.previewUrl, data: { ...s.website!.data, business: { ...s.website!.data.business, domain: d } } }; save(); return s.website; },
+    async websiteStats(days) { await wait(300); return performance(demoEvents(), days); },
+    async websiteEnquiries() { await wait(200); return demoEnquiries(); },
+    async uploadSitePhoto(file) {
+      await wait(300);
+      const url = await new Promise<string>((res, rej) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result)); fr.onerror = rej; fr.readAsDataURL(file); });
+      return { id: uid('p_'), url, name: file.name, alt: '' };
+    },
     async getCaptureWeek() { await wait(200); return { from: iso(Date.now() - 7 * DAY), to: iso(Date.now()), enquiries: 14, afterHours: 5, booked: 6, bookedValue: 1140, valueIsMinimum: true }; },
     async saveNumbers(w) {
       await wait(1200);

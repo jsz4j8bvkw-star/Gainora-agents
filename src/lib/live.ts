@@ -2,8 +2,9 @@ import { captureWeekFrom } from '../../shared/capture-week';
 import type { Api } from './api';
 import type {
   Action, AgentId, Alert, BriefReport, BusinessProfile, ChatMessage, Client, ClientAction, ClientsData, FeedbackRecord, HomeData, Lead, Outcome, PlaceSummary, Plan, ScoutSearch,
-  Tender, User, ValueEvent, Visit, WatcherState, WeekNumbers, WinbackDrafts,
+  Tender, User, ValueEvent, Visit, WatcherState, WeekNumbers, WinbackDrafts, WebsiteState, WebsiteEnquiry,
 } from './types';
+import type { Performance } from '../../shared/site/stats';
 import { emptyClientsData } from './types';
 import { analyseWeeks, metricsFor } from '../../shared/metrics';
 import { planToday } from '../../shared/today';
@@ -271,10 +272,34 @@ export function createLiveApi(): Api {
     },
     async getPlan(): Promise<Plan> {
       const rows = await rest<any[]>('entitlements?select=agent,status,current_period_end&status=in.(active,trialing)');
-      const mine = rows.filter((r) => r.agent !== 'capture');
-      return { agents: mine.map((r) => r.agent as AgentId), status: mine.length ? 'active' : 'none', renewsOn: mine[0]?.current_period_end ?? undefined, capture: rows.some((r) => r.agent === 'capture') };
+      const mine = rows.filter((r) => r.agent !== 'capture' && r.agent !== 'website');
+      return { agents: mine.map((r) => r.agent as AgentId), status: mine.length ? 'active' : 'none', renewsOn: mine[0]?.current_period_end ?? undefined, capture: rows.some((r) => r.agent === 'capture'), website: rows.some((r) => r.agent === 'website') };
     },
     async billingUrl() { return (await fn<{ url: string }>('billing-portal', {})).url; },
+
+    async getWebsite() {
+      try { return (await fn<{ site: WebsiteState }>('site', { op: 'get' }, { doing: 'opening your website' })).site; }
+      catch (e: any) { if (e?.status === 403) return null; throw e; }
+    },
+    async saveWebsite(data) { return (await fn<{ site: WebsiteState }>('site', { op: 'save', data }, { doing: 'saving your website' })).site; },
+    async publishWebsite(data) { return (await fn<{ site: WebsiteState }>('site', { op: 'publish', data }, { doing: 'publishing your website' })).site; },
+    async unpublishWebsite() { return (await fn<{ site: WebsiteState }>('site', { op: 'unpublish' }, { doing: 'taking your website offline' })).site; },
+    async setWebsiteSlug(slug) { return (await fn<{ site: WebsiteState }>('site', { op: 'slug', slug }, { doing: 'changing the address' })).site; },
+    async setWebsiteDomain(domain) { return (await fn<{ site: WebsiteState }>('site', { op: 'domain', domain }, { doing: 'saving the domain' })).site; },
+    async websiteStats(days) { return (await fn<{ performance: Performance }>('site', { op: 'stats', days }, { doing: 'loading your website numbers' })).performance; },
+    async websiteEnquiries() { return (await fn<{ enquiries: WebsiteEnquiry[] }>('site', { op: 'enquiries' }, { doing: 'loading your enquiries' })).enquiries; },
+    async uploadSitePhoto(file) {
+      // Photos go straight to the site-media bucket, into a folder only this account can write to.
+      if (!/^image\/(jpeg|png|webp|svg\+xml)$/.test(file.type)) throw new ApiError('Use a JPG, PNG, WebP or SVG image.', 400);
+      if (file.size > 5 * 1024 * 1024) throw new ApiError('That photo is over 5 MB. Use a smaller one.', 400);
+      const s = await session();
+      if (!s) throw new ApiError('Your session has ended. Sign in again.', 401);
+      const ext = file.type === 'image/svg+xml' ? 'svg' : file.type.split('/')[1].replace('jpeg', 'jpg');
+      const path = `${s.user.id}/${uuid()}.${ext}`;
+      const res = await fetch(`${URL_}/storage/v1/object/site-media/${path}`, { method: 'POST', headers: { apikey: ANON, Authorization: `Bearer ${s.access_token}`, 'Content-Type': file.type, 'Cache-Control': '31536000' }, body: file }).catch(() => null);
+      if (!res?.ok) throw new ApiError(res?.status === 404 ? 'Photo storage isn’t switched on yet. Gainora is setting it up.' : 'The photo didn’t upload. Try again.', res?.status ?? 0);
+      return { id: path, url: `${URL_}/storage/v1/object/public/site-media/${path}`, name: file.name.slice(0, 120), alt: '' };
+    },
 
     async getHome(): Promise<HomeData> {
       const [profile, plan, notes, actions, alerts, watcher, changeRows, searches, briefs, numbers, leads, tenders, clientsData] = await Promise.all([

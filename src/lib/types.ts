@@ -63,7 +63,18 @@ export interface Plan {
   renewsOn?: string;
   /** They also have Gainora Capture & Convert (same login). */
   capture?: boolean;
+  /** Launch & Grow: Command Centre builds, hosts and measures their website. */
+  website?: boolean;
 }
+
+/** The website as Command Centre holds it (Launch & Grow). */
+export interface WebsiteState {
+  id: string; slug: string; domain: string | null; data: import('../../shared/site/data').Site;
+  publishedAt: string | null; updatedAt: string; live: boolean; liveUrl: string; previewUrl: string;
+  /** The draft has changes that aren't live yet. */
+  changed: boolean;
+}
+export interface WebsiteEnquiry { id: string; at: string; name: string; phone: string; email: string; service: string; postcode: string; message: string; page: string; source: string; forwarded: boolean }
 
 /** The last seven days from Capture & Convert, for The Brief. */
 export interface CaptureWeek { from: string; to: string; enquiries: number; afterHours: number; booked: number; bookedValue: number; valueIsMinimum: boolean }

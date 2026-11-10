@@ -20,7 +20,6 @@
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
     Permissions-Policy = "camera=(), microphone=(), geolocation=()"
-    X-Robots-Tag = "noindex"
 
 [[headers]]
   for = "/assets/*"
@@ -31,6 +30,15 @@
   for = "/sw.js"
   [headers.values]
     Cache-Control = "no-cache"
+
+# The app itself stays out of Google (index.html also says noindex). The clients' websites, served by
+# netlify/functions/site-serve.ts, set their own headers so Google can index them.
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    X-Robots-Tag = "noindex"
+
+# Clients' own domains are routed to their websites by netlify/edge-functions/sites.ts (its config says where it runs).
 
 # Single-page app: every route serves the app shell.
 [[redirects]]

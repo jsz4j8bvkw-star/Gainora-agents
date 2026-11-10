@@ -1,8 +1,10 @@
 import type {
-  CaptureWeek,
+  CaptureWeek, WebsiteState, WebsiteEnquiry,
   Action, BriefReport, BusinessProfile, ChatMessage, Client, ClientAction, ClientsData, FeedbackKind, FeedbackRecord, HomeData, Lead, LeadStage, Outcome, PlaceSummary, Plan,
   ScoutKind, ScoutSearch, Tender, User, ValueEvent, Visit, WatcherState, WeekNumbers, WinbackDrafts,
 } from './types';
+import type { Photo, Site } from '../../shared/site/data';
+import type { Performance } from '../../shared/site/stats';
 import { createDemoApi } from './demo';
 import { createLiveApi } from './live';
 
@@ -40,6 +42,17 @@ export interface Api {
   getNumbers(): Promise<WeekNumbers[]>;
   /** The last seven days from Capture & Convert, when they have it. Null when they don't, or it can't be read. */
   getCaptureWeek(): Promise<CaptureWeek | null>;
+
+  /** Launch & Grow website. Null when it isn't on their plan. */
+  getWebsite(): Promise<WebsiteState | null>;
+  saveWebsite(data: Site): Promise<WebsiteState>;
+  publishWebsite(data: Site): Promise<WebsiteState>;
+  unpublishWebsite(): Promise<WebsiteState>;
+  setWebsiteSlug(slug: string): Promise<WebsiteState>;
+  setWebsiteDomain(domain: string): Promise<WebsiteState>;
+  websiteStats(days: number): Promise<Performance>;
+  websiteEnquiries(): Promise<WebsiteEnquiry[]>;
+  uploadSitePhoto(file: File): Promise<Photo>;
   saveNumbers(w: WeekNumbers): Promise<BriefReport>;
   listBriefs(): Promise<BriefReport[]>;
 

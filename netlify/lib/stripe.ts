@@ -13,14 +13,15 @@ export function verifyStripeSignature(payload: string, header: string | null, se
   return sigs.some((s) => s.length === expected.length && timingSafeEqual(Buffer.from(s), Buffer.from(expected)));
 }
 
-type Agent = 'watcher' | 'scout' | 'brief';
+type Agent = 'watcher' | 'scout' | 'brief' | 'website';
 const ALL_AGENTS: Agent[] = ['watcher', 'scout', 'brief'];
-const isAgent = (a: unknown): a is Agent => a === 'watcher' || a === 'scout' || a === 'brief';
+const isAgent = (a: unknown): a is Agent => a === 'watcher' || a === 'scout' || a === 'brief' || a === 'website';
 
 /**
  * STRIPE_AGENT_PRODUCTS maps Stripe products to agents. "all" means Gainora Command Centre (every agent):
  * {"prod_COMMAND":"all"}   or, for the older single-agent products, {"prod_123":"watcher","prod_456":"scout"}.
- * A list also works: {"prod_789":["watcher","brief"]}.
+ * A list also works: {"prod_789":["watcher","brief"]}. Launch & Grow is Command Centre plus the website:
+ * {"prod_LAUNCH":["watcher","scout","brief","website"]}.
  */
 export function agentsForProduct(productId: string): Agent[] {
   try {
