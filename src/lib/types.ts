@@ -61,7 +61,12 @@ export interface Plan {
   agents: AgentId[];
   status: 'active' | 'trial' | 'none';
   renewsOn?: string;
+  /** They also have Gainora Capture & Convert (same login). */
+  capture?: boolean;
 }
+
+/** The last seven days from Capture & Convert, for The Brief. */
+export interface CaptureWeek { from: string; to: string; enquiries: number; afterHours: number; booked: number; bookedValue: number; valueIsMinimum: boolean }
 
 export interface User { id: string; email: string }
 

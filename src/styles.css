@@ -958,3 +958,12 @@ a.result-link:hover { color: var(--on-dark); }
 .interval-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px 20px; }
 .interval-row { display: grid; grid-template-columns: minmax(0, 1fr) 84px; gap: 10px; align-items: center; font-size: var(--t-sm); }
 .interval-row .input { min-height: 40px; padding: 6px 10px; text-align: right; }
+
+/* The two Gainora apps, one login */
+.app-switch { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; margin-top: 16px; padding: 3px; border-radius: 10px; background: var(--dark-2, #1C1D20); border: 1px solid var(--dark-line, #2C2D31); }
+.app-switch > * { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 7px 6px; border-radius: 7px; font-size: 11px; font-weight: 700; letter-spacing: .04em; text-align: center; line-height: 1.2; color: var(--on-dark-soft, #A9A59D); text-decoration: none; }
+.app-switch a:hover { color: var(--on-dark, #E9E5DD); background: rgba(255, 255, 255, .04); }
+.app-switch [aria-current="page"] { background: var(--forest-deep, #2B2C30); color: var(--sage, #C9B37E); }
+.app-switch-add { font-size: 9px; padding: 1px 5px; border-radius: 999px; border: 1px solid var(--dark-line, #2C2D31); color: var(--on-dark-faint, #8E8A82); }
+.capture-week { padding: 12px 14px; border-radius: 10px; background: var(--forest-tint, #EEE8DA); }
+.capture-week p { margin: 0 0 4px; }

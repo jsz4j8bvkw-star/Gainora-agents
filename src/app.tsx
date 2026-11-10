@@ -94,7 +94,7 @@ function Shell() {
   return (
     <div className="shell">
       <aside className="side" aria-label="Main">
-        <div className="side-logo"><img src={`${LOGO}gainora-logo-reverse.svg`} alt="Gainora" /></div>
+        <div className="side-logo"><img src={`${LOGO}gainora-logo-reverse.svg`} alt="Gainora" /><AppSwitch hasCapture={!!plan.capture} /></div>
         <nav className="nav" aria-label="Sections">
           {NAV.map((n) => (
             <Link key={n.path} to={n.path} aria-current={active(n.path)}>
@@ -160,5 +160,17 @@ export function Locked({ agent }: { agent: AgentId }) {
         </div>
       </div>
     </div>
+  );
+}
+
+/** The two Gainora apps, one login: jump to Capture & Convert, or see it if it isn't on their plan yet. */
+function AppSwitch({ hasCapture }: { hasCapture: boolean }) {
+  return (
+    <nav className="app-switch" aria-label="Gainora apps">
+      <span aria-current="page">Command Centre</span>
+      <a href={hasCapture ? 'https://capture.gainora.co.uk/' : 'https://gainora.co.uk/packages/#capture-convert'} target={hasCapture ? undefined : '_blank'} rel="noreferrer">
+        Capture &amp; Convert{!hasCapture && <span className="app-switch-add">Add</span>}
+      </a>
+    </nav>
   );
 }

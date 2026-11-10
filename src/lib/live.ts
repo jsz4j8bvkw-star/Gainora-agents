@@ -1,3 +1,4 @@
+import { captureWeekFrom } from '../../shared/capture-week';
 import type { Api } from './api';
 import type {
   Action, AgentId, Alert, BriefReport, BusinessProfile, ChatMessage, Client, ClientAction, ClientsData, FeedbackRecord, HomeData, Lead, Outcome, PlaceSummary, Plan, ScoutSearch,
@@ -220,7 +221,8 @@ export function createLiveApi(): Api {
     },
     async getPlan(): Promise<Plan> {
       const rows = await rest<any[]>('entitlements?select=agent,status,current_period_end&status=in.(active,trialing)');
-      return { agents: rows.map((r) => r.agent as AgentId), status: rows.length ? 'active' : 'none', renewsOn: rows[0]?.current_period_end ?? undefined };
+      const mine = rows.filter((r) => r.agent !== 'capture');
+      return { agents: mine.map((r) => r.agent as AgentId), status: mine.length ? 'active' : 'none', renewsOn: mine[0]?.current_period_end ?? undefined, capture: rows.some((r) => r.agent === 'capture') };
     },
     async billingUrl() { return (await fn<{ url: string }>('billing-portal', {})).url; },
 
@@ -319,6 +321,17 @@ export function createLiveApi(): Api {
       // From the Leads tab there is no search id: the second argument is the lead's id.
       if (!searchId) return (await fn<{ text: string }>('leads', { op: 'intro', id: resultId })).text;
       return (await fn<{ text: string }>('scout-intro', { searchId, resultId })).text;
+    },
+
+    async getCaptureWeek() {
+      // Read straight from Capture & Convert's inbox (same login, the owner's own rows).
+      const since = new Date(Date.now() - 7 * 86_400_000).toISOString();
+      const [rows, settings] = await Promise.all([
+        rest<any[]>(`enquiries?select=status,after_hours,booked_type,job_value,history&is_test=eq.false&received_at=gte.${since}&limit=2000`),
+        rest<any[]>('capture_settings?select=data&limit=1'),
+      ]).catch(() => [null, null] as const);
+      if (!rows) return null;
+      return captureWeekFrom(rows, settings?.[0]?.data?.bookings?.types ?? [], since);
     },
 
     async getNumbers() {

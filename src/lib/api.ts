@@ -1,4 +1,5 @@
 import type {
+  CaptureWeek,
   Action, BriefReport, BusinessProfile, ChatMessage, Client, ClientAction, ClientsData, FeedbackKind, FeedbackRecord, HomeData, Lead, LeadStage, Outcome, PlaceSummary, Plan,
   ScoutKind, ScoutSearch, Tender, User, ValueEvent, Visit, WatcherState, WeekNumbers, WinbackDrafts,
 } from './types';
@@ -33,6 +34,8 @@ export interface Api {
   draftIntro(searchId: string, resultId: string): Promise<string>;
 
   getNumbers(): Promise<WeekNumbers[]>;
+  /** The last seven days from Capture & Convert, when they have it. Null when they don't, or it can't be read. */
+  getCaptureWeek(): Promise<CaptureWeek | null>;
   saveNumbers(w: WeekNumbers): Promise<BriefReport>;
   listBriefs(): Promise<BriefReport[]>;
 

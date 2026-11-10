@@ -33,11 +33,11 @@ function BriefDoc({ b }: { b: BriefReport }) {
 }
 
 function BriefPage() {
-  const { profile } = useApp();
+  const { profile, plan } = useApp();
   const metrics = metricsFor(profile.numbers.track);
   const { data, setData, error, loading, reload } = useLoad(async () => {
-    const [weeks, briefs] = await Promise.all([api.getNumbers(), api.listBriefs()]);
-    return { weeks, briefs };
+    const [weeks, briefs, capture] = await Promise.all([api.getNumbers(), api.listBriefs(), plan.capture ? api.getCaptureWeek().catch(() => null) : Promise.resolve(null)]);
+    return { weeks, briefs, capture };
   });
   const thisWeek = mondayOf();
   const [form, setForm] = useState<Record<string, string>>({});
@@ -65,7 +65,7 @@ function BriefPage() {
     try {
       const w: WeekNumbers = { weekOf: thisWeek, values, note: note.trim() || undefined };
       const b = await api.saveNumbers(w);
-      setData({ weeks: [...data.weeks.filter((x) => x.weekOf !== thisWeek), w].sort((a, z) => a.weekOf.localeCompare(z.weekOf)), briefs: [b, ...data.briefs.filter((x) => x.weekOf !== b.weekOf)] });
+      setData({ ...data, weeks: [...data.weeks.filter((x) => x.weekOf !== thisWeek), w].sort((a, z) => a.weekOf.localeCompare(z.weekOf)), briefs: [b, ...data.briefs.filter((x) => x.weekOf !== b.weekOf)] });
       setForm({}); setNote('');
       toast('Your Brief is updated');
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -96,6 +96,22 @@ function BriefPage() {
         <form className="panel panel-pad" onSubmit={submit} noValidate aria-labelledby="nums-h">
           <h2 className="heading" id="nums-h">{existing ? 'Update this week' : 'This week’s numbers'}</h2>
           <p className="small muted mt-8">Week starting {shortDate(thisWeek)}. Rough figures are fine.</p>
+          {data.capture && (data.capture.enquiries > 0 || data.capture.booked > 0) && (
+            <div className="capture-week mt-16">
+              <p className="small"><strong>From Capture &amp; Convert, last 7 days:</strong> {data.capture.enquiries} {data.capture.enquiries === 1 ? 'enquiry' : 'enquiries'}{data.capture.afterHours ? ` (${data.capture.afterHours} while you were closed)` : ''}, {data.capture.booked} booked{data.capture.bookedValue ? `, ${data.capture.valueIsMinimum ? 'at least ' : ''}${money(data.capture.bookedValue)} at your prices` : ''}.</p>
+              <button type="button" className="link-btn small" onClick={() => {
+                const c = data.capture!;
+                const next: Record<string, string> = { ...form };
+                for (const m of metrics) {
+                  if (m.id === 'enquiries') next[m.id] = String(c.enquiries);
+                  if (m.id === 'orders') next[m.id] = String(c.booked);
+                  if (m.id === 'revenue' && c.bookedValue) next[m.id] = String(c.bookedValue);
+                }
+                setForm(next);
+                toast('Filled in from Capture & Convert. Check them, then get your Brief.');
+              }}>Fill these in</button>
+            </div>
+          )}
           <div className="numbers-form mt-24" style={{ gridTemplateColumns: '1fr' }}>
             {metrics.map((m) => (
               <Field key={m.id} label={m.label}>

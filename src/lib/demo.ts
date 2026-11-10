@@ -383,7 +383,7 @@ export function createDemoApi(): Api {
 
     async getProfile() { await wait(120); return s.profile; },
     async saveProfile(p) { await wait(250); s.profile = structuredClone(p); ensure(); save(); },
-    async getPlan() { return { agents: ['watcher', 'scout', 'brief'], status: 'active', renewsOn: iso(Date.now() + 19 * DAY) }; },
+    async getPlan() { return { agents: ['watcher', 'scout', 'brief'], status: 'active', renewsOn: iso(Date.now() + 19 * DAY), capture: true }; },
     async billingUrl() { return null; },
 
     async getHome(): Promise<HomeData> {
@@ -490,6 +490,7 @@ export function createDemoApi(): Api {
     },
 
     async getNumbers() { await wait(150); ensure(); return s.numbers; },
+    async getCaptureWeek() { await wait(200); return { from: iso(Date.now() - 7 * DAY), to: iso(Date.now()), enquiries: 14, afterHours: 5, booked: 6, bookedValue: 1140, valueIsMinimum: true }; },
     async saveNumbers(w) {
       await wait(1200);
       s.numbers = [...s.numbers.filter((x) => x.weekOf !== w.weekOf), w].sort((a, b) => a.weekOf.localeCompare(b.weekOf));
