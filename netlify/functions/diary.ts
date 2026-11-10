@@ -1,6 +1,7 @@
 import { body, db, enc, handler, HttpError, json, requireCapture, getSettings } from '../lib/core';
 import { normPhone } from '../../shared/capture';
-import { withDefaults } from '../lib/capture';
+import { toRecord, withDefaults } from '../lib/capture';
+import { syncVisits, visitFrom, type VisitIn } from '../lib/clients-sync';
 import { makeBooking, timesFor } from '../lib/diary';
 import { slotId, slugify } from '../../shared/diary';
 
@@ -53,10 +54,14 @@ export default handler(async (req) => {
       });
     }
     let added = 0;
+    const visits: VisitIn[] = [];
     for (let i = 0; i < rows.length; i += 200) {
       const saved = await db<any[]>('enquiries?on_conflict=user_id,external_id', { method: 'POST', prefer: 'resolution=ignore-duplicates,return=representation', body: rows.slice(i, i + 200) });
       added += saved?.length ?? 0;
+      for (const r of saved ?? []) { const v = visitFrom(toRecord(r), s); if (v) visits.push(v); }
     }
+    // Past visits also go into Command Centre's client list (up to 500 now; the rest as they come back).
+    await syncVisits(user.id, visits.slice(0, 500));
     return json({ added, already: rows.length - added, rejected: list.length - rows.length });
   }
   throw new HttpError(400, 'Unknown action.');

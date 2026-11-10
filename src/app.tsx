@@ -112,7 +112,7 @@ const tabsFor = (appts: boolean) => navFor(appts).filter((n) => n.path !== '/rec
 
 function Shell() {
   const path = usePath();
-  const { settings, enquiries, messages } = useApp();
+  const { settings, enquiries, messages, plan } = useApp();
   const active = (p: string) => (p === '/' ? path === '/' : path.startsWith(p)) ? 'page' : undefined;
   const appts = settings.business.kind === 'appointments';
   const counts = useMemo(() => {
@@ -146,7 +146,7 @@ function Shell() {
       <aside className="side" aria-label="Main">
         <div className="side-logo">
           <img src={`${BASE}gainora-logo-reverse.svg`} alt="Gainora" />
-          <span className="side-product">Capture &amp; Convert</span>
+          <AppSwitch hasCommandCentre={!!plan.alsoCommandCentre} />
         </div>
         <nav className="nav" aria-label="Sections">
           {navFor(appts).map((n) => (
@@ -224,5 +224,17 @@ function NotOnPlan({ email }: { email: string }) {
         </div>
       </section>
     </div>
+  );
+}
+
+/** The two Gainora apps, one login: jump to Command Centre, or see it if it isn't on their plan yet. */
+function AppSwitch({ hasCommandCentre }: { hasCommandCentre: boolean }) {
+  return (
+    <nav className="app-switch" aria-label="Gainora apps">
+      <a href={hasCommandCentre ? 'https://app.gainora.co.uk/' : 'https://gainora.co.uk/packages/#command-centre'} target={hasCommandCentre ? undefined : '_blank'} rel="noreferrer">
+        Command Centre{!hasCommandCentre && <span className="app-switch-add">Add</span>}
+      </a>
+      <span aria-current="page">Capture &amp; Convert</span>
+    </nav>
   );
 }

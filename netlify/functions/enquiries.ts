@@ -1,3 +1,4 @@
+import { syncVisits, visitFrom } from '../lib/clients-sync';
 import { body, db, getSettings, handler, HttpError, insert, json, requireCapture } from '../lib/core';
 import { appUrl, draftEnquiryReply, hashToken, intake, newToken, toRecord, toRow, UUID, withDefaults } from '../lib/capture';
 import { alertOwner, applyStepPatch, deliver, runAutomations, sendText } from '../lib/messages';
@@ -125,6 +126,8 @@ export default handler(async (req) => {
     const settings = withDefaults(await getSettings(user.id));
     const after = applyPatch(before, p, settings);
     await db(`enquiries?id=eq.${row.id}&user_id=eq.${user.id}`, { method: 'PATCH', body: toRow(after) });
+    // Attended: the client and the visit go into Command Centre's client list too (same login).
+    if (after.status === 'won' && before.status !== 'won') { const v = visitFrom(after, settings); if (v) await syncVisits(user.id, [v]); }
     // A booking or a finished job may start a message (confirmation, review request).
     await runAutomations(user.id, [row.id]).catch((e) => console.error('[capture] automations', e?.message));
     const [saved] = await db<any[]>(`enquiries?select=*&id=eq.${row.id}&user_id=eq.${user.id}`);

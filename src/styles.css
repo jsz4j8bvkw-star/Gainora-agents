@@ -1098,3 +1098,10 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .
 .cal-row { display: grid; grid-template-columns: minmax(0, 2fr) 1fr 1fr 1fr; gap: 8px; align-items: center; padding: 10px 14px; border-top: 1px solid var(--line); }
 .cal-row.head { border-top: 0; background: var(--canvas); font-size: var(--t-xs); color: var(--ink-faint); font-weight: 600; }
 @media (max-width: 640px) { .cal-row { grid-template-columns: minmax(0, 1fr) auto auto; } .cal-row > :nth-child(4) { grid-column: 1 / -1; } }
+
+/* The two Gainora apps, one login */
+.app-switch { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; margin-top: 14px; padding: 3px; border-radius: 10px; background: var(--dark-2); border: 1px solid var(--dark-line); }
+.app-switch > * { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 7px 6px; border-radius: 7px; font-size: 11px; font-weight: 700; letter-spacing: .04em; text-align: center; line-height: 1.2; color: var(--on-dark-soft); text-decoration: none; }
+.app-switch a:hover { color: var(--on-dark); background: rgba(255, 255, 255, .04); }
+.app-switch [aria-current="page"] { background: var(--forest-deep); color: var(--sage); }
+.app-switch-add { font-size: 9px; padding: 1px 5px; border-radius: 999px; border: 1px solid var(--dark-line); color: var(--on-dark-faint); }
