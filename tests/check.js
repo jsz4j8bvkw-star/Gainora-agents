@@ -175,7 +175,8 @@ for (const f of ["name", "business", "email", "mobile", "business_type", "size",
 check(/data-netlify="true"/.test(book), "book: form not registered with Netlify");
 if (config.contact.bookingEmbedUrl) {
   const headers = fs.readFileSync(path.join(DIST, "_headers"), "utf8");
-  check(/frame-src [^\n]*calendar\.google\.com/.test(headers), "_headers: CSP frame-src must allow calendar.google.com for the embed");
+  const host = new URL(config.contact.bookingEmbedUrl).origin;
+  check(new RegExp(`frame-src [^\\n]*${host.replace(/\./g, "\\.")}`).test(headers), `_headers: CSP frame-src must allow ${host} for the embed`);
 }
 
 // Demo block hidden until both number and recording exist

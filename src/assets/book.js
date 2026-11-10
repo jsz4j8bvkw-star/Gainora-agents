@@ -17,6 +17,18 @@
   var source = document.getElementById("dx-source");
   if (source && params.get("from")) source.value = "website: " + params.get("from").slice(0, 60);
 
+  // The booking page tells us its height, so it sits on the page without a scrollbar of its own.
+  var frame = document.getElementById("booking-frame");
+  if (frame) {
+    window.addEventListener("message", function (e) {
+      if (e.origin !== "https://capture.gainora.co.uk" || !e.data || typeof e.data.gainoraBookHeight !== "number") return;
+      var h = Math.max(480, Math.min(2400, Math.round(e.data.gainoraBookHeight)));
+      frame.style.height = h + "px";
+      // Moving on to the details or the confirmation: bring the top of the booking page into view.
+      if (e.data.gainoraBookStep === "details" || e.data.gainoraBookStep === "done") frame.scrollIntoView({ block: "start", behavior: "smooth" });
+    });
+  }
+
   // At least one channel must be ticked. The shared form script handles the other fields.
   var form = document.querySelector("form[name=diagnostic]");
   if (!form) return;

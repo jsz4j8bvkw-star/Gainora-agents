@@ -16,8 +16,8 @@
   "email": "hello@gainora.co.uk",
   "phone": "",
   "responseTime": "within one working day",
-  "bookingUrl": "https://calendar.app.google/2nHffNt7oNxPXnB29",
-  "bookingEmbedUrl": "https://calendar.google.com/calendar/appointments/schedules/AcZssZ15t20S0p9NbY7CQoTA_A_6jKbi8opDX_1TwSL5hXfIm2JyW8mytuR1top1YQ-Tm6sgnwfDNEyc?gv=true"
+  "bookingUrl": "https://capture.gainora.co.uk/book/gainora",
+  "bookingEmbedUrl": "https://capture.gainora.co.uk/book/gainora"
  },
  "demo": {
   "_readme": "The 'Ring our receptionist' block stays hidden until both a phone number and a recording are set.",

@@ -20,16 +20,16 @@
     <div class="split">
       <h2 class="split-head" id="time-title">1. Pick a time</h2>
       <div class="split-body">
-        <p class="lede">Choose any slot that suits you. You'll get a calendar invitation straight away, and the call is on the phone or a video link, whichever you prefer.</p>
-        <p class="small">The calendar shows a 45-minute slot so we're never rushed or running late. The call itself takes 15 minutes.</p>
-        {{#if contact.bookingUrl}}<p><a class="button button-secondary" href="{{contact.bookingUrl}}" rel="noopener" target="_blank">Open the booking calendar in a new tab</a></p>{{/if}}
+        <p class="lede">Choose any time that suits you. The call is on the phone or a video link, whichever you prefer.</p>
+        <p class="small">This is the same booking page our clients' customers use. Book on it and you'll see exactly what they get.</p>
+        {{#if contact.bookingUrl}}<p><a class="button button-secondary" href="{{contact.bookingUrl}}" rel="noopener" target="_blank">Open the booking page in a new tab</a></p>{{/if}}
       </div>
     </div>
     {{#if contact.bookingEmbedUrl}}
     <div class="calendar-frame">
-      <iframe src="{{contact.bookingEmbedUrl}}" title="Booking calendar: pick a time for your 15-minute diagnostic" loading="lazy"></iframe>
+      <iframe id="booking-frame" src="{{contact.bookingEmbedUrl}}" title="Booking page: pick a time for your 15-minute diagnostic" loading="lazy"></iframe>
     </div>
-    <p class="small">If the calendar doesn't load, use the button above, or just fill in the form and we'll reply {{contact.responseTime}} with times.</p>
+    <p class="small">If the booking page doesn't load, use the button above, or just fill in the form and we'll reply {{contact.responseTime}} with times.</p>
     {{/if}}
     {{#unless contact.bookingEmbedUrl}}
     <p class="muted">Fill in the form below and we'll reply {{contact.responseTime}} with a few times to choose from.</p>
