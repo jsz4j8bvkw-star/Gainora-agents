@@ -4,7 +4,7 @@ import { isNewClient, NEW_CLIENT, packFromSettings, RETURNING_CLIENT, withDefaul
 import { callerLookup, callerRules, lookupNumber, NO_NUMBER, NO_RECORD } from '../shared/callers';
 import { depositLine, dueNow } from '../shared/automations';
 import { retellSetup } from '../shared/retell';
-import { weeklyNote } from '../shared/insight';
+import { openSpaces, spaceCandidates, weeklyNote } from '../shared/insight';
 import { BEAUTY_SETTINGS, DEMO_SETTINGS } from '../src/lib/demo';
 
 const beauty = withDefaults(structuredClone(BEAUTY_SETTINGS));
@@ -161,4 +161,51 @@ test('monday: last week at the owner’s own prices, what’s still open, and th
 test('monday: nothing to say, no email', () => {
   assert.equal(weeklyNote([], beauty, NOW), null);
   assert.equal(weeklyNote([rec({ receivedAt: '2026-10-01T09:00:00Z', status: 'lost' })], beauty, NOW), null);
+});
+
+/* ---------- A space came up ---------- */
+
+test('spaces: a cancellation ahead becomes a space, offered first to people waiting for the same treatment', () => {
+  const cancelled = rec({ id: 'c', name: 'Rosie Clarke', phone: '+447700900431', status: 'lost', bookedType: 'Lip filler', bookedWith: 'Amy', bookedFor: '2026-11-12T14:00:00Z', receivedAt: '2026-11-09T08:00:00Z',
+    history: [{ at: '2026-11-09T08:05:00Z', text: 'Cancelled for Thu 12 Nov' }] });
+  const noshow = rec({ id: 'n', status: 'lost', bookedFor: '2026-11-08T10:00:00Z', history: [{ at: '2026-11-08T10:40:00Z', text: 'Didn’t turn up for Sun 8 Nov' }] });
+  const lipWaiting = rec({ id: 'w1', name: 'Ellie Morgan', phone: '+447700900432', status: 'replied', kind: 'booking', summary: 'Would like lip filler before her birthday.', receivedAt: '2026-11-07T21:40:00Z' });
+  const priceAsk = rec({ id: 'w2', name: 'Zara Khan', phone: '+447700900415', status: 'replied', kind: 'quote', summary: 'Asked the price of laser hair removal.', receivedAt: '2026-11-08T13:00:00Z' });
+  const noPhone = rec({ id: 'w3', name: 'Laura Bennett', phone: '', email: 'laura@example.com', status: 'new', kind: 'booking', summary: 'Lip filler?', receivedAt: '2026-11-08T13:00:00Z' });
+  const alreadyBooked = rec({ id: 'w4', name: 'Megan Hall', phone: '+447700900412', status: 'new', kind: 'booking', summary: 'Lip filler', receivedAt: '2026-11-08T13:00:00Z' });
+  const megansBooking = rec({ id: 'b4', name: 'Megan Hall', phone: '+447700900412', status: 'booked', bookedFor: '2026-11-14T10:00:00Z', receivedAt: '2026-11-01T13:00:00Z' });
+  const old = rec({ id: 'w5', name: 'Old Ask', phone: '+447700900499', status: 'new', kind: 'booking', receivedAt: '2026-10-01T13:00:00Z' });
+  const list = [cancelled, noshow, lipWaiting, priceAsk, noPhone, alreadyBooked, megansBooking, old];
+  const spaces = openSpaces(list, beauty, NOW);
+  assert.equal(spaces.length, 1);
+  assert.equal(spaces[0].enquiry.id, 'c');
+  assert.deepEqual(spaces[0].value, { amount: 250, from: false, source: 'list' });
+  const c = spaceCandidates(spaces[0], list, beauty, NOW);
+  assert.deepEqual(c.map((x) => x.enquiry.id), ['w1', 'w2']);
+  assert.equal(c[0].sameTreatment, true);
+  assert.match(c[0].why, /Asked about lip filler on Saturday 7 November and hasn’t booked yet/);
+  assert.equal(c[0].text, "Hi Ellie, a space has just come up at Willow Skin & Beauty on Thursday 12 November at 2pm with Amy. Would you like it for your lip filler? Just reply YES and we'll book you in. Amy");
+  // Filled by another booking at the same time: no longer a space.
+  const filled = rec({ id: 'f', status: 'booked', bookedFor: '2026-11-12T14:00:00Z', bookedWith: 'Amy' });
+  assert.equal(openSpaces([...list, filled], beauty, NOW).length, 0);
+  // Trades don't get spaces.
+  assert.equal(openSpaces(list, trade, NOW).length, 0);
+});
+
+test('spaces: clients due back are offered it too, with a STOP line because it is marketing', () => {
+  const cancelled = rec({ id: 'c', phone: '+447700900431', status: 'lost', bookedType: 'HydraFacial', bookedWith: 'Leah', bookedFor: '2026-11-11T11:00:00Z', receivedAt: '2026-11-09T08:00:00Z', history: [{ at: '2026-11-09T08:05:00Z', text: 'Cancelled late for Wed 11 Nov' }] });
+  const due = rec({ id: 'd', name: 'Grace Lee', phone: '+447700900477', status: 'won', bookedType: 'HydraFacial', bookedWith: 'Leah', bookedFor: '2026-10-10T10:00:00Z', receivedAt: '2026-10-01T10:00:00Z', history: [{ at: '2026-10-10T11:00:00Z', text: 'Attended' }] });
+  const [space] = openSpaces([cancelled, due], beauty, NOW);
+  const [c] = spaceCandidates(space, [cancelled, due], beauty, NOW);
+  assert.equal(c.enquiry.id, 'd');
+  assert.equal(c.dueBack, true);
+  assert.match(c.why, /^Due back for hydrafacial/);
+  assert.match(c.text, /you're due your hydrafacial\. Would you like it\?/);
+  assert.match(c.text, /Reply STOP to stop these messages\.$/);
+});
+
+test('monday: a cancelled appointment this week is mentioned with its value', () => {
+  const cancelled = rec({ id: 'c', status: 'lost', bookedType: 'Lip filler', bookedWith: 'Amy', bookedFor: '2026-11-12T14:00:00Z', receivedAt: '2026-11-08T08:00:00Z', history: [{ at: '2026-11-08T08:05:00Z', text: 'Cancelled for Thu 12 Nov' }] });
+  const w = weeklyNote([cancelled], beauty, NOW)!;
+  assert.match(w.lines.join('\n'), /A cancelled appointment this week still has its space free \(£250 at your prices\)\. Open it in Gainora to offer it to someone waiting\./);
 });

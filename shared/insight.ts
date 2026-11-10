@@ -86,6 +86,9 @@ export function nextStep(e: EnquiryRecord, s: CaptureSettings, ctx: Context = {}
     if (!e.reviewAskedAt) return { action: 'review', title: `${W.won}. Ask for a review while it’s fresh.` };
     return { action: 'none', title: `${W.won}${e.jobValue ? `, £${e.jobValue.toLocaleString('en-GB')}` : ''}. All done.` };
   }
+  if (e.status === 'lost' && appts && e.bookedFor && new Date(e.bookedFor).getTime() > now.getTime() + 3_600_000 && e.history.some((h) => /^Cancelled/.test(h.text))) {
+    return { action: 'none', title: 'Cancelled. Offer the space to someone else.', detail: 'The people below asked for an appointment or are due back, each with a text ready.' };
+  }
   if (e.status === 'lost') return { action: 'none', title: e.history.some(isNoShow) ? 'Didn’t turn up.' : 'Didn’t go ahead.' };
   return { action: 'none', title: 'Filed as spam.' };
 }
@@ -339,6 +342,11 @@ export function weeklyNote(list: EnquiryRecord[], s: CaptureSettings, now = new 
     out.push(`Still open: ${plural(open.length, 'enquiry from last week hasn’t', 'enquiries from last week haven’t')} booked yet${total ? ` (worth ${v.some((x) => x.from) || v.length < open.length ? 'at least ' : ''}${money(total)} at your prices)` : ''}. They’re in Enquiries with the next step for each.`);
   }
   if (back.length) out.push(`${plural(back.length, 'client is', 'clients are')} due back for their next treatment this week${backValue ? ` (${money(backValue)} at your prices)` : ''}. They’re on your Today page with a text ready to send.`);
+  const spaces = openSpaces(list, s, now).filter((sp) => new Date(sp.at).getTime() < now.getTime() + 7 * DAY);
+  if (spaces.length) {
+    const sv = spaces.reduce((a, sp) => a + (sp.value?.amount ?? 0), 0);
+    out.push(`${spaces.length === 1 ? 'A cancelled appointment this week still has its space free' : `${spaces.length} cancelled appointments this week still have their spaces free`}${sv ? ` (${money(sv)} at your prices)` : ''}. Open ${spaces.length === 1 ? 'it' : 'them'} in Gainora to offer ${spaces.length === 1 ? 'it' : 'them'} to someone waiting.`);
+  }
   if (ahead.length) out.push(`This week: ${plural(ahead.length, 'appointment', 'appointments')} in the diary from your enquiries${aheadValue ? `, worth ${money(aheadValue)}` : ''}${s.automations?.booking?.on && s.automations.booking.steps?.reminder?.on ? ', each with a reminder going out the day before' : ''}.`);
 
   const headline = r.caught
@@ -351,4 +359,64 @@ export function weeklyNote(list: EnquiryRecord[], s: CaptureSettings, now = new 
 function topicMatch(e: EnquiryRecord, s: CaptureSettings): string {
   const t = topicOf(e, s);
   return s.bookings.types.find((x) => x.name.toLowerCase() === t)?.name ?? '';
+}
+
+/* ---------- A space came up: fill a cancelled appointment ---------- */
+
+export interface OpenSpace { enquiry: EnquiryRecord; at: string; type: string; who: string; value: ReturnType<typeof enquiryValue> }
+export interface SpaceCandidate { enquiry: EnquiryRecord; why: string; text: string; sameTreatment: boolean; dueBack: boolean }
+
+/**
+ * Appointments cancelled ahead of time: the space is still in the diary for someone else. From now (plus an
+ * hour, so there's time to fill it) to two weeks ahead, soonest first.
+ */
+export function openSpaces(list: EnquiryRecord[], s: CaptureSettings, now = new Date()): OpenSpace[] {
+  if (s.business.kind !== 'appointments') return [];
+  return list
+    .filter((e) => !e.isTest && e.status === 'lost' && e.bookedFor && e.history.some((h) => /^Cancelled/.test(h.text))
+      && new Date(e.bookedFor).getTime() > now.getTime() + 3_600_000 && new Date(e.bookedFor).getTime() < now.getTime() + 14 * DAY)
+    // Someone else already booked into the same time (by the owner, or the receptionist) means it's filled.
+    .filter((e) => !list.some((o) => o.id !== e.id && o.status === 'booked' && o.bookedFor === e.bookedFor && (!e.bookedWith || !o.bookedWith || o.bookedWith === e.bookedWith)))
+    .map((e) => ({ enquiry: e, at: e.bookedFor!, type: e.bookedType || topicOf(e, s), who: e.bookedWith || '', value: enquiryValue({ ...e, status: 'booked' }, s) }))
+    .sort((a, b) => a.at.localeCompare(b.at));
+}
+
+/**
+ * Who could take a space: people waiting to be booked (an enquiry in the last three weeks that hasn't booked),
+ * then clients due back. Those wanting the same treatment first. Never the person who cancelled, anyone already
+ * booked in the future, or anyone with no mobile. The owner reads and sends each text; nothing goes on its own.
+ */
+export function spaceCandidates(space: OpenSpace, list: EnquiryRecord[], s: CaptureSettings, now = new Date(), max = 5): SpaceCandidate[] {
+  const gone = space.enquiry;
+  const key = (e: EnquiryRecord) => normPhone(e.phone) || e.email.toLowerCase();
+  const sameAs = (a: EnquiryRecord, b: EnquiryRecord) => !!key(a) && key(a) === key(b);
+  const bookedAhead = list.filter((e) => e.status === 'booked' && e.bookedFor && new Date(e.bookedFor) > now);
+  const usable = (e: EnquiryRecord) => !e.isTest && !!normPhone(e.phone) && !sameAs(e, gone) && !bookedAhead.some((b) => sameAs(b, e));
+  const want = space.type.toLowerCase();
+  const out: SpaceCandidate[] = [];
+  const seen = new Set<string>();
+  const when = `${dayDate(space.at)} at ${time12(space.at)}`;
+  const owner = clean(s.business.ownerName, 40).split(' ')[0];
+
+  const waiting = list.filter((e) => usable(e) && (e.status === 'new' || e.status === 'replied') && (e.kind === 'booking' || e.kind === 'quote') && e.urgency === 'normal'
+    && now.getTime() - new Date(e.receivedAt).getTime() < 21 * DAY);
+  for (const e of waiting) {
+    const t = topicOf(e, s);
+    out.push({ enquiry: e, sameTreatment: !!want && t === want, dueBack: false,
+      why: `Asked${t ? ` about ${t}` : ' for an appointment'} ${whenWord(e.receivedAt, now)} and hasn’t booked yet`,
+      text: `Hi ${first(e) || 'there'}, a space has just come up at ${clean(s.business.name, 80)} on ${when}${space.who ? ` with ${clean(space.who, 40)}` : ''}. Would you like it${t ? ` for your ${t}` : ''}? Just reply YES and we’ll book you in.${owner ? ` ${owner}` : ''}` });
+  }
+  for (const b of rebookDue(list, s, now, 14)) {
+    const e = b.enquiry;
+    if (!usable(e)) continue;
+    const t = (b.type || '').toLowerCase();
+    out.push({ enquiry: e, sameTreatment: !!want && t === want, dueBack: true,
+      why: `Due back for ${t || 'their next appointment'}${b.overdueDays > 0 ? `, ${b.overdueDays} ${b.overdueDays === 1 ? 'day' : 'days'} overdue` : b.overdueDays === 0 ? ' today' : ` in ${-b.overdueDays} days`}`,
+      text: `Hi ${first(e) || 'there'}, a space has just come up at ${clean(s.business.name, 80)} on ${when}${space.who ? ` with ${clean(space.who, 40)}` : ''}, and you're due your ${t || 'next appointment'}. Would you like it? Just reply YES and we'll book you in.${owner ? ` ${owner}` : ''}\n\nReply STOP to stop these messages.` });
+  }
+  return out
+    .sort((a, b) => Number(b.sameTreatment) - Number(a.sameTreatment) || Number(a.dueBack) - Number(b.dueBack) || b.enquiry.receivedAt.localeCompare(a.enquiry.receivedAt))
+    .filter((c) => { const k = key(c.enquiry); if (seen.has(k)) return false; seen.add(k); return true; })
+    .slice(0, max)
+    .map((c) => ({ ...c, text: c.text.replace(/[‘’]/g, "'") }));
 }

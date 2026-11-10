@@ -2,7 +2,7 @@ import { db, requireInternal } from '../lib/core';
 import { appUrl, toRecord, withDefaults } from '../lib/capture';
 import { sendEmail } from '../lib/email';
 import { followUps, report, words } from '../../shared/capture';
-import { advice, rebookDue, weeklyNote } from '../../shared/insight';
+import { advice, openSpaces, rebookDue, spaceCandidates, weeklyNote } from '../../shared/insight';
 
 // Background function (up to 15 minutes), started by the morning schedule. For each client:
 // 1. a short morning email when something needs them: enquiries not replied to, quote chasers,
@@ -37,7 +37,11 @@ export default async (req: Request) => {
         const reviews = due.filter((f) => f.kind === 'review').length;
         // Clients who became due back today (not the whole list every morning).
         const back = rebookDue(list, s, now, 0).filter((b) => b.overdueDays === 0);
+        // Cancelled appointments still ahead in the next week: time-sensitive, so they lead the list.
+        const spaces = openSpaces(list, s, now).filter((sp) => new Date(sp.at).getTime() < now.getTime() + 7 * 86_400_000);
+        const fmt = (iso: string) => new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date(iso)).replace(':00', '');
         const parts = [
+          ...spaces.slice(0, 2).map((sp) => { const n = spaceCandidates(sp, list, s, now).length; return `a space came up on ${fmt(sp.at)}${sp.who ? ` with ${sp.who}` : ''}${sp.value ? ` (${sp.value.from ? 'from ' : ''}${money(sp.value.amount)})` : ''}: ${n ? `${plural(n, 'person', 'people')} could take it, with a text ready for each` : 'your receptionist can offer it to callers'}`; }),
           unreplied.length && plural(unreplied.length, 'enquiry is waiting for a reply', 'enquiries are waiting for a reply'),
           back.length && `${plural(back.length, 'client is', 'clients are')} due back for their next treatment (${back.slice(0, 3).map((b) => `${b.enquiry.name.split(' ')[0] || 'a client'}${b.type ? `: ${b.type}` : ''}`).join(', ')}${back.length > 3 ? '…' : ''})`,
           quotes && plural(quotes, 'quote is ready to chase', 'quotes are ready to chase'),

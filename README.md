@@ -58,6 +58,11 @@ showing the receptionist’s opening line and rules.
 - **Deposits for new clients:** if the owner sets a deposit and their own payment link (Settings → Bookings), she
   tells new clients when she books them and their confirmation text carries the link. Returning clients, and anyone
   with an attended visit from the same number or email, are never asked. Gainora never takes payments.
+- **Fill the space:** when an appointment is cancelled ahead of time, Today shows “A space came up” with its value at
+  the owner's prices, and the enquiry lists who could take it: people who asked for an appointment in the last three
+  weeks and haven't booked (same treatment first), then clients due back. Each has a text drafted; the owner reads
+  and sends it (from the clinic's number with texting on, otherwise from their own Messages). Due-back offers carry
+  a STOP line. The morning email leads with spaces in the next week, and the Monday email counts them.
 
 ## Beauty and aesthetics safety (the owner's decision)
 

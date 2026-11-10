@@ -5,6 +5,7 @@ import { Link, navigate, takeIntent } from '../lib/router';
 import { Button, Choices, ErrorNote, Field, Icon, Loading, Modal, Tabs, copyText, useToast } from '../components/ui';
 import { Compose } from '../components/compose';
 import { Thread } from '../components/thread';
+import { FillTheSpace } from '../components/space';
 import { CHANNEL_ICON, EnquiryRow, StatusTag, UrgencyTag, who } from '../components/enquiry';
 import { csv, money, phone, relative, shortDate } from '../lib/format';
 import {
@@ -313,6 +314,8 @@ export function EnquiryDetail({ id }: { id: string }) {
               </div>
             )}
           </section>
+
+          {appts && e.status === 'lost' && <FillTheSpace e={e} />}
 
           {earlier.length > 0 && (
             <section className="panel" aria-labelledby="hist2-h">

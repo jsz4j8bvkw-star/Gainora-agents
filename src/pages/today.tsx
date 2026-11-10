@@ -4,6 +4,7 @@ import { useApp } from '../app';
 import { Link, navigate, setIntent } from '../lib/router';
 import { Button, ErrorNote, Icon, Loading, useLoad, useToast } from '../components/ui';
 import { EnquiryRow, who } from '../components/enquiry';
+import { useOpenSpaces } from '../components/space';
 import { greeting, money, time12 } from '../lib/format';
 import { followUps, isBeauty, report, words } from '../../shared/capture';
 import { priority, rebookDue, type Priority } from '../../shared/insight';
@@ -12,6 +13,7 @@ import type { EnquiryRecord } from '../lib/types';
 export function Today() {
   const { settings, enquiries, enquiriesError, reloadEnquiries, putEnquiry, messages } = useApp();
   const sources = useLoad(() => api.listSources());
+  const spaces = useOpenSpaces();
   const [testing, setTesting] = useState(false);
   const toast = useToast();
   const appts = settings.business.kind === 'appointments';
@@ -125,7 +127,25 @@ export function Today() {
         </section>
       )}
 
-      <section className={`panel ${now.length || data.waitingOk.length ? 'section' : ''}`} aria-label="The last 7 days">
+      {appts && spaces.length > 0 && (
+        <section className={now.length || data.waitingOk.length ? 'section' : 'section-tight'} aria-labelledby="space-h">
+          <div className="section-head"><h2 className="heading" id="space-h">{spaces.length === 1 ? 'A space came up' : `${spaces.length} spaces came up`}</h2></div>
+          <div className="panel rows">
+            {spaces.slice(0, 3).map(({ space, count }) => (
+              <Link key={space.enquiry.id} to={`/enquiries/${space.enquiry.id}`} className="mini-row with-cta">
+                <span className="date-chip"><strong>{new Date(space.at).toLocaleDateString('en-GB', { day: 'numeric' })}</strong>{new Date(space.at).toLocaleDateString('en-GB', { month: 'short' })}</span>
+                <span className="stack" style={{ minWidth: 0 }}>
+                  <span className="small" style={{ fontWeight: 600 }}>{time12(space.at)}{space.who ? ` with ${space.who}` : ''}{space.type ? ` · ${space.type}` : ''}{space.value ? ` · ${space.value.from ? 'from ' : ''}${money(space.value.amount)}` : ''}</span>
+                  <span className="xsmall faint">{who(space.enquiry)} cancelled. {count ? `${count} ${count === 1 ? 'person' : 'people'} could take it, with a text ready for each.` : 'Nobody waiting yet: your receptionist can offer it.'}</span>
+                </span>
+                <span className="btn btn-secondary btn-small">Fill it</span>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+
+      <section className={`panel ${now.length || data.waitingOk.length || (appts && spaces.length) ? 'section' : ''}`} aria-label="The last 7 days">
         <div className="stats">
           <div className="stat"><span className="stat-label">Enquiries, last 7 days</span><span className="stat-value">{data.week.caught}</span><span className="stat-note">{data.week.byChannel.call} by phone{data.week.spam ? `, ${data.week.spam} spam kept out` : ''}</span></div>
           <div className="stat"><span className="stat-label">Caught while you were closed</span><span className="stat-value">{data.week.afterHours}</span><span className="stat-note">{caughtNote}</span></div>
