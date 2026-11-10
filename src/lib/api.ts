@@ -11,7 +11,11 @@ declare const __DEMO__: boolean;
 export interface Api {
   mode: 'demo' | 'live';
   getUser(): Promise<User | null>;
+  /** Emails a sign-in link: the first time in, or when they've forgotten their password. */
   requestSignIn(email: string): Promise<void>;
+  signInWithPassword(email: string, password: string): Promise<void>;
+  /** Sets (or changes) the password for the signed-in user. */
+  setPassword(password: string): Promise<void>;
   signOut(): Promise<void>;
 
   getProfile(): Promise<BusinessProfile | null>;

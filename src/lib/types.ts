@@ -68,7 +68,13 @@ export interface Plan {
 /** The last seven days from Capture & Convert, for The Brief. */
 export interface CaptureWeek { from: string; to: string; enquiries: number; afterHours: number; booked: number; bookedValue: number; valueIsMinimum: boolean }
 
-export interface User { id: string; email: string }
+export interface User {
+  id: string; email: string;
+  /** They've chosen a password for their Gainora login. */
+  hasPassword?: boolean;
+  /** A password must be chosen before the app opens: 'create' the first time, 'new' after an email-link sign-in. */
+  passwordStep?: 'create' | 'new';
+}
 
 export interface Action { id: string; text: string; agent: AgentId | 'you'; done: boolean; createdAt: string }
 

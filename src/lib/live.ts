@@ -12,6 +12,7 @@ import { POLL_DELAYS_MS } from '../../shared/chat';
 import { decodeFocus } from '../../shared/scout';
 import { likelyOutcomes } from '../../shared/money';
 import { uuid } from './format';
+import { isSamePassword, passwordStep } from './password';
 
 declare const __SUPABASE_URL__: string;
 declare const __SUPABASE_ANON_KEY__: string;
@@ -22,7 +23,12 @@ const SESSION_KEY = 'gainora.session.v1';
 const enc = encodeURIComponent;
 const DAY = 86_400_000;
 
-interface Session { access_token: string; refresh_token: string; expires_at: number; user: User }
+/** viaLink: this session began with an emailed link, so a password is chosen before the app opens. */
+interface Session { access_token: string; refresh_token: string; expires_at: number; user: User; viaLink?: boolean }
+
+/** The user as the app sees them. has_password is set when they choose a password (in either Gainora app). */
+const userFrom = (u: any, prev?: User): User => ({ id: u.id, email: u.email, hasPassword: !!u?.user_metadata?.has_password || !!prev?.hasPassword });
+const withStep = (s: Session): User => ({ ...s.user, passwordStep: passwordStep(s.user.hasPassword, s.viaLink) });
 
 export class ApiError extends Error {
   constructor(message: string, public status = 0, public code = '') { super(message); }
@@ -56,10 +62,30 @@ async function authFetch(path: string, body: unknown) {
     method: 'POST', headers: { apikey: ANON, 'Content-Type': 'application/json' }, body: JSON.stringify(body),
   });
   const data = (await readBody(res)) ?? {};
-  if (!res.ok) {
-    const m = typeof data.msg === 'string' ? data.msg : typeof data.error_description === 'string' ? data.error_description : '';
-    throw new ApiError(m && !/json|token|jwt/i.test(m) ? m : humanError({ status: res.status, doing: 'signing in' }), res.status);
-  }
+  if (!res.ok) throw authError(res.status, data, 'signing in');
+  return data;
+}
+
+/** Supabase's auth errors, with its error code kept so the sign-in screens can say what happened. */
+function authError(status: number, data: any, doing: string) {
+  const m = typeof data?.msg === 'string' ? data.msg : typeof data?.error_description === 'string' ? data.error_description : typeof data?.message === 'string' ? data.message : '';
+  const code = typeof data?.error_code === 'string' ? data.error_code : typeof data?.error === 'string' ? data.error : '';
+  return new ApiError(m && !/json|token|jwt/i.test(m) ? m : humanError({ status, doing }), status, code);
+}
+
+async function fetchUser(access: string): Promise<any | null> {
+  const res = await fetch(`${URL_}/auth/v1/user`, { headers: { apikey: ANON, Authorization: `Bearer ${access}` } }).catch(() => null);
+  return res?.ok ? res.json().catch(() => null) : null;
+}
+
+/** Saves a password (and marks that they have one) for the signed-in user. */
+async function putUser(access: string, body: unknown) {
+  let res: Response;
+  try {
+    res = await fetch(`${URL_}/auth/v1/user`, { method: 'PUT', headers: { apikey: ANON, Authorization: `Bearer ${access}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  } catch { throw new ApiError(humanError({ status: 0, doing: 'saving your password' }), 0); }
+  const data = (await readBody(res)) ?? {};
+  if (!res.ok) throw authError(res.status, data, 'saving your password');
   return data;
 }
 
@@ -69,10 +95,10 @@ async function consumeRedirect(): Promise<Session | null> {
   const access = h.get('access_token'); const refresh = h.get('refresh_token');
   if (!access || !refresh) return null;
   history.replaceState(null, '', location.pathname);
-  const res = await fetch(`${URL_}/auth/v1/user`, { headers: { apikey: ANON, Authorization: `Bearer ${access}` } });
-  if (!res.ok) return null;
-  const u = await res.json();
-  const s: Session = { access_token: access, refresh_token: refresh, expires_at: Date.now() + Number(h.get('expires_in') || 3600) * 1000, user: { id: u.id, email: u.email } };
+  const u = await fetchUser(access);
+  if (!u) return null;
+  // Every link sign-in (an invitation, the first time, or a forgotten password) ends with choosing a password.
+  const s: Session = { access_token: access, refresh_token: refresh, expires_at: Date.now() + Number(h.get('expires_in') || 3600) * 1000, user: userFrom(u), viaLink: true };
   writeSession(s);
   return s;
 }
@@ -82,9 +108,10 @@ async function session(): Promise<Session | null> {
   let s = readSession();
   if (!s) return null;
   if (s.expires_at - Date.now() > 60_000) return s;
+  const prev = s;
   refreshing ??= authFetch('token?grant_type=refresh_token', { refresh_token: s.refresh_token })
     .then((d) => {
-      const next: Session = { access_token: d.access_token, refresh_token: d.refresh_token, expires_at: Date.now() + d.expires_in * 1000, user: { id: d.user.id, email: d.user.email } };
+      const next: Session = { access_token: d.access_token, refresh_token: d.refresh_token, expires_at: Date.now() + d.expires_in * 1000, user: userFrom(d.user, prev.user), viaLink: prev.viaLink };
       writeSession(next); return next;
     })
     .catch(() => { writeSession(null); return null; })
@@ -195,7 +222,30 @@ export function createLiveApi(): Api {
     mode: 'live',
     async getUser() {
       const fromLink = await consumeRedirect();
-      return (fromLink ?? (await session()))?.user ?? null;
+      let s = fromLink ?? (await session());
+      if (!s) return null;
+      if (!s.user.hasPassword && !s.viaLink) {
+        // They may have chosen a password in the other Gainora app since this device last checked.
+        const fresh = await fetchUser(s.access_token);
+        if (fresh?.user_metadata?.has_password) { s = { ...s, user: userFrom(fresh, s.user) }; writeSession(s); }
+      }
+      return withStep(s);
+    },
+    async signInWithPassword(email, password) {
+      const d = await authFetch('token?grant_type=password', { email, password });
+      writeSession({ access_token: d.access_token, refresh_token: d.refresh_token, expires_at: Date.now() + d.expires_in * 1000, user: { ...userFrom(d.user), hasPassword: true } });
+    },
+    async setPassword(password) {
+      const s = await session();
+      if (!s) throw new ApiError('Your sign-in has run out. Get a new sign-in link.', 401);
+      try {
+        await putUser(s.access_token, { password, data: { has_password: true } });
+      } catch (e: any) {
+        // The same password they already have is still their password: just record that they have one.
+        if (!isSamePassword(e?.code, e?.message)) throw e;
+        await putUser(s.access_token, { data: { has_password: true } });
+      }
+      writeSession({ ...s, viaLink: false, user: { ...s.user, hasPassword: true } });
     },
     async requestSignIn(email) {
       // create_user is false: only people with a subscription (created by the Stripe webhook) can sign in.

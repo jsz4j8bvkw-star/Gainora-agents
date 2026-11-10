@@ -7,6 +7,7 @@ import { AGENTS, Icon, Loading, ToastProvider } from './components/ui';
 import { hostOf, longDate } from './lib/format';
 import { Palette, usePaletteShortcut } from './components/palette';
 import { SignIn } from './pages/signin';
+import { SetPassword } from './pages/password';
 import { Onboarding } from './pages/onboarding';
 import { Home } from './pages/home';
 import { Watcher } from './pages/watcher';
@@ -50,6 +51,7 @@ export function App() {
   if (error) return <div className="page"><div className="err" role="alert">{error}</div></div>;
   if (user === undefined) return <Loading label="Opening Gainora" />;
   if (!user) return <ToastProvider><SignIn onSignedIn={load} /></ToastProvider>;
+  if (user.passwordStep) return <ToastProvider><SetPassword user={user} onDone={load} /></ToastProvider>;
   if (profile === undefined || !plan) return <Loading label="Loading your business" />;
   if (!profile?.completedAt) {
     return <ToastProvider><Onboarding initial={profile} onDone={(p) => { setProfile(p); navigate('/', { replace: true }); }} /></ToastProvider>;

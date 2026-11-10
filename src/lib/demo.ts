@@ -1,7 +1,7 @@
 import type { Api } from './api';
 import type {
   Action, Alert, BriefReport, BusinessProfile, ChatMessage, Client, ClientAction, FeedbackRecord, HomeData, Lead, Outcome, ScoutResult, ScoutSearch, Tender,
-  ValueEvent, ValueKind, Visit, WatcherState, WeekNumbers,
+  User, ValueEvent, ValueKind, Visit, WatcherState, WeekNumbers,
 } from './types';
 import { likelyOutcomes } from '../../shared/money';
 import { uuid } from './format';
@@ -28,7 +28,7 @@ const KEY = 'gainora.agents.demo.v3';
 const DAY = 86_400_000;
 
 interface DemoState {
-  user: { id: string; email: string } | null;
+  user: User | null;
   profile: BusinessProfile | null;
   seeded: boolean;
   actions: Action[];
@@ -379,6 +379,8 @@ export function createDemoApi(): Api {
     mode: 'demo',
     async getUser() { await wait(120); return s.user; },
     async requestSignIn(email) { await wait(500); s.user = { id: 'demo', email }; save(); },
+    async signInWithPassword(email) { await wait(400); s.user = { id: 'demo', email, hasPassword: true }; save(); },
+    async setPassword() { await wait(400); if (s.user) { s.user = { ...s.user, hasPassword: true, passwordStep: undefined }; save(); } },
     async signOut() { s.user = null; save(); },
 
     async getProfile() { await wait(120); return s.profile; },

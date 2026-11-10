@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { humanThrown } from '../lib/errors';
 import { api } from '../lib/api';
+import { ChangePassword } from './password';
 import { useApp } from '../app';
 import { AGENTS, Button, Field, Icon, useLoad, useToast } from '../components/ui';
 import { SectionEditor } from './profile';
@@ -81,6 +82,12 @@ export function Settings() {
           <Button kind="secondary" icon="download" onClick={exportData}>Download my data</Button>
           <Button kind="secondary" icon="logout" onClick={async () => { await api.signOut(); location.reload(); }}>Sign out</Button>
         </div>
+        {api.mode === 'live' && (
+          <div className="mt-24">
+            <p className="small muted" style={{ margin: "0 0 12px" }}>You sign in with your email and password. The same password opens Capture &amp; Convert.</p>
+            <ChangePassword email={user.email} />
+          </div>
+        )}
         <p className="xsmall faint mt-16">To close your account and delete your data, email <a href="mailto:hello@gainora.co.uk">hello@gainora.co.uk</a>. We delete everything within 30 days.</p>
       </section>
     </div>
