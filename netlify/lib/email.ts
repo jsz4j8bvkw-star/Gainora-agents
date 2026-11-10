@@ -5,7 +5,7 @@ const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 
 export function emailHtml(paragraphs: string[], cta?: { label: string; url: string }): string {
   // Black and champagne, matching the app and gainora.co.uk.
-  const body = paragraphs.map((p) => `<p style="margin:0 0 16px;font:16px/1.6 Georgia,serif;color:#1A1A1C">${esc(p)}</p>`).join('');
+  const body = paragraphs.map((p) => `<p style="margin:0 0 16px;font:16px/1.6 Georgia,serif;color:#1A1A1C">${esc(p).replace(/\n/g, '<br>')}</p>`).join('');
   const button = cta ? `<p style="margin:24px 0 4px"><a href="${esc(cta.url)}" style="display:inline-block;background:#111214;color:#E9E5DD;text-decoration:none;font:600 15px/1 Arial,sans-serif;padding:14px 22px;border-radius:6px;border:1px solid #C9B37E">${esc(cta.label)}</a></p>` : '';
   return `<!doctype html><html><body style="margin:0;background:#F4F4F2"><div style="max-width:560px;margin:0 auto;padding:32px 24px"><div style="background:#111214;border-radius:12px 12px 0 0;padding:18px 28px;font:600 19px Georgia,serif;letter-spacing:0.02em;color:#E9E5DD">Gainora<span style="color:#C9B37E">.</span></div><div style="background:#fff;border:1px solid #E4E3DF;border-top:2px solid #C9B37E;border-radius:0 0 12px 12px;padding:28px">${body}${button}</div><p style="font:12px/1.5 Arial,sans-serif;color:#6F6C66;margin-top:18px">Gainora, gainora.co.uk. You receive this because you subscribe to Gainora agents. Change alerts in Plan and settings.</p></div></body></html>`;
 }

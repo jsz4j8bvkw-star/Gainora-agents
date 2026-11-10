@@ -28,14 +28,16 @@ const change = (now: number, before: number) => {
 
 /* ---------- The page ---------- */
 
-export function Website() {
-  const { plan } = useApp();
-  const [client, setClient] = useState<string | null>(() => queryParam('site'));
-  useState(() => { api.setWebsiteClient(queryParam('site')); return 0; });
+/** In Command Centre for the client (or Gainora with ?site=), or embedded in Gainora's admin for one client. */
+export function Website({ embedded }: { embedded?: { slug: string; hasCapture: boolean } } = {}) {
+  const app = useApp() as any;
+  const plan = embedded ? { capture: embedded.hasCapture } : (app?.plan ?? {});
+  const [client, setClient] = useState<string | null>(() => embedded?.slug ?? queryParam('site'));
+  useState(() => { api.setWebsiteClient(embedded?.slug ?? queryParam('site')); if (embedded && api.mode === 'demo') api.setWebsiteRole?.('gainora'); return 0; });
   const { data: loaded, error, loading, reload } = useLoad(() => api.getWebsite(), [client]);
   const [site, setSite] = useState<WebsiteState | null>(null);
   const [draft, setDraft] = useState<Site | null>(null);
-  const [tab, setTab] = useState<Tab>(() => { const t = queryParam('tab') as Tab | null; return t && TABS.includes(t) ? t : 'performance'; });
+  const [tab, setTab] = useState<Tab>(() => { const t = (embedded ? null : queryParam('tab')) as Tab | null; return t && TABS.includes(t) ? t : embedded ? 'edit' : 'performance'; });
   const [saving, setSaving] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [publishing, setPublishing] = useState(false);
   const [asking, setAsking] = useState(false);
@@ -86,9 +88,9 @@ export function Website() {
     { id: 'settings', label: 'Address and tracking' },
   ] as { id: Tab; label: string; badge?: any }[]).filter((t) => gainora || OWNER_TABS.includes(t.id));
   return (
-    <div className="page website">
-      {gainora && <ClientBar current={client} onPick={switchClient} />}
-      {api.mode === 'demo' && api.setWebsiteRole && (
+    <div className={embedded ? 'website embedded' : 'page website'}>
+      {gainora && !embedded && <ClientBar current={client} onPick={switchClient} />}
+      {api.mode === 'demo' && api.setWebsiteRole && !embedded && (
         <p className="demo-role small">Demo: <button type="button" className="linklike" onClick={() => { api.setWebsiteRole!(gainora ? 'owner' : 'gainora'); setSite(null); setDraft(null); reload(); }}>{gainora ? 'see it as the client sees it' : 'see it as Gainora sees it'}</button></p>
       )}
       <div className="page-head">

@@ -536,4 +536,6 @@ export function createLiveApi(): Api {
 }
 
 export const liveConfigured = Boolean(URL_ && ANON);
+/** Signed-in call to one of Gainora's server functions (used by the Gainora admin app). */
+export const callFunction = fn;
 export type { BusinessProfile, WeekNumbers };
