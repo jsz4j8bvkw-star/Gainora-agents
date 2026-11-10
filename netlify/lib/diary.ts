@@ -5,7 +5,7 @@ import { db, enc, insert } from './core';
 import { appUrl, toRecord, withDefaults } from './capture';
 import { sendEmail } from './email';
 import { runAutomations } from './messages';
-import { externalBusy, pushBooking } from './connections';
+import { bookingSystemFirst, externalBusy, providerTimes, pushBooking } from './connections';
 import {
   depositRule, depositCovers, effectiveBookingMode, isAfterHours, NEW_CLIENT, normPhone, RETURNING_CLIENT,
   type CaptureSettings, type EnquiryRecord,
@@ -27,6 +27,9 @@ export async function busyBetween(userId: string, s: CaptureSettings, from: Date
 /** Free times for a treatment, from a UK date, for a number of days. */
 export async function timesFor(userId: string, s: CaptureSettings, q: { type: string; who?: string; from?: string; days?: number }, now = new Date()): Promise<DayTimes[]> {
   const days = Math.min(Math.max(1, q.days ?? 7), 21);
+  // With Cliniko connected, its own free times are the truth.
+  const theirs = await providerTimes(userId, s, { type: q.type, who: q.who, from: q.from || londonDate(now), days, now }).catch((e) => { console.error('[capture] cliniko times', e?.message); return [] as DayTimes[]; });
+  if (theirs) return theirs;
   const fromDate = q.from && /^\d{4}-\d{2}-\d{2}$/.test(q.from) ? new Date(`${q.from}T00:00:00Z`) : now;
   const busy = await busyBetween(userId, s, new Date(Math.max(now.getTime(), fromDate.getTime() - DAY)), new Date(fromDate.getTime() + (days + 1) * DAY));
   return freeTimes(s, { type: q.type, who: q.who, from: q.from || londonDate(now), days, busy, now });
@@ -68,19 +71,27 @@ export async function makeBooking(userId: string, s: CaptureSettings, input: Boo
   if (input.source === 'page' && tooMany(recent.map((r) => ({ phone: r.phone, receivedAt: r.received_at }) as any), phone, now)) {
     return { ok: false, reason: 'too_many', message: `You’ve asked for a few times already. Please call ${s.business.name} to book.` };
   }
-  const busy = await busyBetween(userId, s, new Date(start.getTime() - DAY), new Date(start.getTime() + DAY));
-  if (!stillFree(s, type.name, start.toISOString(), who, busy, now)) {
-    return { ok: false, reason: 'taken', message: 'Sorry, that time has just gone. Please choose another.' };
-  }
+  // Still free? From the connected booking system when there is one, otherwise the Gainora diary.
+  const external = await bookingSystemFirst(userId);
+  const sameDay = external
+    ? await timesFor(userId, s, { type: type.name, who, from: londonDate(start), days: 1 }, now)
+    : freeTimes(s, { type: type.name, who, from: londonDate(start), days: 1, busy: await busyBetween(userId, s, new Date(start.getTime() - DAY), new Date(start.getTime() + DAY)), now });
   // Who it's with: the person asked for, or the first free one at that time.
-  const slot = freeTimes(s, { type: type.name, who, from: londonDate(start), days: 1, busy, now })
-    .flatMap((d) => d.slots).find((x) => x.start === start.toISOString());
-  const withWho = slot?.who ?? who;
+  const slot = sameDay.flatMap((d) => d.slots).find((x) => x.start === start.toISOString() && (!who || x.who === who));
+  if (!slot) return { ok: false, reason: 'taken', message: 'Sorry, that time has just gone. Please choose another.' };
+  const withWho = slot.who || who;
 
   // New or returning: what they said, checked against anyone with an attended visit from the same number.
   const before = await db<any[]>(`enquiries?select=id&user_id=eq.${userId}&phone=eq.${enc(phone)}&status=eq.won&is_test=eq.false&limit=1`);
   const returning = before.length > 0 || input.newClient === false;
-  const mode = input.source === 'owner' ? 'book' : input.source === 'page' ? pageOf(s).mode : effectiveBookingMode(s.bookings) === 'book' ? 'book' : 'request';
+  const mode = input.source === 'owner' ? 'book'
+    : input.source === 'page' ? (s.bookings.mirror ? 'request' : pageOf(s).mode)
+    : effectiveBookingMode(s.bookings) === 'book' ? 'book' : 'request';
+  // Into the clinic's own booking system first: if it says no, nothing is booked here either.
+  if (mode === 'book' && external) {
+    try { await pushBooking(userId, s, { start: start.toISOString(), minutes: type.minutes, type: type.name, who: withWho, name, phone, email, notes: clean(input.notes, 600), enquiryId: '' }); }
+    catch (e: any) { console.error('[capture] booking system', e?.message); return { ok: false, reason: 'taken', message: 'Sorry, that time couldn’t be booked. Please choose another.' }; }
+  }
   const when = sayTime({ start: start.toISOString(), end: start.toISOString(), who: withWho });
   const at = now.toISOString();
   const history = [
@@ -100,7 +111,7 @@ export async function makeBooking(userId: string, s: CaptureSettings, input: Boo
   const [saved] = await insert('enquiries', row);
   const enquiry = toRecord(saved);
 
-  if (mode === 'book') {
+  if (mode === 'book' && !external) {
     await pushBooking(userId, s, { start: start.toISOString(), minutes: type.minutes, type: type.name, who: withWho, name, phone, email, notes, enquiryId: enquiry.id })
       .catch((e) => console.error('[capture] calendar push', e?.message));
   }

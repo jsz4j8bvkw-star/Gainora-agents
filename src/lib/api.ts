@@ -1,5 +1,6 @@
 import type { CaptureSettings, EnquiryPatch, EnquiryRecord, MessageRecord, NewEnquiry, Plan, Source, User } from './types';
 import type { PageTimes } from '../book/BookingPage';
+import type { ImportedBooking } from '../../shared/importer';
 
 export interface DiaryBooking { type: string; slot: string; name: string; phone: string; email?: string; notes?: string; newClient?: boolean }
 import { createDemoApi } from './demo';
@@ -44,6 +45,10 @@ export interface Api {
   slugFree(slug: string): Promise<{ slug: string; free: boolean }>;
   /** The demo only: a booking made on the booking page preview, so it lands in the demo diary. */
   pageBook?(b: DiaryBooking): Promise<EnquiryRecord>;
+  /** Appointments from the clinic's old system: upcoming ones into the diary, past ones as visit history. */
+  importBookings(bookings: ImportedBooking[], system: string): Promise<{ added: number; already: number; rejected: number }>;
+  /** Connecting Google Calendar or Cliniko: list, google-start, google-save, cliniko-connect, cliniko-save, disconnect. */
+  connect(op: string, payload?: Record<string, unknown>): Promise<any>;
 
   resetDemo?(): void;
 }

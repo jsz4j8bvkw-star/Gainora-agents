@@ -96,11 +96,12 @@ export function greetingFor(s: Pick<CaptureSettings, 'business' | 'calls'>, now 
  * The booking the receptionist can really make. Until Gainora has connected the diary (or when the diary is
  * on paper) she can't see free times, so she takes details and the owner calls back, whatever was chosen.
  */
-export function effectiveBookingMode(bk: Pick<Bookings, 'mode' | 'status' | 'system'>): BookingMode {
+export function effectiveBookingMode(bk: Pick<Bookings, 'mode' | 'status' | 'system'> & { mirror?: boolean }): BookingMode {
   if (bk.mode === 'callback') return 'callback';
   if (bk.system === GAINORA_DIARY) return bk.mode;   // the diary is Gainora's own, so it's always there
   if (/paper/i.test(bk.system || '')) return 'callback';
-  return bk.status === 'connected' ? bk.mode : 'callback';
+  if (bk.status !== 'connected') return 'callback';
+  return bk.mirror ? 'offer' : bk.mode;               // a copy of their real diary: offer times, the clinic confirms
 }
 
 /** The deposit new clients pay, when the owner set one with a link to pay it; otherwise ''. */
@@ -553,6 +554,9 @@ export interface Bookings {
   depositTypes?: string[];
   /** The owner's own wording for the line added to the confirmation. Empty uses ours. */
   depositWording?: string;
+  /** The connected calendar is only a copy of another booking system (Fresha's calendar sync, say): Gainora can
+   *  see when they're busy but can't book into the real diary, so times are offered and the clinic confirms. */
+  mirror?: boolean;
   status: 'not_connected' | 'requested' | 'connected';
 }
 
@@ -813,6 +817,9 @@ export function applyPatch(e: EnquiryRecord, p: EnquiryPatch, settings: (Pick<Ca
   return next;
 }
 
+/** Brought in from the clinic's old booking system when they switched (shared/importer.ts). */
+export const isImported = (e: Pick<EnquiryRecord, 'history'>) => e.history.some((h) => /^Imported from /.test(h.text));
+
 /** History lines the receptionist's call analysis leaves, so a new client is known without a new column. */
 export const NEW_CLIENT = 'New client';
 export const RETURNING_CLIENT = 'Returning client';
@@ -885,7 +892,8 @@ export interface Report {
 const mondayIso = (iso: string) => { const d = new Date(iso); const day = (d.getUTCDay() + 6) % 7; d.setUTCDate(d.getUTCDate() - day); return d.toISOString().slice(0, 10); };
 
 export function report(list: EnquiryRecord[], from: Date, to: Date, settings?: Pick<CaptureSettings, 'bookings'>, now = new Date()): Report {
-  const inRange = list.filter((e) => !e.isTest && new Date(e.receivedAt) >= from && new Date(e.receivedAt) < to);
+  // Bookings imported from a clinic's old system aren't enquiries Gainora caught, so they're left out of the figures.
+  const inRange = list.filter((e) => !e.isTest && !isImported(e) && new Date(e.receivedAt) >= from && new Date(e.receivedAt) < to);
   const real = inRange.filter((e) => e.status !== 'spam');
   const onCall = real.filter(bookedOnCall);
   // Reply time measures the owner, so calls the receptionist settled herself are left out.

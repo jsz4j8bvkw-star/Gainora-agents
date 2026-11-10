@@ -531,6 +531,30 @@ export function createDemoApi(): Api {
     async diaryBook(b) { return demoBook(b, 'owner'); },
     async pageBook(b) { return demoBook(b, 'page'); },
     async slugFree(slug) { await wait(200); return { slug: slugify(slug), free: true }; },
+    async importBookings(bookings, system) {
+      await wait(600);
+      const now = new Date().toISOString();
+      const seen = new Set(s.enquiries.map((e) => `${normPhone(e.phone) || e.email}:${e.bookedFor}`));
+      let added = 0;
+      for (const b of bookings) {
+        if (seen.has(`${b.phone || b.email}:${b.start}`)) continue;
+        seen.add(`${b.phone || b.email}:${b.start}`); added++;
+        s.enquiries.push({
+          id: uid('e_'), channel: 'call', name: b.name, phone: b.phone, email: b.email, postcode: '', summary: `${b.past ? 'Visit' : 'Booking'} imported from ${system}${b.type ? `: ${b.type}` : ''}.`, transcript: '', recordingUrl: '',
+          urgency: 'normal', kind: 'booking', reasons: [], status: b.past ? 'won' : 'booked', afterHours: false, notes: '',
+          history: [{ at: now, text: `Imported from ${system}` }, ...(b.past ? [{ at: b.start, text: 'Attended' }] : [{ at: now, text: `Booked in for ${new Date(b.start).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}${b.type ? `: ${b.type}` : ''}` }])],
+          repliedAt: b.past ? b.start : now, quoteAmount: null, quotedAt: null, chasersSent: 0, bookedFor: b.start, bookedType: b.type, bookedWith: b.who, jobValue: b.past ? b.price : null, invoiceDue: null,
+          paidAt: b.past ? b.start : null, paymentRemindersSent: 0, reviewAskedAt: b.past ? b.start : null, receivedAt: b.past ? b.start : now, isTest: false,
+        });
+      }
+      s.enquiries.sort((a, b) => b.receivedAt.localeCompare(a.receivedAt)); save();
+      return { added, already: bookings.length - added, rejected: 0 };
+    },
+    async connect(op) {
+      await wait(300);
+      if (op === 'list') return { google: { ready: true, connection: null }, cliniko: { connection: null } };
+      throw new Error(op === 'google-start' ? 'In your app this opens Google’s sign-in, then brings you back here connected.' : 'In your app this connects your Cliniko account.');
+    },
 
     resetDemo() { try { localStorage.removeItem(KEY); } catch { /* ignore */ } s = fresh(); },
   };

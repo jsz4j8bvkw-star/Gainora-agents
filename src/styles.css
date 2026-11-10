@@ -1094,3 +1094,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .
 .phone-frame { width: min(390px, 100%); height: min(720px, 70vh); margin: 0 auto; overflow: auto; border-radius: 28px; border: 8px solid #111214; background: #FBF9F5; }
 .phone-frame .bk-main { padding-top: 22px; }
 .feature-body .step-edit-body { padding-left: 0; padding-right: 0; }
+.cal-table { display: grid; gap: 0; border: 1px solid var(--line); border-radius: var(--r-md); overflow: hidden; }
+.cal-row { display: grid; grid-template-columns: minmax(0, 2fr) 1fr 1fr 1fr; gap: 8px; align-items: center; padding: 10px 14px; border-top: 1px solid var(--line); }
+.cal-row.head { border-top: 0; background: var(--canvas); font-size: var(--t-xs); color: var(--ink-faint); font-weight: 600; }
+@media (max-width: 640px) { .cal-row { grid-template-columns: minmax(0, 1fr) auto auto; } .cal-row > :nth-child(4) { grid-column: 1 / -1; } }

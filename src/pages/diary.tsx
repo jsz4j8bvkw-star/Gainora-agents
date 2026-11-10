@@ -6,6 +6,8 @@ import { useApp } from '../app';
 import { Link, navigate } from '../lib/router';
 import { Button, Choices, Field, Icon, Modal, Tabs, copyText, useToast } from '../components/ui';
 import { Toggle } from '../components/features';
+import { Connections } from '../components/connections';
+import { ImportCard } from '../components/importer';
 import { BookingPage, type PageApi } from '../book/BookingPage';
 import '../book/book.css';
 import { depositRule, GAINORA_DIARY, hoursText, isBeauty, normPhone } from '../../shared/capture';
@@ -22,7 +24,7 @@ const COLOURS = ['#C9B37E', '#8FA89A', '#B79AAE', '#9DB0C9', '#C9A08F', '#A3A3A3
 const PAGE_BASE = 'https://capture.gainora.co.uk/book/';
 
 export function DiaryPage() {
-  const [tab, setTab] = useState<Tab>('diary');
+  const [tab, setTab] = useState<Tab>(() => (/connected=|connect_error=/.test(location.search) ? 'setup' : 'diary'));
   const { settings } = useApp();
   const gainora = settings.bookings.system === GAINORA_DIARY;
   return (
@@ -446,6 +448,13 @@ function DiarySetup() {
           )}</Field>
         </div>
         <p className="small muted">Open {hoursText(settings.calls) || 'hours not set'}. Treatments, lengths, prices and who does what are in <Link to="/settings">Settings, Bookings</Link>.</p>
+      </section>
+
+      <ImportCard />
+
+      <section className="stack gap-12" aria-labelledby="conn-h">
+        <div><h2 className="subhead" id="conn-h">Connect your calendar or booking system</h2><p className="small muted">So nobody is ever booked twice, whichever way they book.</p></div>
+        <Connections />
       </section>
     </div>
   );

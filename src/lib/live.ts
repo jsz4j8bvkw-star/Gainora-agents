@@ -167,6 +167,8 @@ export function createLiveApi(): Api {
     async diaryTimes(type, who, from, days) { return fn('diary', { op: 'times', type, who, from, days }); },
     async diaryBook(b) { return (await fn<{ enquiry: EnquiryRecord }>('diary', { op: 'book', ...b })).enquiry; },
     async slugFree(slug) { return fn('diary', { op: 'slug', slug }); },
+    async connect(op, payload = {}) { return fn('connect', { op, ...payload }); },
+    async importBookings(bookings, system) { return fn('diary', { op: 'import', bookings, system }); },
   };
 }
 

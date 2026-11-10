@@ -3,7 +3,7 @@
 //
 // The owner doesn't build flows. Gainora ships a fixed set of well-made workflows; the owner switches
 // each one on or off, edits the wording and timing, and marks any step "ask me first".
-import { applyPatch, bookedOnCall, depositCovers, depositRule, findPostcode, isNewClient, normPhone, rebookWeeksFor, type BusinessKind, type CaptureSettings, type EnquiryPatch, type EnquiryRecord } from './capture';
+import { applyPatch, bookedOnCall, depositCovers, depositRule, findPostcode, isImported, isNewClient, normPhone, rebookWeeksFor, type BusinessKind, type CaptureSettings, type EnquiryPatch, type EnquiryRecord } from './capture';
 
 export type WorkflowId = 'ack' | 'booking' | 'quote' | 'payment' | 'review' | 'aftercare' | 'rebook';
 export type StepId = 'ack' | 'confirm' | 'reminder' | 'chase1' | 'chase2' | 'pay1' | 'pay2' | 'pay3' | 'review' | 'checkin' | 'rebook';
@@ -259,6 +259,17 @@ export function schedule(e: EnquiryRecord, s: CaptureSettings): Due[] {
   const kind = s.business.kind;
   const dayMs = 86_400_000;
   if (e.isTest || e.status === 'spam' || e.kind === 'spam') return out;
+  // Imported from the clinic's old system: only the reminder before an upcoming appointment. No thank-yous,
+  // confirmations, check-ins, review requests or rebook texts for history that happened before Gainora.
+  if (isImported(e)) {
+    if (e.status === 'booked' && e.bookedFor) {
+      const anchor = e.receivedAt;
+      const w = s.automations?.booking?.steps?.reminder?.wait ?? 1;
+      const at = w === 1 ? nineTheDayBefore(e.bookedFor) : new Date(new Date(e.bookedFor).getTime() - w * 3_600_000).toISOString();
+      if (new Date(at).getTime() - new Date(anchor).getTime() > 3 * 3_600_000) out.push({ wf: 'booking', step: 'reminder', key: `reminder@${e.bookedFor}`, anchor, sendAt: at, patch: null });
+    }
+    return out;
+  }
   // Thank-you: for enquiries not booked on the call, not logged by the owner, and not clinic emergencies
   // (those callers have been told to get urgent help, not "we'll find you an appointment").
   const loggedByOwner = e.history.some((h) => h.text === 'Logged by you');

@@ -58,6 +58,20 @@ showing the receptionist’s opening line and rules.
 - **Deposits for new clients:** if the owner sets a deposit and their own payment link (Settings → Bookings), she
   tells new clients when she books them and their confirmation text carries the link. Returning clients, and anyone
   with an attended visit from the same number or email, are never asked. Gainora never takes payments.
+- **Diary** (`shared/diary.ts`, `netlify/lib/diary.ts`, `src/pages/diary.tsx`): free times from opening hours (UK
+  time), treatment lengths, who does what, notice, how far ahead, start-time steps and a gap after appointments;
+  nobody booked twice. The day by team member, a week strip, add a booking in a few taps, confirm requested
+  times, spaces to fill. A clinic can run its whole diary here ("Gainora diary (this app)" as the booking system).
+- **Booking page** (`/book/<slug>`, `src/book/`, `netlify/functions/book.ts`): treatment, time, details, done.
+  Phone first, prices, choose who, deposit note, add to calendar; "book" or "I confirm each one"; the clinic's
+  colour. Its own small bundle; can be framed inside the clinic's website.
+- **Booking during the call** (`netlify/functions/diary-tool.ts`): Retell custom tools `check_availability` and
+  `book_appointment` at `/api/diary-tool/<token>/{times,book}`; the call summary later joins the booking.
+- **Connections** (`netlify/lib/connections.ts`, `netlify/functions/connect.ts`): Google Calendar (busy times count,
+  bookings added; a calendar that's a copy of another system, like Fresha's sync, is read only and times become
+  requests) and Cliniko (its own free times; bookings made in Cliniko). Secrets sealed with AES-256-GCM.
+- **Import** (`shared/importer.ts`): appointments from the old system's CSV. Upcoming ones into the diary (reminder
+  only), past ones as visit history (due back, returning callers). Not counted as caught enquiries; no texts.
 - **Fill the space:** when an appointment is cancelled ahead of time, Today shows “A space came up” with its value at
   the owner's prices, and the enquiry lists who could take it: people who asked for an appointment in the last three
   weeks and haven't booked (same treatment first), then clients due back. Each has a text drafted; the owner reads
@@ -137,6 +151,10 @@ trades keep the National Gas Emergency number (0800 111 999).
    to the caller lookup link shown with the enquiry link (`/api/caller-in/<token>`). For Never Miss a Call, export
    with `recogniseCallers: false`.
 5. **Domain:** add `capture.gainora.co.uk` in Netlify and a CNAME in Squarespace DNS.
+5a. **Diary connections:** run `supabase/migrations/20261110_capture_diary.sql`. For Google Calendar, create an OAuth
+   client (Web) in Google Cloud with redirect URI `https://capture.gainora.co.uk/api/connect/google/callback` and
+   scopes `calendar.readonly` and `calendar.events`, then set `GOOGLE_OAUTH_CLIENT_ID` and `GOOGLE_OAUTH_CLIENT_SECRET`
+   in Netlify. Optional: `DIARY_SECRET_KEY` (otherwise derived from `INTERNAL_SECRET`).
 6. **Supabase auth:** add the new site to Authentication → URL configuration → Redirect URLs.
 
 ## Develop
