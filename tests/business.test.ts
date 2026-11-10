@@ -124,4 +124,5 @@ test('greeting people properly', async () => {
   assert.equal(firstName('Mrs Smith'), 'Mrs Smith');
   assert.equal(firstName(''), 'there');
   assert.equal(firstName('Dr'), 'there');
+  assert.equal(firstName('Mari and Carys'), 'Mari and Carys');
 });

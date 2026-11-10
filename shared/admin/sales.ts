@@ -57,6 +57,7 @@ export function firstName(full: string): string {
   const words = full.trim().split(/\s+/).filter(Boolean);
   const title = words[0]?.replace(/\.$/, '').toLowerCase();
   if (!words.length) return 'there';
+  if (/\s(and|&)\s/i.test(full.trim())) return full.trim();   // "Mari and Carys": greet both
   if (!['mr', 'mrs', 'ms', 'miss', 'dr', 'prof'].includes(title)) return words[0];
   const rest = words.slice(1);
   const t = words[0].replace(/\.$/, '');
