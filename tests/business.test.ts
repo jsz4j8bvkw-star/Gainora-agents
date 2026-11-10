@@ -114,3 +114,14 @@ test('books: monthly costs, VAT threshold and repeating deadlines', () => {
   assert.equal(nextOccurrence('2026-11-10', 'none'), null);
   assert.equal(dueSoon([{ id: 'a', title: 'x', category: '', due_on: '2026-11-20', repeat: 'none', note: '', done_at: null }, { id: 'b', title: 'y', category: '', due_on: '2027-01-31', repeat: 'yearly', note: '', done_at: null }], '2026-11-10').length, 1);
 });
+
+test('greeting people properly', async () => {
+  const { firstName } = await import('../shared/admin/sales');
+  assert.equal(firstName('Kate Moss'), 'Kate');
+  assert.equal(firstName('Dr Priya Shah'), 'Dr Shah');
+  assert.equal(firstName('Dr. Tom Ellis'), 'Dr Ellis');
+  assert.equal(firstName('Mrs Jane Smith'), 'Jane');
+  assert.equal(firstName('Mrs Smith'), 'Mrs Smith');
+  assert.equal(firstName(''), 'there');
+  assert.equal(firstName('Dr'), 'there');
+});

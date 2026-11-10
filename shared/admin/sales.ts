@@ -52,7 +52,18 @@ export function canEmail(p: Pick<Prospect, 'email' | 'company_type' | 'consent' 
 
 /* ---------- Writing the message ---------- */
 
-export const firstName = (full: string) => (full.trim().split(/\s+/)[0] || '').replace(/^(mr|mrs|ms|miss|dr)\.?$/i, '') || 'there';
+/** How to greet someone: their first name; "Dr Shah" for a doctor; "Mrs Smith" when only a title and surname are known. */
+export function firstName(full: string): string {
+  const words = full.trim().split(/\s+/).filter(Boolean);
+  const title = words[0]?.replace(/\.$/, '').toLowerCase();
+  if (!words.length) return 'there';
+  if (!['mr', 'mrs', 'ms', 'miss', 'dr', 'prof'].includes(title)) return words[0];
+  const rest = words.slice(1);
+  const t = words[0].replace(/\.$/, '');
+  if (!rest.length) return 'there';
+  if (title === 'dr' || title === 'prof') return `${t} ${rest[rest.length - 1]}`;
+  return rest.length >= 2 ? rest[0] : `${t} ${rest[0]}`;
+}
 
 /** Fills a template. A line that only held {personal_line} disappears when there's nothing real to say. */
 export function fill(template: string, p: Partial<Prospect>, me: { name: string; booking: string }): string {

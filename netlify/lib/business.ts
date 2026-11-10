@@ -113,7 +113,7 @@ export async function recordStep(p: Prospect, seq: Sequence, how: { status: 'sen
 }
 
 /** Sends a prospect's next email now, if the rules allow it. */
-export async function sendOutreachEmail(p: Prospect, seq: Sequence, by: string, settings?: AdminSettings): Promise<{ ok: boolean; why?: string }> {
+export async function sendOutreachEmail(p: Prospect, seq: Sequence, by: string, settings?: AdminSettings, bodyOverride?: string): Promise<{ ok: boolean; why?: string }> {
   const s = settings ?? (await getSettings());
   const step = seq.steps[p.step];
   if (!step) return { ok: false, why: 'There’s no next message in this sequence.' };
@@ -122,7 +122,9 @@ export async function sendOutreachEmail(p: Prospect, seq: Sequence, by: string, 
   const gate = canEmail(p, await blockedSet());
   if (!gate.ok) return { ok: false, why: gate.why };
   const token = await ensureToken(p);
-  const d = draftFor(p, seq, s.outreach)!;
+  const draft = draftFor(p, seq, s.outreach)!;
+  // Adelin can edit the message before sending it by hand from Follow-ups.
+  const d = { ...draft, body: bodyOverride?.trim() ? bodyOverride.slice(0, 5000) : draft.body };
   const unsub = `${APP_ORIGIN()}/u/${token}`;
   const text = d.body + emailFooter(`${s.outreach.myName}, Gainora · gainora.co.uk`, unsub);
   const html = `<div style="font:15px/1.6 Arial,sans-serif;color:#1A1A1C;max-width:600px">${text.split('\n\n').map((para) => `<p style="margin:0 0 14px">${para.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>').replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1">$1</a>')}</p>`).join('')}</div>`;

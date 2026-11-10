@@ -7,19 +7,25 @@ import { SetPassword } from '../pages/password';
 import { longDate } from '../lib/format';
 import type { User } from '../lib/types';
 import { admin } from './api';
-import { Today, Clients, Delivery, Requests, Money, Settings } from './pages';
+import { Today, Clients, Delivery, Requests, Settings } from './pages';
+import { Health, Money, Paperwork, Prices } from './business';
+import { ProspectPage, Sales } from './sales';
 import { ClientPage } from './client';
 
 declare const __DEMO__: boolean;
 const BASE = (typeof __DEMO__ !== 'undefined' && __DEMO__) ? './' : '/';
 
-const NAV = [
-  { path: '/', label: 'Today', icon: 'home' },
-  { path: '/clients', label: 'Clients', icon: 'clients' },
-  { path: '/delivery', label: 'Delivery', icon: 'check' },
-  { path: '/requests', label: 'Requests', icon: 'send' },
-  { path: '/money', label: 'Money', icon: 'results' },
-  { path: '/settings', label: 'Settings', icon: 'settings' },
+const NAV: { path: string; label: string; icon: string; group?: string; tab?: boolean }[] = [
+  { path: '/', label: 'Today', icon: 'home', tab: true },
+  { path: '/sales', label: 'Sales', icon: 'send', tab: true },
+  { path: '/clients', label: 'Clients', icon: 'clients', group: 'Clients', tab: true },
+  { path: '/delivery', label: 'Delivery', icon: 'check', tab: true },
+  { path: '/requests', label: 'Requests', icon: 'pencil' },
+  { path: '/health', label: 'Health', icon: 'alert' },
+  { path: '/money', label: 'Money', icon: 'results', group: 'Business' },
+  { path: '/prices', label: 'Prices', icon: 'tag' },
+  { path: '/paperwork', label: 'Paperwork', icon: 'contract' },
+  { path: '/settings', label: 'Settings', icon: 'settings', group: '' },
 ];
 
 /** Gainora's admin: sign in with a Gainora team login, then everything about every client in one place. */
@@ -59,11 +65,17 @@ function Shell({ email }: { email: string }) {
   const path = usePath().split('?')[0];
   const active = (p: string) => (p === '/' ? path === '/' : path.startsWith(p)) ? 'page' : undefined;
   const page = (() => {
+    if (path.startsWith('/sales/')) return <ProspectPage id={decodeURIComponent(path.slice('/sales/'.length))} />;
+    if (path.startsWith('/sales')) return <Sales />;
     if (path.startsWith('/clients/')) return <ClientPage email={decodeURIComponent(path.slice('/clients/'.length))} />;
     if (path.startsWith('/clients')) return <Clients />;
     if (path.startsWith('/delivery')) return <Delivery />;
     if (path.startsWith('/requests')) return <Requests />;
+    if (path.startsWith('/health')) return <Health />;
     if (path.startsWith('/money')) return <Money />;
+    if (path.startsWith('/prices')) return <Prices />;
+    if (path.startsWith('/paperwork')) return <Paperwork />;
+    if (path.startsWith('/more')) return <More />;
     if (path.startsWith('/settings')) return <Settings />;
     return <Today />;
   })();
@@ -72,7 +84,7 @@ function Shell({ email }: { email: string }) {
       <aside className="side" aria-label="Main">
         <div className="side-logo"><img src={`${BASE}gainora-logo-reverse.svg`} alt="Gainora" /><span className="admin-badge">Admin</span></div>
         <nav className="nav" aria-label="Sections">
-          {NAV.map((n) => <Link key={n.path} to={n.path} aria-current={active(n.path)}><Icon name={n.icon} />{n.label}</Link>)}
+          {NAV.map((n) => [n.group !== undefined && <span key={`g-${n.path}`} className="nav-group" aria-hidden={!n.group}>{n.group}</span>, <Link key={n.path} to={n.path} aria-current={active(n.path)}><Icon name={n.icon} />{n.label}</Link>])}
         </nav>
         <div className="side-foot">
           <div className="side-biz">{email}</div>
@@ -85,9 +97,23 @@ function Shell({ email }: { email: string }) {
         <div className="appbar"><span className="small faint">{longDate()}</span></div>
         <main key={path} className="route-in">{page}</main>
         <nav className="tabbar" aria-label="Sections">
-          {NAV.map((n) => <Link key={n.path} to={n.path} aria-current={active(n.path)}><Icon name={n.icon} />{n.label}</Link>)}
+          {NAV.filter((n) => n.tab).map((n) => <Link key={n.path} to={n.path} aria-current={active(n.path)}><Icon name={n.icon} />{n.label}</Link>)}
+          <Link to="/more" aria-current={NAV.some((n) => !n.tab && active(n.path)) || path === '/more' ? 'page' : undefined}><Icon name="chevron" />More</Link>
         </nav>
       </div>
+    </div>
+  );
+}
+
+/** On a phone, the sections that don't fit in the tab bar. */
+function More() {
+  return (
+    <div className="page">
+      <div className="page-head"><div><h1 className="title">More</h1></div></div>
+      <nav className="panel more-list" aria-label="More sections">
+        {NAV.filter((n) => !n.tab).map((n) => <Link key={n.path} to={n.path}><Icon name={n.icon} /><span>{n.label}</span><Icon name="chevron" className="more-chev" /></Link>)}
+        {api.mode === 'live' && <button type="button" className="linklike-plain more-out" onClick={async () => { await api.signOut(); location.reload(); }}><Icon name="logout" /><span>Sign out</span></button>}
+      </nav>
     </div>
   );
 }

@@ -39,7 +39,7 @@ export default handler(async (req) => {
     const bySeq = new Map(seqs.map((s) => [s.id, s]));
     const due = dueFollowUps(list, today).map((p) => ({ ...p, draft: draftFor(p, bySeq.get(p.sequence_id ?? ''), settings.outreach), email_ok: canEmail(p, blocked) }));
     return json({
-      today, prospects: list, sequences: seqs, due, proposals, funnel: funnel(list, messages, today),
+      today, prospects: list, sequences: seqs, due, proposals: proposals.map((x) => ({ ...x, url: proposalUrl(x.token) })), funnel: funnel(list, messages, today),
       calls: list.filter((p) => p.call_at && p.call_at.slice(0, 10) >= today).sort((x, y) => x.call_at!.localeCompare(y.call_at!)),
       outreach: { ...settings.outreach, ready: outreachReady() },
     });
@@ -98,7 +98,7 @@ export default handler(async (req) => {
     const p = await prospect(b.id);
     const seq = (await sequences()).find((s) => s.id === p.sequence_id);
     if (!seq) throw new HttpError(400, 'Put them on a sequence first.');
-    const r = await sendOutreachEmail(p, seq, by);
+    const r = await sendOutreachEmail(p, seq, by, undefined, typeof b.body === 'string' ? b.body : undefined);
     if (!r.ok) throw new HttpError(400, r.why ?? 'Not sent.');
     return json({ ok: true });
   }

@@ -63,5 +63,5 @@ export function monthlyFromSubscription(sub: any): number {
   return pence(total);
 }
 
-export const gbp = (n: number | null | undefined, whole = false) => (n == null ? '–' : `£${n.toLocaleString('en-GB', { minimumFractionDigits: whole ? 0 : 2, maximumFractionDigits: whole ? 0 : 2 })}`);
+export const gbp = (n: number | null | undefined, whole = false) => (n == null ? '–' : `${n < 0 ? '−' : ''}£${Math.abs(n).toLocaleString('en-GB', { minimumFractionDigits: whole ? 0 : 2, maximumFractionDigits: whole ? 0 : 2 })}`);
 export const monthStart = (d = new Date()) => `${new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/London', year: 'numeric', month: '2-digit' }).format(d)}-01`;

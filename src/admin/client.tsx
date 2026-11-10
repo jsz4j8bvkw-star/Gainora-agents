@@ -9,6 +9,7 @@ import { ACCOUNT_STATUS_LABEL, type AccountRecord, type AccountStatus, PACKAGES,
 import { ukToday } from '../../shared/admin/board';
 import { admin, type AccountDetail, type ClientTask } from './api';
 import { PackageChips, StartSetup, StatusChip, TaskRow } from './bits';
+import { ClientCare } from './business';
 
 type Section = 'overview' | 'delivery' | 'website' | 'enquiries' | 'costs' | 'notes';
 const SECTIONS: Section[] = ['overview', 'delivery', 'website', 'enquiries', 'costs', 'notes'];
@@ -97,6 +98,7 @@ function OverviewTab({ d, today, reload, go }: { d: AccountDetail; today: string
             <div><dt>Margin this month</dt><dd>{gbp(cost?.margin ?? null)}</dd></div>
           </dl>
         </section>
+        <ClientCare email={a.email} name={a.name} />
         <section className="panel panel-pad stack gap-12" aria-labelledby="apps-h">
           <h2 className="heading" id="apps-h">Their apps</h2>
           <ul className="plain-list compact">

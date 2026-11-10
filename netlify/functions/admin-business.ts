@@ -12,9 +12,10 @@ import { normEmail } from '../../shared/admin/model';
 import { resultsEmail } from '../../shared/admin/care';
 import { type Deadline, dueSoon, type Expense, expensesIn, nextOccurrence, SUGGESTED_DEADLINES, sum, VAT_THRESHOLD, vatStatus } from '../../shared/admin/books';
 import { toWebsitePrices } from '../../shared/admin/prices';
+import { addDays } from '../../shared/admin/templates';
 
 // Gainora admin → Prices, Health, Money and Paperwork. Gainora's team only.
-//   POST /api/admin-business {op: prices | prices-save | health | results | results-send | care-settings |
+//   POST /api/admin-business {op: today | prices | prices-save | health | results | results-send | care-settings |
 //     books | expense-save | expense-delete | paperwork | deadline-save | deadline-done | deadline-delete | agreement-save}
 const who = (email: string) => email.split('@')[0].replace(/^./, (c) => c.toUpperCase());
 const id = (v: unknown) => { const s = String(v || ''); if (!/^[0-9a-f-]{36}$/i.test(s)) throw new HttpError(400, 'Unknown record.'); return s; };
@@ -26,6 +27,23 @@ export default handler(async (req) => {
   const by = who(me.email);
   const b = await body<any>(req);
   const today = ukToday();
+
+  /* What Today shows from sales and the business: follow-ups, calls, proposals waiting, failed payments, deadlines. */
+  if (b.op === 'today') {
+    const [prospects, proposals, deadlines, unpaid] = await Promise.all([
+      db<any[]>('prospects?select=id,business_name,contact_name,stage,next_on,call_at,unsubscribed_at&limit=5000').catch(() => []),
+      db<any[]>('proposals?select=id,business_name,status,sent_at,viewed_at&status=in.(sent,viewed)&limit=500').catch(() => []),
+      db<Deadline[]>('business_deadlines?select=*&done_at=is.null&limit=500').catch(() => []),
+      unpaidInvoices(),
+    ]);
+    const due = prospects.filter((p) => p.next_on && p.next_on <= today && (p.stage === 'new' || p.stage === 'contacted') && !p.unsubscribed_at);
+    return json({
+      followUps: due.length,
+      calls: prospects.filter((p) => p.call_at && p.call_at.slice(0, 10) >= today && p.call_at.slice(0, 10) <= addDays(today, 7)).sort((x, y) => x.call_at.localeCompare(y.call_at)),
+      proposals: proposals.map((p) => ({ ...p, waitingDays: Math.floor((Date.parse(`${today}T12:00:00Z`) - Date.parse(p.viewed_at || p.sent_at)) / 86_400_000) })),
+      unpaid, deadlines: dueSoon(deadlines, today, 14),
+    });
+  }
 
   /* Prices */
   if (b.op === 'prices') return json({ prices: await priceBook(), website: !!process.env.WEBSITE_BUILD_HOOK, stripe: !!process.env.STRIPE_SECRET_KEY });

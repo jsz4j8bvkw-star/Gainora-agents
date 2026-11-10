@@ -8,6 +8,7 @@ import { gbp, monthStart, RATE_LABELS, type RateCard } from '../../shared/admin/
 import { ACCOUNT_STATUS_LABEL, type AccountStatus, normEmail, PACKAGES, type Package, type TaskWho } from '../../shared/admin/model';
 import { admin, type Overview } from './api';
 import { clientPath, Due, PackageChips, Progress, StartSetup, StatusChip, TaskRow } from './bits';
+import { TodayBusiness } from './business';
 
 const useOverview = () => useLoad<Overview>(() => admin.overview());
 
@@ -36,6 +37,7 @@ export function Today() {
           {now.length ? <ul className="task-list">{now.map((t) => <TaskRow key={t.id} task={t} today={o.today} showClient onChange={reload} />)}</ul> : <p className="panel-pad muted">You’re on top of it.</p>}
         </section>
         <div className="stack gap-24">
+          <TodayBusiness />
           {notStarted.length > 0 && (
             <section className="panel" aria-labelledby="new-h">
               <div className="panel-head"><h2 className="heading" id="new-h">New clients to start</h2></div>
@@ -184,15 +186,16 @@ export function Requests() {
 
 /* ---------- Money ---------- */
 
-export function Money() {
+/** What each client pays against what they cost to run (Money → By client). */
+export function ClientMoney({ embedded }: { embedded?: boolean }) {
   const months = useMemo(() => { const out: string[] = []; const d = new Date(`${monthStart()}T00:00:00Z`); for (let i = 0; i < 6; i++) { out.push(d.toISOString().slice(0, 10)); d.setUTCMonth(d.getUTCMonth() - 1); } return out; }, []);
   const [month, setMonth] = useState(months[0]);
   const [open, setOpen] = useState<string | null>(null);
   const { data, error, reload, loading } = useLoad(() => admin.money(month), [month]);
   const label = (m: string) => new Date(`${m}T12:00:00Z`).toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' });
   return (
-    <div className="page">
-      <div className="page-head"><div><h1 className="title">Money</h1><p className="lede">What each client pays against what they cost to run.</p></div>
+    <div className={embedded ? 'stack' : 'page'}>
+      <div className="page-head">{embedded ? <p className="small muted">What each client pays against what they cost to run.</p> : <div><h1 className="title">Money</h1><p className="lede">What each client pays against what they cost to run.</p></div>}
         <Field label="Month">{(id) => <select id={id} className="select" value={month} onChange={(e: any) => setMonth(e.target.value)}>{months.map((m) => <option key={m} value={m}>{label(m)}</option>)}</select>}</Field>
       </div>
       {error ? <ErrorNote message={error} retry={reload} /> : !data || loading ? <Loading label="Working out the numbers" /> : (
