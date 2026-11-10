@@ -4,10 +4,10 @@ import { humanThrown } from '../lib/errors';
 import { relative } from '../lib/format';
 import { dueLabel, ukToday } from '../../shared/admin/board';
 import { addDays } from '../../shared/admin/templates';
-import { ASK_STATUS_LABEL, ASK_TEMPLATES, type Question, type QuestionType, progressOf, templateFor } from '../../shared/admin/asks';
+import { ASK_STATUS_LABEL, ASK_TEMPLATES, HAS_OPTIONS, MAX_QUESTIONS, type Question, type QuestionType, progressOf, templateFor } from '../../shared/admin/asks';
 import { biz, type AskRow } from './biz-api';
 
-const TYPE_LABEL: Record<QuestionType, string> = { long: 'Written answer', text: 'Short answer', links: 'Links', photos: 'Photos', yesno: 'Yes or no' };
+const TYPE_LABEL: Record<QuestionType, string> = { long: 'Written answer', text: 'Short answer', choice: 'Pick one', multi: 'Tick all that apply', yesno: 'Yes or no', links: 'Links', photos: 'Photos' };
 const confirmed = (msg: string) => (typeof window !== 'undefined' && typeof window.confirm === 'function' ? window.confirm(msg) : true);
 
 /** A client's page → Questions: what's been asked, what came back, and asking for more. */
@@ -72,7 +72,7 @@ function Answers({ a }: { a: AskRow }) {
       {a.questions.map((q) => {
         const head = q.group && q.group !== group ? (group = q.group, <h3 key={`g-${q.id}`} className="answers-group">{q.group}</h3>) : null;
         const files = a.files.filter((f) => f.question === q.id);
-        const v = q.type === 'yesno' ? (a.answers[q.id] === 'yes' ? 'Yes' : a.answers[q.id] === 'no' ? 'No' : '') : a.answers[q.id] || '';
+        const v = q.type === 'yesno' ? (a.answers[q.id] === 'yes' ? 'Yes' : a.answers[q.id] === 'no' ? 'No' : '') : q.type === 'multi' ? (a.answers[q.id] || '').split('\n').filter(Boolean).join(', ') : a.answers[q.id] || '';
         return [head, (
           <div key={q.id} className="answer">
             <span className="xsmall faint">{q.label}</span>
@@ -126,12 +126,14 @@ function AskEditor({ email, contact, initial, onClose, onDone }: { email: string
               <textarea className="textarea" rows={2} aria-label={`Question ${i + 1}`} value={q.label} onChange={(e: any) => setQ(i, { label: e.target.value })} />
               <div className="row gap-8 wrap">
                 <select className="select select-small" aria-label={`Answer type for question ${i + 1}`} value={q.type} onChange={(e: any) => setQ(i, { type: e.target.value })}>{(Object.entries(TYPE_LABEL) as [QuestionType, string][]).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
+                {q.group && <span className="xsmall faint">{q.group}</span>}
                 <button type="button" className="linklike xsmall" onClick={() => setQuestions(questions.filter((_, j) => j !== i))}>Remove</button>
               </div>
+              {HAS_OPTIONS(q.type) && <textarea className="textarea" rows={Math.min(6, Math.max(2, (q.options ?? []).length))} aria-label={`Choices for question ${i + 1}, one per line`} placeholder="The choices, one per line" value={(q.options ?? []).join('\n')} onChange={(e: any) => setQ(i, { options: e.target.value.split('\n') })} />}
             </li>
           ))}</ol>
         )}</Field>
-        <div><Button small kind="secondary" icon="plus" onClick={() => setQuestions([...questions, { id: `q${Date.now() % 100000}`, label: '', type: 'long' }])}>Add a question</Button></div>
+        <div><Button small kind="secondary" icon="plus" disabled={questions.length >= MAX_QUESTIONS} onClick={() => setQuestions([...questions, { id: `q${Date.now() % 100000}`, label: '', type: 'long' }])}>Add a question</Button></div>
         <hr className="rule" />
         <Field label="Send to">{(id) => <input id={id} className="input" type="email" value={to} onChange={(e: any) => setTo(e.target.value)} />}</Field>
         <Field label="Your message in the email" optional help={`Starts “Hi ${contact.split(' ')[0] || 'there'},”. The button to the form and the date are added underneath.`}>{(id, d) => <textarea id={id} className="textarea" rows={3} aria-describedby={d} value={message} placeholder="We need a few details from you to get things right. It’s a short form you can fill in on your phone, and your answers save as you go." onChange={(e: any) => setMessage(e.target.value)} />}</Field>

@@ -22,6 +22,11 @@ function field(q: Question, a: Ask): string {
   const desc = q.help ? ` aria-describedby="${id}_h"` : '';
   if (q.type === 'text') return `<div class="q"><label for="${id}">${esc(q.label)}</label>${help}<input id="${id}" name="${esc(q.id)}" type="text" value="${esc(v)}"${desc} autocomplete="off"></div>`;
   if (q.type === 'yesno') return `<fieldset class="q"><legend>${esc(q.label)}</legend>${help}<div class="yn"><label><input type="radio" name="${esc(q.id)}" value="yes"${v === 'yes' ? ' checked' : ''}> Yes</label><label><input type="radio" name="${esc(q.id)}" value="no"${v === 'no' ? ' checked' : ''}> No</label></div></fieldset>`;
+  if (q.type === 'choice' || q.type === 'multi') {
+    const kind = q.type === 'choice' ? 'radio' : 'checkbox';
+    const picked = q.type === 'multi' ? v.split('\n') : [v];
+    return `<fieldset class="q"><legend>${esc(q.label)}</legend>${help}<div class="opts">${(q.options ?? []).map((o) => `<label><input type="${kind}" name="${esc(q.id)}" value="${esc(o)}"${picked.includes(o) ? ' checked' : ''}> <span>${esc(o)}</span></label>`).join('')}</div></fieldset>`;
+  }
   if (q.type === 'photos') {
     const files = a.files.filter((f) => f.question === q.id);
     return `<div class="q photos" data-q="${esc(q.id)}"><span class="lbl" id="${id}_l">${esc(q.label)}</span>${help}
@@ -51,7 +56,8 @@ ${groups.map((g) => `<section class="card">${g.name ? `<h2>${esc(g.name)}</h2>` 
 input[type=text],textarea{width:100%;font:inherit;font-size:16px;padding:12px 14px;border:1px solid #CFCBC3;border-radius:8px;background:#fff;color:var(--ink)}
 input[type=text]:focus,textarea:focus{outline:3px solid var(--champ);outline-offset:1px;border-color:var(--ink)}
 textarea{resize:vertical;min-height:96px}
-.yn{display:flex;gap:18px}.yn label{display:flex;align-items:center;gap:8px;font-weight:500;min-height:44px}.yn input{width:20px;height:20px;accent-color:var(--black)}
+.yn{display:flex;gap:18px}.yn label{display:flex;align-items:center;gap:8px;font-weight:500;min-height:44px}.yn input,.opts input{width:20px;height:20px;accent-color:var(--black);flex:none}
+.opts{display:grid;gap:2px}.opts label{display:flex;align-items:center;gap:10px;font-weight:500;min-height:44px;line-height:1.35}
 .thumbs{list-style:none;margin:4px 0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:10px}
 .thumbs li{display:grid;gap:4px}.thumbs img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px;border:1px solid var(--line)}
 .rm{background:none;border:0;color:var(--gold);font:inherit;font-size:.85rem;text-decoration:underline;cursor:pointer;padding:4px 0;text-align:left}
@@ -64,11 +70,11 @@ h2{font:600 1.05rem/1.3 Manrope,sans-serif;margin:0 0 14px}
 <script>
 (function(){
   var f=document.getElementById('f'),saved=document.getElementById('saved'),go=document.getElementById('go'),base='/q/${esc(a.token)}',timer=null,busy=false;
-  function data(){var o={};f.querySelectorAll('input[type=text],textarea').forEach(function(e){o[e.name]=e.value});f.querySelectorAll('input[type=radio]:checked').forEach(function(e){o[e.name]=e.value});return o}
+  function data(){var o={};f.querySelectorAll('input[type=text],textarea').forEach(function(e){o[e.name]=e.value});f.querySelectorAll('input[type=radio]:checked').forEach(function(e){o[e.name]=e.value});f.querySelectorAll('input[type=checkbox]').forEach(function(e){if(!(e.name in o))o[e.name]='';if(e.checked)o[e.name]+=(o[e.name]?'\\n':'')+e.value});return o}
   function post(path,body,type){return fetch(base+path,{method:'POST',headers:{'Content-Type':type||'application/json'},body:type?body:JSON.stringify(body)}).then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error(j.error||'Not saved');return j})})}
   function save(){clearTimeout(timer);saved.textContent='Saving…';return post('/save',{answers:data()}).then(function(j){saved.textContent=j.answered+' of '+j.total+' answered. Saved.'}).catch(function(e){saved.textContent=e.message+' Your answers are still here; try again in a moment.'})}
   f.addEventListener('input',function(e){if(e.target.type==='file')return;clearTimeout(timer);timer=setTimeout(save,1200)});
-  f.addEventListener('change',function(e){if(e.target.type==='radio')save()});
+  f.addEventListener('change',function(e){if(e.target.type==='radio'||e.target.type==='checkbox')save()});
   f.addEventListener('submit',function(e){e.preventDefault();if(busy)return;busy=true;go.disabled=true;go.textContent='Sending…';post('/send',{answers:data()}).then(function(){location.href=base+'?sent=1'}).catch(function(err){busy=false;go.disabled=false;go.textContent='Send to Gainora';saved.textContent=err.message})});
   function shrink(file){return new Promise(function(res){if(!/^image\\//.test(file.type)){res(null);return}var img=new Image(),u=URL.createObjectURL(file);img.onload=function(){var m=2400,w=img.naturalWidth,h=img.naturalHeight,s=Math.min(1,m/Math.max(w,h)),c=document.createElement('canvas');c.width=Math.round(w*s);c.height=Math.round(h*s);c.getContext('2d').drawImage(img,0,0,c.width,c.height);URL.revokeObjectURL(u);c.toBlob(function(b){res(b)},'image/jpeg',0.85)};img.onerror=function(){URL.revokeObjectURL(u);res(/^image\\/(jpeg|png|webp)$/.test(file.type)?file:null)};img.src=u})}
   function thumb(list,file){var li=document.createElement('li');li.innerHTML='<img alt=""><button type="button" class="rm">Remove</button>';li.querySelector('img').src=file.url;li.querySelector('img').alt=file.name;var b=li.querySelector('.rm');b.dataset.url=file.url;b.setAttribute('aria-label','Remove '+file.name);list.appendChild(li)}
@@ -84,7 +90,7 @@ function thanks(a: Ask): Response {
   const body = `<h1>Thank you</h1>
 <div class="card"><p>We’ve got your answers${a.files.length ? ` and ${a.files.length} photo${a.files.length === 1 ? '' : 's'}` : ''}. We’ll be in touch if anything’s unclear.</p>
 <p class="small muted">Thought of something else? <a href="/q/${esc(a.token)}?edit=1">Add to or change your answers</a>.</p></div>
-<section class="card" aria-label="Your answers">${a.questions.map((q) => `<div class="item"><strong class="small">${esc(q.label)}</strong><span class="small muted" style="white-space:pre-line">${q.type === 'photos' ? `${a.files.filter((f) => f.question === q.id).length} photo(s)` : q.type === 'yesno' ? (a.answers[q.id] === 'yes' ? 'Yes' : a.answers[q.id] === 'no' ? 'No' : '–') : esc(a.answers[q.id] || '–')}</span></div>`).join('')}</section>`;
+<section class="card" aria-label="Your answers">${a.questions.map((q) => `<div class="item"><strong class="small">${esc(q.label)}</strong><span class="small muted" style="white-space:pre-line">${q.type === 'photos' ? `${a.files.filter((f) => f.question === q.id).length} photo(s)` : q.type === 'yesno' ? (a.answers[q.id] === 'yes' ? 'Yes' : a.answers[q.id] === 'no' ? 'No' : '–') : q.type === 'multi' ? esc((a.answers[q.id] || '–').split('\n').join(', ')) : esc(a.answers[q.id] || '–')}</span></div>`).join('')}</section>`;
   return page('Thank you', body);
 }
 
@@ -115,7 +121,7 @@ export default async (req: Request) => {
       // Without JavaScript: an ordinary form post.
       const fd = await req.formData().catch(() => null);
       const raw: Record<string, string> = {};
-      fd?.forEach((v, k) => { if (typeof v === 'string') raw[k] = v; });
+      fd?.forEach((v, k) => { if (typeof v === 'string') raw[k] = raw[k] ? `${raw[k]}\n${v}` : v; });   // ticked boxes arrive one by one
       await finishAsk(a, raw);
       return Response.redirect(`${url.origin}/q/${a.token}?sent=1`, 303);
     }

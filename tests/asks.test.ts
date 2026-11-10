@@ -5,6 +5,25 @@ import { ukToday } from '../shared/admin/board';
 import { addDays } from '../shared/admin/templates';
 import { answersText, cleanAnswers, cleanQuestions, progressOf, templateFor } from '../shared/admin/asks';
 
+test('pick-one and tick-all questions: options tidied, answers checked against them', () => {
+  const qs = cleanQuestions([
+    { id: 'look', label: 'Feel', type: 'multi', options: [' Calm ', 'Warm', 'Warm', '', 'Bold'] },
+    { id: 'price', label: 'Prices', type: 'choice', options: ['Full', 'From'] },
+    { id: 'lonely', label: 'Only one choice', type: 'choice', options: ['Just this'] },
+  ]);
+  assert.deepEqual(qs[0].options, ['Calm', 'Warm', 'Bold']);
+  assert.equal(qs[2].type, 'long', 'a pick list with one option becomes a written answer');
+  assert.equal(qs[2].options, undefined);
+  const a = cleanAnswers(qs, { look: 'Bold\nCalm\nShouty\nCalm', price: 'Free', lonely: 'anything' });
+  assert.deepEqual(a, { look: 'Bold\nCalm', lonely: 'anything' });
+  assert.match(answersText({ questions: qs, answers: a, files: [] }), /Feel\nBold, Calm/);
+  assert.equal(cleanQuestions(Array.from({ length: 80 }, (_, i) => ({ label: `Q${i}` }))).length, 60);
+  const w = templateFor('website');
+  assert.ok(w.questions.length >= 40 && w.questions.length <= 60);
+  assert.ok(w.questions.every((q) => q.group), 'every website question sits in a section');
+  assert.deepEqual(cleanQuestions(w.questions), w.questions, 'the template is already clean');
+});
+
 test('question sets: cleaning, answers and progress', () => {
   const qs = cleanQuestions([{ label: 'Your name', type: 'text' }, { label: '' }, { id: 'pics', label: 'Photos', type: 'photos' }, { id: 'pics', label: 'Again', type: 'weird' }]);
   assert.deepEqual(qs.map((q) => [q.id, q.type]), [['q1', 'text'], ['pics', 'photos'], ['pics_3', 'long']]);
@@ -46,30 +65,31 @@ test('asking a client for details, from the admin to the answers', async () => {
     const { ask } = await ok(call({ op: 'save', ask: { email: 'Alder Ease', template: 'website' } }));
     assert.equal(ask.status, 'draft');
     assert.equal(ask.email, OWNER.email);
-    assert.equal(ask.due_on, addDays(ukToday(), 5));
+    assert.equal(ask.due_on, addDays(ukToday(), 7));
     assert.match(ask.url, /^https:\/\/app\.gainora\.co\.uk\/q\/[A-Za-z0-9_-]{20,}$/);
     const draftPage = await form(new Request(ask.url));
     assert.equal(draftPage.status, 404, 'a draft link doesn’t open');
     const sent = await ok(call({ op: 'send', id: ask.id, email: OWNER.email }));
     assert.equal(sent.ask.status, 'sent');
     const mail = emails.find((e) => e.to[0] === OWNER.email);
-    assert.equal(mail.subject, 'Your new website: a few questions');
+    assert.equal(mail.subject, 'Your new website: the full brief');
     assert.equal(mail.reply_to, 'hello@gainora.co.uk');
     assert.match(mail.text, /^Hi Amy,/);
     assert.ok(mail.html.includes(ask.url));
     const clientTask = fake.tables.admin_tasks.find((t) => t.who === 'client');
-    assert.equal(clientTask.title, 'Answer: Your new website: a few questions');
+    assert.equal(clientTask.title, 'Answer: Your new website: the full brief');
     assert.equal(clientTask.due_on, ask.due_on);
     assert.ok(fake.tables.admin_log.some((l) => /^Asked: Your new website/.test(l.text)));
 
     // The client opens it on their phone.
     const html = await (await form(new Request(ask.url))).text();
-    for (const bit of ['Your new website: a few questions', 'About you and the clinic', 'Add photos', 'Send to Gainora', 'name="owner"']) assert.ok(html.includes(bit), bit);
+    for (const bit of ['Your new website: the full brief', 'About the business', 'Add photos', 'Send to Gainora', 'name="owner"', 'type="checkbox" name="contact_ways" value="WhatsApp"', 'type="radio" name="price_display"']) assert.ok(html.includes(bit), bit);
     assert.equal(fake.tables.client_asks[0].status, 'opened');
 
     // Saves as they type, a photo, a wrong file type, then sends it.
-    const save = await (await form(new Request(`${ask.url}/save`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ answers: { owner: 'Amy Walker, nurse prescriber, 6 years', treatments: 'Skin boosters £180, 45 min' } }) }))).json();
-    assert.deepEqual([save.answered, save.total], [2, 15]);
+    const save = await (await form(new Request(`${ask.url}/save`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ answers: { owner: 'Amy Walker, nurse prescriber, 6 years', services: 'Skin boosters £180, 45 min', contact_ways: 'Call\nWhatsApp\nCarrier pigeon', price_display: 'Full prices' } }) }))).json();
+    assert.deepEqual([save.answered, save.total], [4, templateFor('website').questions.length]);
+    assert.equal(fake.tables.client_asks[0].answers.contact_ways, 'Call\nWhatsApp', 'only real choices are kept');
     const photo = await (await form(new Request(`${ask.url}/photo?question=photos&name=room.jpg`, { method: 'POST', headers: { 'Content-Type': 'image/jpeg' }, body: new Uint8Array([255, 216, 255, 1, 2, 3]) }))).json();
     assert.match(photo.file.url, new RegExp(`/storage/v1/object/public/site-media/${OWNER.id}/from-questions/.+\\.jpg$`), 'photos go in the client’s own website folder');
     assert.equal((await form(new Request(`${ask.url}/photo?question=photos&name=x.gif`, { method: 'POST', headers: { 'Content-Type': 'image/gif' }, body: new Uint8Array([1]) }))).status, 415);
@@ -79,7 +99,7 @@ test('asking a client for details, from the admin to the answers', async () => {
     assert.equal(done.status, 200);
     const row = fake.tables.client_asks[0];
     assert.equal(row.status, 'answered');
-    assert.equal(row.answers.treatments, 'Skin boosters £180, 45 min', 'earlier answers are kept');
+    assert.equal(row.answers.services, 'Skin boosters £180, 45 min', 'earlier answers are kept');
     assert.equal(row.answers.case_study, 'yes');
     assert.equal(fake.tables.admin_tasks.find((t) => t.id === clientTask.id).status, 'done', 'their checklist step is ticked');
     const next = fake.tables.admin_tasks.find((t) => t.who === 'claude');
@@ -104,6 +124,14 @@ test('asking a client for details, from the admin to the answers', async () => {
     assert.equal(fake.tables.admin_accounts.find((r) => r.email === OWNER.email).business_name, 'Alder Ease Aesthetics', 'what wasn’t sent is kept');
     const drafted = await use('draft_client_questions', { client: 'alder', questions: [{ label: 'Which photo should go at the top of the home page?', type: 'text' }] });
     assert.equal(drafted.draft, true);
+    // The full website brief, with what they told us filled in, and a question of our own on the end.
+    const brief = await use('draft_client_questions', { client: 'alder', template: 'website', extra_questions: [{ id: 'prescriber', label: 'Who prescribes?', type: 'text', group: 'Treatments' }], answers: { owner: 'Mirela, level 4', feel: 'Warm\nNatural', price_display: 'Not a choice' } });
+    assert.equal(brief.questions, templateFor('website').questions.length + 1);
+    assert.equal(brief.filled_in, 2);
+    const briefRow = fake.tables.client_asks.find((r) => r.title === 'Your new website: the full brief' && r.status === 'draft');
+    assert.equal(briefRow.questions.at(-1).id, 'prescriber');
+    assert.deepEqual(briefRow.answers, { owner: 'Mirela, level 4', feel: 'Warm\nNatural' });
+    fake.tables.client_asks = fake.tables.client_asks.filter((r) => r !== briefRow);
     const before = emails.length;
     assert.equal(fake.tables.client_asks.filter((a) => a.status === 'draft').length, 1);
     assert.equal(emails.length, before, 'drafting sends nothing');

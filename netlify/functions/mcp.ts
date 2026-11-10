@@ -13,7 +13,7 @@ import { blockedSet, cleanItems, cleanProspect, draftFor, getSettings, priceBook
 import { dueFollowUps, type Prospect, sameProspect, STAGES } from '../../shared/admin/sales';
 import { fromPriceItem, money, proposalTotals } from '../../shared/admin/prices';
 import { askUrl, saveAsk } from '../lib/asks';
-import { answersText, ASK_TEMPLATES, type Ask, progressOf } from '../../shared/admin/asks';
+import { answersText, ASK_TEMPLATES, type Ask, MAX_QUESTIONS, progressOf, templateFor } from '../../shared/admin/asks';
 import { addDays } from '../../shared/admin/templates';
 
 // The Claude connector for Gainora's admin. Added once in claude.ai (Settings → Connectors → Add custom connector)
@@ -28,6 +28,7 @@ const CLAUDE = 'Claude';
 
 type Tool = { name: string; description: string; inputSchema: any; run: (args: any, s: AdminState) => Promise<unknown> };
 const str = { type: 'string' };
+const QUESTION_ITEM = { type: 'object', properties: { id: { type: 'string' }, label: { type: 'string' }, type: { type: 'string', enum: ['text', 'long', 'links', 'photos', 'yesno', 'choice', 'multi'] }, options: { type: 'array', items: { type: 'string' }, maxItems: 12 }, help: { type: 'string' }, group: { type: 'string' } }, required: ['label'] };
 const client = { type: 'string', description: 'The client: their email, business name, or website address (slug).' };
 
 /** Objects merge, anything else (text, numbers, lists) replaces. */
@@ -222,17 +223,19 @@ const TOOLS: Tool[] = [
   },
   {
     name: 'draft_client_questions',
-    description: `Prepare questions for a client: a template (${ASK_TEMPLATES.map((t) => t.key).join(', ')}) or your own questions. It is NOT sent: Adelin checks it and sends it from the client's page in the admin (Questions). Each question: {label, type: text | long | links | photos | yesno, help?, group?}.`,
+    description: `Prepare questions for a client: a template (${ASK_TEMPLATES.map((t) => t.key).join(', ')}) or your own questions, plus extra_questions added after the template's. answers fills in what the client already told you (question id → answer), for them to check. It is NOT sent: Adelin checks it and sends it from the client's page in the admin (Questions). Each question: {id?, label, type: text | long | links | photos | yesno | choice | multi, options? (for choice and multi), help?, group?}. The website template's question ids: ${templateFor('website').questions.map((q) => q.id).join(', ')}.`,
     inputSchema: { type: 'object', properties: {
       client, template: { type: 'string', enum: ASK_TEMPLATES.map((t) => t.key) }, title: str, intro: str,
-      questions: { type: 'array', maxItems: 30, items: { type: 'object', properties: { label: str, type: { type: 'string', enum: ['text', 'long', 'links', 'photos', 'yesno'] }, help: str, group: str }, required: ['label'] } },
-      due_on: { ...str, description: 'YYYY-MM-DD; five days from today if left out.' },
+      questions: { type: 'array', maxItems: MAX_QUESTIONS, items: QUESTION_ITEM, description: 'Replaces the template’s questions.' },
+      extra_questions: { type: 'array', maxItems: 20, items: QUESTION_ITEM, description: 'Added after the template’s questions.' },
+      answers: { type: 'object', description: 'Answers to fill in already: question id → answer. For multi, separate the ticked options with a new line.' },
+      due_on: { ...str, description: 'YYYY-MM-DD; a week from today if left out.' },
     }, required: ['client'] },
-    run: async ({ client: ref, template, title, intro, questions, due_on }, s) => {
+    run: async ({ client: ref, template, title, intro, questions, extra_questions, answers, due_on }, s) => {
       const acc = findAccount(s, ref);
-      const a = await saveAsk({ email: acc.email, template: template || (questions?.length ? 'custom' : 'website'), title, intro, questions, due_on }, CLAUDE);
+      const a = await saveAsk({ email: acc.email, template: template || (questions?.length ? 'custom' : 'website'), title, intro, questions, extra_questions, answers, due_on }, CLAUDE);
       await log(acc.email, CLAUDE, `Drafted questions for them: ${a.title} (${a.questions.length}). Not sent yet.`, 'work');
-      return { draft: true, client: acc.name, title: a.title, questions: a.questions.length, due_on: a.due_on, note: 'Draft only. Adelin sends it from their client page in the admin (Questions).' };
+      return { draft: true, client: acc.name, title: a.title, questions: a.questions.length, filled_in: Object.keys(a.answers).length, due_on: a.due_on, note: 'Draft only. Adelin sends it from their client page in the admin (Questions).' };
     },
   },
   /* ---------- Sales ---------- */

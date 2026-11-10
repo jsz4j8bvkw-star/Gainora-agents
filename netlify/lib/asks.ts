@@ -31,7 +31,8 @@ export async function saveAsk(raw: any, by: string): Promise<Ask> {
   const email = normEmail(raw?.email || '');
   if (!email) throw new HttpError(400, 'Say which client.');
   const t = templateFor(String(raw?.template || 'custom'));
-  const questions = cleanQuestions(Array.isArray(raw?.questions) && raw.questions.length ? raw.questions : t.questions);
+  const base = Array.isArray(raw?.questions) && raw.questions.length ? raw.questions : t.questions;
+  const questions = cleanQuestions([...base, ...(Array.isArray(raw?.extra_questions) ? raw.extra_questions : [])]);
   if (!questions.length) throw new HttpError(400, 'Add at least one question.');
   const row = {
     email, template: t.key, title: String(raw?.title || t.title).trim().slice(0, 160) || t.title,
@@ -44,7 +45,9 @@ export async function saveAsk(raw: any, by: string): Promise<Ask> {
     const [saved] = await db<Ask[]>(`client_asks?id=eq.${cur.id}`, { method: 'PATCH', body: row, prefer: 'return=representation' });
     return saved;
   }
-  const [made] = await insert<Ask>('client_asks', { id: randomUUID(), token: randomBytes(18).toString('base64url'), status: 'draft', answers: {}, files: [], created_by: by, created_at: iso(), ...row });
+  // A new set can start with answers already filled in (what the client told us before), for them to check.
+  const answers = cleanAnswers(questions, raw?.answers);
+  const [made] = await insert<Ask>('client_asks', { id: randomUUID(), token: randomBytes(18).toString('base64url'), status: 'draft', answers, files: [], created_by: by, created_at: iso(), ...row });
   return made;
 }
 
