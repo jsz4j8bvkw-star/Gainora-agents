@@ -8,7 +8,7 @@
 // - A phone number isn't proof of who is calling, so the receptionist's rules (shared/retell.ts) keep all of
 //   it back until the caller has given their own name and it matches.
 
-import { normPhone, type CaptureSettings, type EnquiryRecord } from './capture';
+import { featuresOf, normPhone, type CaptureSettings, type EnquiryRecord } from './capture';
 import { topicOf } from './insight';
 
 /** A client from the Command Centre client list (same Gainora login), when the owner keeps one there. */
@@ -55,7 +55,11 @@ const NONE = (record: string): CallerLookup => ({ known: false, firstName: '', v
 export const NO_NUMBER = 'The number is withheld, so there is nothing to look up.';
 export const NO_RECORD = 'Nothing on record for this number.';
 
+export const SWITCHED_OFF = 'Returning callers are switched off for this business.';
+
 export function callerLookup(h: CallerHistory, s: CaptureSettings, now = new Date()): CallerLookup {
+  const opts = featuresOf(s).callers;
+  if (!opts.on) return NONE(SWITCHED_OFF);
   const appts = s.business.kind === 'appointments';
   const client = appts ? 'client' : 'customer';
   const list = h.enquiries
@@ -75,7 +79,8 @@ export function callerLookup(h: CallerHistory, s: CaptureSettings, now = new Dat
   const lastVisit = visits[0];
   const lastAttended = attended.map((e) => ({ at: attendedAt(e), e })).sort((a, b) => b.at.localeCompare(a.at))[0];
   const useVisit = lastVisit && (!lastAttended || lastVisit.visitedOn >= lastAttended.at.slice(0, 10));
-  if (count) {
+  if (count && !opts.lastVisit) parts.push(`Returning ${client}.`);
+  else if (count) {
     const what = useVisit ? clean(lastVisit.treatment) : clean(lastAttended!.e.bookedType || topicOf(lastAttended!.e, s), 60);
     const who = useVisit ? clean(lastVisit.practitioner ?? '', 40) : clean(lastAttended!.e.bookedWith, 40);
     const when = useVisit ? `${lastVisit.visitedOn.slice(0, 10)}T12:00:00Z` : lastAttended!.at;
@@ -86,7 +91,7 @@ export function callerLookup(h: CallerHistory, s: CaptureSettings, now = new Dat
   const next = list
     .filter((e) => e.status === 'booked' && e.bookedFor && new Date(e.bookedFor).getTime() > now.getTime() - 2 * 3_600_000)
     .sort((a, b) => a.bookedFor!.localeCompare(b.bookedFor!))[0];
-  if (next) {
+  if (next && opts.bookings) {
     const what = clean(next.bookedType, 60);
     parts.push(`Booked in: ${dayDate(next.bookedFor!)} at ${time12(next.bookedFor!)}${what ? `, ${what.toLowerCase()}` : ''}${next.bookedWith ? ` with ${clean(next.bookedWith, 40)}` : ''}.`);
   }
@@ -94,7 +99,7 @@ export function callerLookup(h: CallerHistory, s: CaptureSettings, now = new Dat
   // An enquiry in the last fortnight nobody has answered yet: the caller is probably chasing it.
   // Emergencies are left out: those are handled by the safety steps, never from a record.
   const waiting = list.find((e) => e.status === 'new' && e.urgency !== 'emergency' && now.getTime() - new Date(e.receivedAt).getTime() < 14 * DAY);
-  if (waiting) {
+  if (waiting && opts.waiting) {
     const topic = clean(waiting.bookedType || topicOf(waiting, s), 60);
     parts.push(`Got in touch on ${dayDate(waiting.receivedAt)}${topic ? ` about ${topic.toLowerCase()}` : ''}, and the team hasn't got back to them yet.`);
   }
@@ -116,6 +121,6 @@ export function callerRules(s: CaptureSettings): string {
     '- If they give a different name, ignore the record completely.',
     '- Once their name matches, use the record only to save them repeating themselves: to find the booking they want to move, cancel or are running late for ("Is that your Thursday at 2 with Sarah?"), or when they want "the same as last time". Don’t read the record out otherwise.',
     `- If the record says they got in touch recently and haven’t heard back, say sorry nobody has got back to them yet, and that you’ll flag it so ${appts ? 'the team' : 'someone'} calls them back as soon as possible.`,
-    `- If the record line above is empty, shows a placeholder in curly brackets, says nothing is on record, or says the number is withheld, you know nothing about this caller: ask whether they’ve been to ${name} before, as usual.`,
+    `- If the record line above is empty, shows a placeholder in curly brackets, says nothing is on record, says the number is withheld, or says returning callers are switched off, you know nothing about this caller: ask whether they’ve been to ${name} before, as usual.`,
   ].join('\n');
 }

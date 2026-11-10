@@ -209,3 +209,47 @@ test('monday: a cancelled appointment this week is mentioned with its value', ()
   const w = weeklyNote([cancelled], beauty, NOW)!;
   assert.match(w.lines.join('\n'), /A cancelled appointment this week still has its space free \(£250 at your prices\)\. Open it in Gainora to offer it to someone waiting\./);
 });
+
+/* ---------- The owner's switches ---------- */
+
+test('switches: deposits can be off, for everyone, for chosen treatments, in the owner’s words', () => {
+  const booked = (type: string, history: { at: string; text: string }[] = []) => rec({ status: 'booked', bookedFor: '2026-11-12T14:00:00Z', bookedType: type, receivedAt: '2026-11-09T09:58:00Z', history });
+  const off = structuredClone(beauty); off.bookings.depositOn = false;
+  assert.equal(depositLine(booked('Lip filler', [{ at: '2026-11-09T09:58:00Z', text: NEW_CLIENT }]), off), '');
+  assert.doesNotMatch(packFromSettings(off).text, /deposit to secure/i);
+  const all = structuredClone(beauty); all.bookings.depositFor = 'all'; all.bookings.depositTypes = ['Lip filler'];
+  assert.match(depositLine(booked('Lip filler'), all), /Please pay your deposit \(£30, taken off your treatment\) to secure your booking/);
+  assert.equal(depositLine(booked('Gel nails'), all), '');
+  assert.match(packFromSettings(all).text, /every booking for Lip filler needs a deposit/);
+  const mine = structuredClone(all); mine.bookings.depositWording = 'Hi {first name}, a {deposit} deposit holds your {appointment}: {deposit link}';
+  assert.equal(depositLine(booked('Lip filler'), mine), '\n\nHi Chloe, a £30, taken off your treatment deposit holds your lip filler: https://pay.example/willow-skin/deposit');
+});
+
+test('switches: returning callers can be off, or share less', () => {
+  const past = rec({ id: 'a', status: 'won', bookedType: 'Lip filler', bookedWith: 'Amy', bookedFor: '2026-09-12T10:00:00Z', history: [{ at: '2026-09-12T11:00:00Z', text: 'Attended' }] });
+  const next = rec({ id: 'b', status: 'booked', bookedType: 'Lip filler', bookedFor: '2026-11-12T14:00:00Z' });
+  const off = withDefaults({ ...structuredClone(BEAUTY_SETTINGS), features: { callers: { on: false } } });
+  assert.equal(callerLookup({ enquiries: [past, next] }, off, NOW).known, false);
+  assert.match(callerLookup({ enquiries: [past] }, off, NOW).variables.caller_record, /switched off/);
+  assert.doesNotMatch(String(retellSetup(off).llm.general_prompt), /caller_record/);
+  const less = withDefaults({ ...structuredClone(BEAUTY_SETTINGS), features: { callers: { lastVisit: false, bookings: false } } });
+  const t = callerLookup({ enquiries: [past, next] }, less, NOW).variables.caller_record;
+  assert.match(t, /Returning client\./);
+  assert.doesNotMatch(t, /lip filler|Amy|Booked in/i);
+});
+
+test('switches: Fill the space can be off, limited to waiting clients, nearer dates and the owner’s wording', () => {
+  const cancelled = rec({ id: 'c', phone: '+447700900431', status: 'lost', bookedType: 'Lip filler', bookedWith: 'Amy', bookedFor: '2026-11-20T14:00:00Z', history: [{ at: '2026-11-09T08:05:00Z', text: 'Cancelled for Fri 20 Nov' }] });
+  const waiting = rec({ id: 'w', name: 'Ellie Morgan', phone: '+447700900432', status: 'replied', kind: 'booking', summary: 'Would like lip filler.', receivedAt: '2026-11-08T09:00:00Z' });
+  const due = rec({ id: 'd', name: 'Grace Lee', phone: '+447700900477', status: 'won', bookedType: 'Lip filler', bookedFor: '2026-05-10T10:00:00Z', receivedAt: '2026-05-01T10:00:00Z', history: [{ at: '2026-05-10T11:00:00Z', text: 'Attended' }] });
+  const list = [cancelled, waiting, due];
+  const off = withDefaults({ ...structuredClone(BEAUTY_SETTINGS), features: { spaces: { on: false } } });
+  assert.equal(openSpaces(list, off, NOW).length, 0);
+  const near = withDefaults({ ...structuredClone(BEAUTY_SETTINGS), features: { spaces: { aheadDays: 7 } } });
+  assert.equal(openSpaces(list, near, NOW).length, 0, '11 days ahead is outside a 7-day window');
+  const mine = withDefaults({ ...structuredClone(BEAUTY_SETTINGS), features: { spaces: { dueBack: false, wording: 'Space {day} {time}[ with {who}], {first name}? Reply YES.' } } });
+  const [space] = openSpaces(list, mine, NOW);
+  const c = spaceCandidates(space, list, mine, NOW);
+  assert.deepEqual(c.map((x) => x.enquiry.id), ['w']);
+  assert.equal(c[0].text, 'Space Friday 2pm with Amy, Ellie? Reply YES.');
+});

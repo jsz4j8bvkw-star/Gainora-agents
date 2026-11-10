@@ -3,9 +3,10 @@
 // the demo and the server agree. Nothing here invents a price, a figure or a fact: every number comes from the
 // owner's own settings or their own enquiries.
 import {
-  depositText, enquiryValue, isBeauty, isNoShow, lines, normPhone, rebookWeeksFor, report, typePrice, words,
+  depositText, enquiryValue, featuresOf, isBeauty, isNoShow, lines, normPhone, rebookWeeksFor, report, typePrice, words,
   type CaptureSettings, type EnquiryRecord, type Report,
 } from './capture';
+import { render } from './automations';
 
 const DAY = 86_400_000;
 const clean = (s: unknown, max = 300) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
@@ -371,10 +372,11 @@ export interface SpaceCandidate { enquiry: EnquiryRecord; why: string; text: str
  * hour, so there's time to fill it) to two weeks ahead, soonest first.
  */
 export function openSpaces(list: EnquiryRecord[], s: CaptureSettings, now = new Date()): OpenSpace[] {
-  if (s.business.kind !== 'appointments') return [];
+  const f = featuresOf(s).spaces;
+  if (s.business.kind !== 'appointments' || !f.on) return [];
   return list
     .filter((e) => !e.isTest && e.status === 'lost' && e.bookedFor && e.history.some((h) => /^Cancelled/.test(h.text))
-      && new Date(e.bookedFor).getTime() > now.getTime() + 3_600_000 && new Date(e.bookedFor).getTime() < now.getTime() + 14 * DAY)
+      && new Date(e.bookedFor).getTime() > now.getTime() + 3_600_000 && new Date(e.bookedFor).getTime() < now.getTime() + f.aheadDays * DAY)
     // Someone else already booked into the same time (by the owner, or the receptionist) means it's filled.
     .filter((e) => !list.some((o) => o.id !== e.id && o.status === 'booked' && o.bookedFor === e.bookedFor && (!e.bookedWith || !o.bookedWith || o.bookedWith === e.bookedWith)))
     .map((e) => ({ enquiry: e, at: e.bookedFor!, type: e.bookedType || topicOf(e, s), who: e.bookedWith || '', value: enquiryValue({ ...e, status: 'booked' }, s) }))
@@ -387,6 +389,7 @@ export function openSpaces(list: EnquiryRecord[], s: CaptureSettings, now = new 
  * booked in the future, or anyone with no mobile. The owner reads and sends each text; nothing goes on its own.
  */
 export function spaceCandidates(space: OpenSpace, list: EnquiryRecord[], s: CaptureSettings, now = new Date(), max = 5): SpaceCandidate[] {
+  const opts = featuresOf(s).spaces;
   const gone = space.enquiry;
   const key = (e: EnquiryRecord) => normPhone(e.phone) || e.email.toLowerCase();
   const sameAs = (a: EnquiryRecord, b: EnquiryRecord) => !!key(a) && key(a) === key(b);
@@ -395,28 +398,36 @@ export function spaceCandidates(space: OpenSpace, list: EnquiryRecord[], s: Capt
   const want = space.type.toLowerCase();
   const out: SpaceCandidate[] = [];
   const seen = new Set<string>();
-  const when = `${dayDate(space.at)} at ${time12(space.at)}`;
-  const owner = clean(s.business.ownerName, 40).split(' ')[0];
+  // The owner's wording, with the space's details filled in. [Square brackets] drop out when a detail is missing.
+  const fields = (e: EnquiryRecord, treatment: string) => ({
+    'first name': first(e) || 'there', business: clean(s.business.name, 80), owner: clean(s.business.ownerName, 40).split(' ')[0],
+    day: london(space.at, { weekday: 'long' }), date: london(space.at, { day: 'numeric', month: 'long' }), time: time12(space.at),
+    who: clean(space.who, 40), treatment, when: `${dayDate(space.at)} at ${time12(space.at)}`,
+  });
 
-  const waiting = list.filter((e) => usable(e) && (e.status === 'new' || e.status === 'replied') && (e.kind === 'booking' || e.kind === 'quote') && e.urgency === 'normal'
-    && now.getTime() - new Date(e.receivedAt).getTime() < 21 * DAY);
-  for (const e of waiting) {
-    const t = topicOf(e, s);
-    out.push({ enquiry: e, sameTreatment: !!want && t === want, dueBack: false,
-      why: `Asked${t ? ` about ${t}` : ' for an appointment'} ${whenWord(e.receivedAt, now)} and hasn’t booked yet`,
-      text: `Hi ${first(e) || 'there'}, a space has just come up at ${clean(s.business.name, 80)} on ${when}${space.who ? ` with ${clean(space.who, 40)}` : ''}. Would you like it${t ? ` for your ${t}` : ''}? Just reply YES and we’ll book you in.${owner ? ` ${owner}` : ''}` });
+  if (opts.waiting) {
+    const waiting = list.filter((e) => usable(e) && (e.status === 'new' || e.status === 'replied') && (e.kind === 'booking' || e.kind === 'quote') && e.urgency === 'normal'
+      && now.getTime() - new Date(e.receivedAt).getTime() < 21 * DAY);
+    for (const e of waiting) {
+      const t = topicOf(e, s);
+      out.push({ enquiry: e, sameTreatment: !!want && t === want, dueBack: false,
+        why: `Asked${t ? ` about ${t}` : ' for an appointment'} ${whenWord(e.receivedAt, now)} and hasn’t booked yet`,
+        text: render(opts.wording, fields(e, t)) });
+    }
   }
-  for (const b of rebookDue(list, s, now, 14)) {
-    const e = b.enquiry;
-    if (!usable(e)) continue;
-    const t = (b.type || '').toLowerCase();
-    out.push({ enquiry: e, sameTreatment: !!want && t === want, dueBack: true,
-      why: `Due back for ${t || 'their next appointment'}${b.overdueDays > 0 ? `, ${b.overdueDays} ${b.overdueDays === 1 ? 'day' : 'days'} overdue` : b.overdueDays === 0 ? ' today' : ` in ${-b.overdueDays} days`}`,
-      text: `Hi ${first(e) || 'there'}, a space has just come up at ${clean(s.business.name, 80)} on ${when}${space.who ? ` with ${clean(space.who, 40)}` : ''}, and you're due your ${t || 'next appointment'}. Would you like it? Just reply YES and we'll book you in.${owner ? ` ${owner}` : ''}\n\nReply STOP to stop these messages.` });
+  if (opts.dueBack) {
+    for (const b of rebookDue(list, s, now, 14)) {
+      const e = b.enquiry;
+      if (!usable(e)) continue;
+      const t = (b.type || '').toLowerCase();
+      out.push({ enquiry: e, sameTreatment: !!want && t === want, dueBack: true,
+        why: `Due back for ${t || 'their next appointment'}${b.overdueDays > 0 ? `, ${b.overdueDays} ${b.overdueDays === 1 ? 'day' : 'days'} overdue` : b.overdueDays === 0 ? ' today' : ` in ${-b.overdueDays} days`}`,
+        // Offering a space to a past client is marketing, so it always carries the opt-out line.
+        text: render(opts.dueBackWording, fields(e, t || 'next appointment'), true) });
+    }
   }
   return out
     .sort((a, b) => Number(b.sameTreatment) - Number(a.sameTreatment) || Number(a.dueBack) - Number(b.dueBack) || b.enquiry.receivedAt.localeCompare(a.enquiry.receivedAt))
     .filter((c) => { const k = key(c.enquiry); if (seen.has(k)) return false; seen.add(k); return true; })
-    .slice(0, max)
-    .map((c) => ({ ...c, text: c.text.replace(/[‘’]/g, "'") }));
+    .slice(0, max);
 }

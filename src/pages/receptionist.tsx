@@ -3,6 +3,7 @@ import { api } from '../lib/api';
 import { useApp } from '../app';
 import { Link, navigate } from '../lib/router';
 import { Button, Choices, ErrorNote, Field, Icon, Loading, Modal, Tabs, copyText, useLoad, useToast } from '../components/ui';
+import { CallersCard } from '../components/features';
 import { ScriptPreview } from './setup';
 import { relative, shortDate } from '../lib/format';
 import { CHANNEL_LABEL, DIRECT_SYSTEMS, isBeauty, packFromSettings } from '../../shared/capture';
@@ -57,6 +58,7 @@ function Script() {
       </div>
       <ScriptPreview s={settings} full />
       <p className="xsmall faint mt-16"><Icon name="info" className="inline-icon" />It never claims to be a person and answers honestly if asked{settings.calls.recording ? ', and the opening line says calls are recorded' : ''}. It never takes card details{isBeauty(settings.business) ? ', and sends every concern after a treatment to your clinic, never to another service' : ' or gives safety advice beyond the emergency numbers'}.</p>
+      <div className="mt-24"><CallersCard /></div>
     </>
   );
 }

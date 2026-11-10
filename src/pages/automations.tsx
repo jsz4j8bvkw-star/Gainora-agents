@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { Fragment, useMemo, useRef, useState } from 'react';
 import { api } from '../lib/api';
 import { useApp } from '../app';
 import { Link } from '../lib/router';
@@ -9,7 +9,8 @@ import {
   fieldsFor, render, smsParts, WEEKLY_CAP, WORKFLOWS,
   type MsgChannel, type StepDef, type StepSetting, type WorkflowDef, type WorkflowSetting,
 } from '../../shared/automations';
-import { depositText } from '../../shared/capture';
+import { depositRule } from '../../shared/capture';
+import { DepositCard, EmailsCard, SpaceCard } from '../components/features';
 import type { CaptureSettings, EnquiryRecord, MessageRecord } from '../lib/types';
 
 type Tab = 'messages' | 'waiting' | 'sent';
@@ -89,8 +90,14 @@ function Messages() {
       </section>
 
       <OwnerAlerts save={save} />
+      <EmailsCard />
 
-      {WORKFLOWS.filter((w) => !w.only || w.only === settings.business.kind).map((w) => <WorkflowCard key={w.id} def={w} save={save} />)}
+      {WORKFLOWS.filter((w) => !w.only || w.only === settings.business.kind).map((w) => (
+        <Fragment key={w.id}>
+          <WorkflowCard def={w} save={save} />
+          {w.id === 'booking' && settings.business.kind === 'appointments' && <><DepositCard /><SpaceCard /></>}
+        </Fragment>
+      ))}
     </div>
   );
 }
@@ -230,8 +237,8 @@ function StepEditor({ def, kind, value, sample, settings, onChange }: { def: Ste
           <span className="xsmall faint">Preview with sample details</span>
           <div className="sms">{preview}</div>
           <span className="xsmall faint">{preview.length} characters · {smsParts(preview)} {smsParts(preview) === 1 ? 'text' : 'texts'}</span>
-          {def.id === 'confirm' && kind === 'appointments' && depositText(settings.bookings) && (
-            <span className="xsmall faint">New clients also get: “As a new client, please pay your deposit ({depositText(settings.bookings)}) to secure your booking”, with your payment link. Change it in Settings, Bookings.</span>
+          {def.id === 'confirm' && kind === 'appointments' && depositRule(settings.bookings) && (
+            <span className="xsmall faint">{depositRule(settings.bookings)!.forWho === 'new' ? 'New clients' : 'Everyone'}{depositRule(settings.bookings)!.types.length ? ` booking ${depositRule(settings.bookings)!.types.join(', ')}` : ''} also get your deposit line with the payment link. Change it under Deposits, below.</span>
           )}
         </div>
       </div>

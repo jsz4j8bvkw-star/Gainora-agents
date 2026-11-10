@@ -1,13 +1,13 @@
 import { db, requireInternal } from '../lib/core';
 import { appUrl, toRecord, withDefaults } from '../lib/capture';
 import { sendEmail } from '../lib/email';
-import { followUps, report, words } from '../../shared/capture';
+import { DAYS, featuresOf, followUps, report, words } from '../../shared/capture';
 import { advice, openSpaces, rebookDue, spaceCandidates, weeklyNote } from '../../shared/insight';
 
 // Background function (up to 15 minutes), started by the morning schedule. For each client:
 // 1. a short morning email when something needs them: enquiries not replied to, quote chasers,
 //    payment reminders and review requests due today (nothing is sent to their customers),
-// 2. on Mondays, the last seven days at their own prices and the week ahead,
+// 2. weekly (Monday unless they chose another day), the last seven days at their own prices and the week ahead,
 // 3. on the 1st of the month, last month's report.
 const money = (n: number) => `£${Math.round(n).toLocaleString('en-GB')}`;
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
@@ -17,7 +17,7 @@ export default async (req: Request) => {
     requireInternal(req);
     const now = new Date();
     const firstOfMonth = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', day: 'numeric' }).format(now) === '1';
-    const monday = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', weekday: 'short' }).format(now) === 'Mon';
+    const weekday = DAYS.indexOf(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', weekday: 'short' }).format(now)) + 1;   // 1 = Monday
     const ents = await db<any[]>('entitlements?select=user_id,email&agent=eq.capture&status=in.(active,trialing)&user_id=not.is.null');
     for (const ent of ents) {
       try {
@@ -25,6 +25,7 @@ export default async (req: Request) => {
         const s = withDefaults(srow?.data);
         if (!s.completedAt) continue;
         const to = s.business.alertEmail || ent.email;
+        const mail = featuresOf(s).emails;   // the owner's choices: morning list, weekly summary (and its day), monthly report
         const since = new Date(now.getTime() - 70 * 86_400_000).toISOString();
         const list = (await db<any[]>(`enquiries?select=*&user_id=eq.${ent.user_id}&is_test=eq.false&or=(received_at.gte.${since},status.in.(quoted,won))&order=received_at.desc&limit=1000`)).map(toRecord);
 
@@ -48,7 +49,7 @@ export default async (req: Request) => {
           pays.length && `${plural(pays.length, 'payment reminder is', 'payment reminders are')} due (${money(pays.reduce((a, f) => a + (f.enquiry.jobValue ?? 0), 0))} outstanding)`,
           reviews && plural(reviews, `happy ${W.customer} could leave a review`, `happy ${W.customer}s could leave a review`),
         ].filter(Boolean) as string[];
-        if (parts.length) {
+        if (parts.length && mail.daily) {
           await sendEmail(to, `Today: ${parts.length === 1 ? parts[0] : `${parts.length} things to follow up`}`, [
             `Good morning ${s.business.ownerName || ''}`.trim() + '.',
             ...parts.map((p) => `• ${p[0].toUpperCase()}${p.slice(1)}.`),
@@ -56,12 +57,12 @@ export default async (req: Request) => {
           ], { label: 'Open your follow-ups', url: `${appUrl()}/follow-ups` });
         }
 
-        if (monday) {
+        if (mail.weekly && weekday === mail.weeklyDay) {
           const w = weeklyNote(list, s, now);
           if (w) await sendEmail(to, w.subject, w.lines, { label: 'Open Gainora', url: `${appUrl()}/` });
         }
 
-        if (firstOfMonth) {
+        if (firstOfMonth && mail.monthly) {
           const end = new Date(now.getFullYear(), now.getMonth(), 1);
           const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
           const r = report(list, start, end, s, now);

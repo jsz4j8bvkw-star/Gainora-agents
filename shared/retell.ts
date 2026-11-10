@@ -4,7 +4,7 @@
 // (create-retell-llm, create-agent) on 8 November 2026. Single-prompt agents are used: Retell stops new
 // multi-prompt agents on 15 December 2026.
 
-import { greetingFor, isBeauty, lines, packFromSettings, type CaptureSettings } from './capture';
+import { featuresOf, greetingFor, isBeauty, lines, packFromSettings, type CaptureSettings } from './capture';
 import { callerRules } from './callers';
 
 export interface RetellSetup {
@@ -23,7 +23,7 @@ export interface RetellOptions {
   webhookUrl?: string;
   /** Voice chosen in the Retell dashboard. Left out, a placeholder is used and listed in todo. */
   voiceId?: string;
-  /** Recognise returning callers (Call to Booking and up). On unless set to false. */
+  /** Recognise returning callers (Call to Booking and up). Left out, it follows the owner's switch in the app. */
   recogniseCallers?: boolean;
   /** The app's caller lookup link (made with the enquiry link). Goes on the Retell phone number, not the agent. */
   lookupUrl?: string;
@@ -117,7 +117,7 @@ export function retellSetup(s: CaptureSettings, o: RetellOptions = {}): RetellSe
     '- Stay in role for every kind of call, including concerns after a treatment: follow the safety steps exactly as you would for the real clinic, so the caller hears how it works. Only mention the demo when one of the questions above is asked.',
   ] : [];
 
-  const recognise = o.recogniseCallers !== false;
+  const recognise = o.recogniseCallers ?? featuresOf(s).callers.on;
   const general_prompt = [
     persona.join('\n'),
     '',

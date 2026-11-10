@@ -3,7 +3,7 @@
 //
 // The owner doesn't build flows. Gainora ships a fixed set of well-made workflows; the owner switches
 // each one on or off, edits the wording and timing, and marks any step "ask me first".
-import { applyPatch, bookedOnCall, depositText, findPostcode, isNewClient, normPhone, rebookWeeksFor, type BusinessKind, type CaptureSettings, type EnquiryPatch, type EnquiryRecord } from './capture';
+import { applyPatch, bookedOnCall, depositCovers, depositRule, findPostcode, isNewClient, normPhone, rebookWeeksFor, type BusinessKind, type CaptureSettings, type EnquiryPatch, type EnquiryRecord } from './capture';
 
 export type WorkflowId = 'ack' | 'booking' | 'quote' | 'payment' | 'review' | 'aftercare' | 'rebook';
 export type StepId = 'ack' | 'confirm' | 'reminder' | 'chase1' | 'chase2' | 'pay1' | 'pay2' | 'pay3' | 'review' | 'checkin' | 'rebook';
@@ -347,7 +347,7 @@ export function dueNow(e: EnquiryRecord, s: CaptureSettings, msgs: MessageLite[]
     if (!/^(confirm|reminder)$/.test(d.step) && recent >= WEEKLY_CAP) continue;
     const phone = normPhone(e.phone);
     const channels: ('text' | 'email')[] = st.channel === 'both' ? ['text', 'email'] : [st.channel];
-    const body = render(st.text, f, !!def.marketing) + (d.step === 'confirm' ? depositLine(e, s, others) : '');
+    const body = render(st.text, f, !!def.marketing) + (d.step === 'confirm' ? depositLine(e, s, others, now) : '');
     let made = false;
     for (const ch of channels) {
       const to = ch === 'text' ? (optedOut ? '' : phone) : e.email;
@@ -370,13 +370,17 @@ export function dueNow(e: EnquiryRecord, s: CaptureSettings, msgs: MessageLite[]
 }
 
 /**
- * The deposit request added to a new client's booking confirmation, when the owner set a deposit and a link
- * to pay it. Returning clients never get it. Gainora never takes the payment: the link is the owner's own.
+ * The deposit request added to a booking confirmation, when the owner has deposits switched on with a link to
+ * pay. It follows the owner's rule: new clients only (the default) or everyone, and only the treatments they
+ * chose. Returning clients are never asked for a new-client deposit. Gainora never takes the payment.
  */
-export function depositLine(e: EnquiryRecord, s: CaptureSettings, others: EnquiryRecord[] = []): string {
-  const what = depositText(s.bookings);
-  if (s.business.kind !== 'appointments' || !what || !isNewClient(e, others)) return '';
-  return `\n\nAs a new client, please pay your deposit (${what.replace(/[‘’]/g, "'")}) to secure your booking: ${String(s.bookings.depositLink).trim()}`;
+export function depositLine(e: EnquiryRecord, s: CaptureSettings, others: EnquiryRecord[] = [], now = new Date()): string {
+  const rule = depositRule(s.bookings);
+  if (s.business.kind !== 'appointments' || !rule) return '';
+  if (rule.forWho === 'new' && !isNewClient(e, others)) return '';
+  if (!depositCovers(rule, e.bookedType)) return '';
+  const f = { ...fieldsFor(e, s, now), deposit: rule.what, 'deposit link': rule.link };
+  return `\n\n${render(rule.wording, f)}`;
 }
 
 /** What's coming up next for an enquiry, for the app to show ("Reminder: Mon 9am"). */

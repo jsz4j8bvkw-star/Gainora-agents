@@ -102,8 +102,22 @@ export function effectiveBookingMode(bk: Pick<Bookings, 'mode' | 'status' | 'sys
 }
 
 /** The deposit new clients pay, when the owner set one with a link to pay it; otherwise ''. */
-export const depositText = (bk: Pick<Bookings, 'deposit' | 'depositLink'>) =>
-  clean(bk.deposit ?? '', 120) && /^https:\/\//.test(String(bk.depositLink ?? '').trim()) ? clean(bk.deposit ?? '', 120) : '';
+export const depositText = (bk: Pick<Bookings, 'deposit' | 'depositLink' | 'depositOn'>) =>
+  bk.depositOn !== false && clean(bk.deposit ?? '', 120) && /^https:\/\//.test(String(bk.depositLink ?? '').trim()) ? clean(bk.deposit ?? '', 120) : '';
+
+/** Everything about the deposit in one place, or null when it's off or not set up. */
+export function depositRule(bk: Pick<Bookings, 'deposit' | 'depositLink' | 'depositOn' | 'depositFor' | 'depositTypes' | 'depositWording'>) {
+  const what = depositText(bk);
+  if (!what) return null;
+  const forWho: 'new' | 'all' = bk.depositFor === 'all' ? 'all' : 'new';
+  const types = (bk.depositTypes ?? []).map((t) => clean(t, 80)).filter(Boolean);
+  const wording = clean(bk.depositWording ?? '', 400) || (forWho === 'all' ? DEPOSIT_WORDING_ALL : DEPOSIT_WORDING_NEW);
+  return { what, link: String(bk.depositLink).trim(), forWho, types, wording };
+}
+
+/** Whether a booking for this treatment needs a deposit under the owner's rule (the who-pays part is checked separately). */
+export const depositCovers = (rule: NonNullable<ReturnType<typeof depositRule>>, bookedType: string | undefined) =>
+  !rule.types.length || rule.types.some((t) => sameName(t, bookedType || ''));
 
 /** The script and knowledge for the receptionist. Plain text, so it pastes into any platform. */
 export function packFromSettings(s: CaptureSettings): ReceptionistPack {
@@ -122,6 +136,7 @@ export function packFromSettings(s: CaptureSettings): ReceptionistPack {
   const staff = lines(bk.staff);
   const mode = effectiveBookingMode(bk);
   const who = beauty ? 'client' : appts ? 'patient or client' : 'customer';
+  const dep = depositRule(bk);
 
   const sections: PackSection[] = [
     { title: 'Who you are', lines: [
@@ -159,7 +174,9 @@ export function packFromSettings(s: CaptureSettings): ReceptionistPack {
         : mode === 'offer' ? `Check the diary and offer two free times. Take their choice and say ${team} will confirm it by text shortly.`
         : `Don't book a time. Take the details and say ${team} will call back to arrange it.`,
       ...(bk.cancellation ? [`Cancellation policy, mention it when booking: ${clean(bk.cancellation, 200)}`] : []),
-      ...(appts && depositText(bk) ? [`Deposit: new ${who}s pay a deposit to secure their booking (${depositText(bk)}). When you book a new ${who}, say so kindly and that a secure link to pay it comes with their confirmation text. Returning ${who}s don't pay one. Never take card details.`] : []),
+      ...(appts && dep ? [dep.forWho === 'new'
+        ? `Deposit: new ${who}s pay a deposit to secure their booking (${dep.what})${dep.types.length ? ` for ${dep.types.join(', ')}` : ''}. When you book a new ${who}${dep.types.length ? ' for one of those' : ''}, say so kindly and that a secure link to pay it comes with their confirmation text. Returning ${who}s don't pay one. Never take card details.`
+        : `Deposit: every booking${dep.types.length ? ` for ${dep.types.join(', ')}` : ''} needs a deposit to secure it (${dep.what}). Say so kindly when you book, and that a secure link to pay it comes with the confirmation text. Never take card details.`] : []),
       `Tell them they'll get a text confirming the details.`,
       'At the end, sum up what happens next in one sentence and thank them for calling.',
     ] },
@@ -209,6 +226,7 @@ export function packFromSettings(s: CaptureSettings): ReceptionistPack {
 /** The calls a beauty and aesthetics clinic gets, and how each one is handled. */
 function beautyCalls(s: CaptureSettings, team: string): string[] {
   const bk = s.bookings;
+  const dep = depositRule(bk);
   const mode = effectiveBookingMode(bk);
   const book = mode === 'book' ? 'book it' : mode === 'offer' ? `offer two times and say ${team} will confirm by text` : `take the details and say ${team} will call back to arrange it`;
   return [
@@ -224,8 +242,8 @@ function beautyCalls(s: CaptureSettings, team: string): string[] {
     `Aftercare questions: don't give advice. If what they describe is on the safety list, follow the safety steps straight away. Otherwise take the details and say ${team} will call back today.`,
     `Unhappy with a result, or a complaint: listen, be kind and say sorry they feel that way. Don't argue, explain or offer refunds, discounts or free treatment. Take their name, number, the treatment and date, and say ${team} will call them back personally, today if possible.`,
     `Gift vouchers: take the buyer's name, number, the amount or treatment, and who it's for. Say ${team} will send a payment link. Never take card details.`,
-    depositText(bk)
-      ? `Deposits: new clients pay ${depositText(bk)} to secure a booking, by the secure link in their confirmation text. Returning clients don't. Never take card details.`
+    dep
+      ? `Deposits: ${dep.forWho === 'new' ? 'new clients pay' : 'every booking needs'} ${dep.what}${dep.types.length ? ` (for ${dep.types.join(', ')})` : ''} to secure a booking, by the secure link in their confirmation text.${dep.forWho === 'new' ? ' Returning clients don\'t.' : ''} Never take card details.`
       : 'Deposits and payments: never take card details. Say a secure payment link will come by text.',
     'Group bookings (bridal parties, birthdays): take the date, how many people, the treatments and a contact number. Say the team will put a plan together and call back.',
     `Fully booked: offer the next free time. If nothing suits, add them to the call-back list with the days and times that work, and say ${team} will be in touch if a space comes up.`,
@@ -525,7 +543,51 @@ export interface Bookings {
   deposit?: string;
   /** Where they pay it: the owner's own payment link. Gainora never takes payments. */
   depositLink?: string;
+  /** The owner's switch. Left unset (settings from before the switch existed), it's on when an amount and link are set. */
+  depositOn?: boolean;
+  /** Who pays: new clients only (the default) or every booking. */
+  depositFor?: 'new' | 'all';
+  /** The treatments that need one, by name. Empty means every treatment. */
+  depositTypes?: string[];
+  /** The owner's own wording for the line added to the confirmation. Empty uses ours. */
+  depositWording?: string;
   status: 'not_connected' | 'requested' | 'connected';
+}
+
+/** Switches and choices for the features on top of the receptionist and inbox. All on by default. */
+export interface Features {
+  /** Returning callers: what the receptionist is told about a number she recognises. */
+  callers: { on: boolean; lastVisit: boolean; bookings: boolean; waiting: boolean };
+  /** A space came up: who is offered a cancelled appointment, how far ahead, and the wording. */
+  spaces: { on: boolean; waiting: boolean; dueBack: boolean; aheadDays: number; wording: string; dueBackWording: string };
+  /** The owner's own emails. weeklyDay: 1 = Monday … 7 = Sunday. */
+  emails: { daily: boolean; weekly: boolean; weeklyDay: number; monthly: boolean };
+}
+
+export const SPACE_WORDING = "Hi {first name}, a space has just come up at {business} on {day} {date} at {time}[ with {who}]. Would you like it[ for your {treatment}]? Just reply YES and we'll book you in.[ {owner}]";
+export const SPACE_DUEBACK_WORDING = "Hi {first name}, a space has just come up at {business} on {day} {date} at {time}[ with {who}], and you're due your {treatment}. Would you like it? Just reply YES and we'll book you in.[ {owner}]";
+export const DEPOSIT_WORDING_NEW = 'As a new client, please pay your deposit ({deposit}) to secure your booking: {deposit link}';
+export const DEPOSIT_WORDING_ALL = 'Please pay your deposit ({deposit}) to secure your booking: {deposit link}';
+
+export function defaultFeatures(): Features {
+  return {
+    callers: { on: true, lastVisit: true, bookings: true, waiting: true },
+    spaces: { on: true, waiting: true, dueBack: true, aheadDays: 14, wording: SPACE_WORDING, dueBackWording: SPACE_DUEBACK_WORDING },
+    emails: { daily: true, weekly: true, weeklyDay: 1, monthly: true },
+  };
+}
+
+/** The saved feature settings with every field present. */
+export function featuresOf(s: { features?: Partial<Features> | any }): Features {
+  const d = defaultFeatures();
+  const f = s?.features ?? {};
+  const spaces = { ...d.spaces, ...(f.spaces ?? {}) };
+  if (!String(spaces.wording || '').trim()) spaces.wording = SPACE_WORDING;
+  if (!String(spaces.dueBackWording || '').trim()) spaces.dueBackWording = SPACE_DUEBACK_WORDING;
+  spaces.aheadDays = Math.min(56, Math.max(1, Number(spaces.aheadDays) || d.spaces.aheadDays));
+  const emails = { ...d.emails, ...(f.emails ?? {}) };
+  emails.weeklyDay = Math.min(7, Math.max(1, Number(emails.weeklyDay) || 1));
+  return { callers: { ...d.callers, ...(f.callers ?? {}) }, spaces, emails };
 }
 
 export interface Texting { number: string; status: 'off' | 'requested' | 'on' }
@@ -548,6 +610,8 @@ export interface CaptureSettings {
   texting: Texting;
   followUps: { reviewLink: string; payLink: string; paymentDays: number };
   provider: { name: string; aiNumber: string };
+  /** Switches for returning callers, Fill the space and the owner's emails. Older settings have none: see featuresOf. */
+  features?: Features;
   completedAt?: string;
 }
 
@@ -600,6 +664,7 @@ export function withDefaults(data: any): CaptureSettings {
     provider: { ...d.provider, ...(data?.provider ?? {}) },
     automations: automationsWithDefaults(data?.automations, data?.business?.kind === 'appointments' ? 'appointments' : 'trade', data?.completedAt || new Date(0).toISOString()),
     texting: { ...d.texting, ...(data?.texting ?? {}) },
+    features: featuresOf(data ?? {}),
     completedAt: data?.completedAt,
   };
 }
