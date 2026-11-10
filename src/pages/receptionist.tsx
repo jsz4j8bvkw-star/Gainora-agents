@@ -153,6 +153,12 @@ function Connect() {
                 <div className="secret"><code>{made.lookupUrl}</code><Button small icon="copy" onClick={async () => toast((await copyText(made.lookupUrl!)) ? 'Link copied.' : 'Select it and copy.')}>Copy</Button></div>
               </>
             )}
+            {made.toolsUrl && (
+              <>
+                <p className="muted"><strong>Booking during the call.</strong> The receptionist’s diary tools use this address (Gainora puts it into her check-availability and book tools on your setup call), so she can find free times and book them while the caller is on the line.</p>
+                <div className="secret"><code>{made.toolsUrl}</code><Button small icon="copy" onClick={async () => toast((await copyText(made.toolsUrl!)) ? 'Link copied.' : 'Select it and copy.')}>Copy</Button></div>
+              </>
+            )}
             <p className="xsmall faint">Anyone with {made.lookupUrl ? 'these links' : 'this link'} can add enquiries to your inbox{made.lookupUrl ? ' or look up a number' : ''}, so keep {made.lookupUrl ? 'them' : 'it'} private.</p>
           </div>
         </Modal>

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  applyPatch, effectiveBookingMode, enquiryValue, isNoShow, normaliseEnquiry, packFromSettings, parsePrice, rebookWeeksFor, report, triage, typePrice, withDefaults,
+  applyPatch, effectiveBookingMode, GAINORA_DIARY, enquiryValue, isNoShow, normaliseEnquiry, packFromSettings, parsePrice, rebookWeeksFor, report, triage, typePrice, withDefaults,
   type EnquiryRecord,
 } from '../shared/capture';
 import { advice, nextStep, priority, rebookDue, rebookText, suggestReply, topicOf } from '../shared/insight';
@@ -175,7 +175,9 @@ test('the receptionist never offers to check a diary it can’t see', () => {
   assert.equal(effectiveBookingMode({ mode: 'book', status: 'connected', system: 'Phorest' }), 'book');
   assert.equal(effectiveBookingMode({ mode: 'book', status: 'requested', system: 'Phorest' }), 'callback');
   assert.equal(effectiveBookingMode({ mode: 'offer', status: 'connected', system: 'A paper diary, or nothing yet' }), 'callback');
-  const s = structuredClone(beauty); s.bookings.status = 'not_connected';
+  // Gainora's own diary is always visible to her.
+  assert.equal(effectiveBookingMode({ mode: 'book', status: 'not_connected', system: GAINORA_DIARY }), 'book');
+  const s = structuredClone(beauty); s.bookings.system = 'Phorest'; s.bookings.status = 'not_connected';
   const text = packFromSettings(s).text;
   assert.match(text, /Don't book a time\. Take the details/);
   assert.doesNotMatch(text, /Check the diary/);

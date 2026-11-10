@@ -5,6 +5,7 @@
 //  - triage: flags emergencies and sorts enquiries so the owner sees what matters first
 //  - reminder templates: quote chasers, payment reminders and review requests the owner approves and sends
 
+import type { BookingPage, DiaryRules } from './diary';
 import { automationsWithDefaults, defaultAutomations, type Automations } from './automations';
 
 export const GAS_EMERGENCY = '0800 111 999';
@@ -97,6 +98,7 @@ export function greetingFor(s: Pick<CaptureSettings, 'business' | 'calls'>, now 
  */
 export function effectiveBookingMode(bk: Pick<Bookings, 'mode' | 'status' | 'system'>): BookingMode {
   if (bk.mode === 'callback') return 'callback';
+  if (bk.system === GAINORA_DIARY) return bk.mode;   // the diary is Gainora's own, so it's always there
   if (/paper/i.test(bk.system || '')) return 'callback';
   return bk.status === 'connected' ? bk.mode : 'callback';
 }
@@ -612,6 +614,10 @@ export interface CaptureSettings {
   provider: { name: string; aiNumber: string };
   /** Switches for returning callers, Fill the space and the owner's emails. Older settings have none: see featuresOf. */
   features?: Features;
+  /** The clinic's own booking page (shared/diary.ts pageOf fills in the rest). */
+  page?: Partial<BookingPage>;
+  /** Diary rules: minutes between start times, and a gap after each appointment. */
+  diary?: Partial<DiaryRules>;
   completedAt?: string;
 }
 
@@ -626,13 +632,15 @@ const BEAUTY_SYSTEMS = ['Fresha', 'Phorest', 'Timely', 'Treatwell', 'Booksy', 'S
 const CLINIC_SYSTEMS = ['Cliniko', 'Jane', 'WriteUpp', 'Pabau', 'Setmore', 'Acuity Scheduling', 'Square Appointments', 'SimplyBook.me'];
 const TRADE_SYSTEMS = ['Jobber', 'Tradify', 'ServiceM8'];
 const LAST = ['A paper diary, or nothing yet', 'Something else'];
+/** The clinic runs its diary in Gainora itself (the booking page and the receptionist share it). */
+export const GAINORA_DIARY = 'Gainora diary (this app)';
 const uniq = (a: string[]) => [...new Set(a)];
-export const BOOKING_SYSTEMS = uniq([...CALENDARS, ...BEAUTY_SYSTEMS, ...CLINIC_SYSTEMS, ...TRADE_SYSTEMS, ...LAST]);
+export const BOOKING_SYSTEMS = uniq([GAINORA_DIARY, ...CALENDARS, ...BEAUTY_SYSTEMS, ...CLINIC_SYSTEMS, ...TRADE_SYSTEMS, ...LAST]);
 /** The booking systems to offer, most likely first, for the business type. */
 export function bookingSystemsFor(b: { kind: BusinessKind; trade: string }): string[] {
-  if (b.kind !== 'appointments') return uniq([...CALENDARS, ...TRADE_SYSTEMS, 'Square Appointments', 'Setmore', ...LAST]);
-  if (isBeauty(b)) return uniq([...BEAUTY_SYSTEMS, ...CALENDARS, 'Square Appointments', 'Setmore', 'Acuity Scheduling', ...LAST]);
-  return uniq([...CLINIC_SYSTEMS, ...CALENDARS, 'Fresha', ...LAST]);
+  if (b.kind !== 'appointments') return uniq([GAINORA_DIARY, ...CALENDARS, ...TRADE_SYSTEMS, 'Square Appointments', 'Setmore', ...LAST]);
+  if (isBeauty(b)) return uniq([GAINORA_DIARY, ...BEAUTY_SYSTEMS, ...CALENDARS, 'Square Appointments', 'Setmore', 'Acuity Scheduling', ...LAST]);
+  return uniq([GAINORA_DIARY, ...CLINIC_SYSTEMS, ...CALENDARS, 'Fresha', ...LAST]);
 }
 /** Systems Gainora can book straight into today; the rest are connected client by client. */
 export const DIRECT_SYSTEMS = ['Google Calendar', 'Microsoft Outlook or 365', 'Cal.com', 'Calendly'];
@@ -665,6 +673,8 @@ export function withDefaults(data: any): CaptureSettings {
     automations: automationsWithDefaults(data?.automations, data?.business?.kind === 'appointments' ? 'appointments' : 'trade', data?.completedAt || new Date(0).toISOString()),
     texting: { ...d.texting, ...(data?.texting ?? {}) },
     features: featuresOf(data ?? {}),
+    ...(data?.page ? { page: data.page } : {}),
+    ...(data?.diary ? { diary: data.diary } : {}),
     completedAt: data?.completedAt,
   };
 }

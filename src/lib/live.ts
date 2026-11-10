@@ -164,6 +164,9 @@ export function createLiveApi(): Api {
     async listSources() { return (await rest<any[]>('enquiry_sources?select=id,label,channel,active,created_at,last_used_at&order=created_at.desc')).map(mapSource); },
     async createSource(label, channel) { return fn<Source>('enquiries', { op: 'link', label, channel }); },
     async revokeSource(id) { await fn('enquiries', { op: 'revoke', id }); },
+    async diaryTimes(type, who, from, days) { return fn('diary', { op: 'times', type, who, from, days }); },
+    async diaryBook(b) { return (await fn<{ enquiry: EnquiryRecord }>('diary', { op: 'book', ...b })).enquiry; },
+    async slugFree(slug) { return fn('diary', { op: 'slug', slug }); },
   };
 }
 

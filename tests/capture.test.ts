@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import {
-  applyPatch, emptySettings, followUps, GAS_EMERGENCY, hoursText, isAfterHours, MARKETING_OPT_OUT, normaliseEnquiry, normPhone,
+  applyPatch, emptySettings, followUps, GAINORA_DIARY, GAS_EMERGENCY, hoursText, isAfterHours, MARKETING_OPT_OUT, normaliseEnquiry, normPhone,
   packFromSettings, paymentReminder, paymentStageDue, quoteChaseDue, quoteChaser, report, reviewRequest, triage,
   withDefaults, type CaptureSettings, type EnquiryRecord,
 } from '../shared/capture';
@@ -304,7 +304,8 @@ test('settings with nothing saved still work', () => {
   test('booking systems: salon systems first for beauty, trade systems for trades', () => {
     const b = bookingSystemsFor(s.business);
     for (const x of ['Fresha', 'Phorest', 'Timely', 'Treatwell', 'Booksy', 'Salonized', 'Pabau']) assert(b.includes(x), x);
-    assert(b[0] === 'Fresha' && b.indexOf('Phorest') < b.indexOf('Google Calendar'));
+    // Gainora's own diary comes first, then the salon systems.
+    assert(b[0] === GAINORA_DIARY && b[1] === 'Fresha' && b.indexOf('Phorest') < b.indexOf('Google Calendar'));
     assert(!b.includes('Jobber'));
     const t = bookingSystemsFor({ kind: 'trade', trade: 'Electrical' });
     assert(t.includes('Jobber') && !t.includes('Phorest'));

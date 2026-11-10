@@ -57,4 +57,21 @@ if (demo) {
 }
 else html = html.replace('<!--SW-->', `<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('/sw.js').catch(()=>{}))}</script>`);
 writeFileSync(join(out, 'index.html'), html);
+
+// The clinics' public booking page (/book/<slug>): its own small bundle, no app code, no sign-in.
+if (!demo) {
+  const page = await build({
+    entryPoints: [join(root, 'src/book/main.tsx')], bundle: true, minify: true, format: 'esm', target: 'es2020', jsx: 'automatic',
+    write: false, outdir: join(out, 'assets'), nodePaths, define: { 'process.env.NODE_ENV': '"production"', __DEMO__: 'false' }, loader: { '.css': 'css' }, logLevel: 'warning',
+  });
+  const pf = {};
+  for (const f of page.outputFiles) {
+    const ext = f.path.endsWith('.css') ? 'css' : 'js';
+    const name = `book-${createHash('sha256').update(f.contents).digest('hex').slice(0, 10)}.${ext}`;
+    writeFileSync(join(out, 'assets', name), f.contents);
+    pf[ext] = `/assets/${name}`;
+  }
+  writeFileSync(join(out, 'book.html'), readFileSync(join(root, 'book.html'), 'utf8').replace('%CSS%', pf.css).replace('%JS%', pf.js));
+  files.book = pf;
+}
 console.log(`Built ${demo ? 'demo' : 'app'} → ${out}`, files);

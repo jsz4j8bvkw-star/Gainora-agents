@@ -1,4 +1,7 @@
 import type { CaptureSettings, EnquiryPatch, EnquiryRecord, MessageRecord, NewEnquiry, Plan, Source, User } from './types';
+import type { PageTimes } from '../book/BookingPage';
+
+export interface DiaryBooking { type: string; slot: string; name: string; phone: string; email?: string; notes?: string; newClient?: boolean }
 import { createDemoApi } from './demo';
 import { createLiveApi } from './live';
 
@@ -34,6 +37,13 @@ export interface Api {
   listSources(): Promise<Source[]>;
   createSource(label: string, channel: Source['channel']): Promise<Source>;
   revokeSource(id: string): Promise<void>;
+
+  // The diary: free times, putting a booking in, and the booking page's address
+  diaryTimes(type: string, who: string, from: string, days: number): Promise<PageTimes>;
+  diaryBook(b: DiaryBooking): Promise<EnquiryRecord>;
+  slugFree(slug: string): Promise<{ slug: string; free: boolean }>;
+  /** The demo only: a booking made on the booking page preview, so it lands in the demo diary. */
+  pageBook?(b: DiaryBooking): Promise<EnquiryRecord>;
 
   resetDemo?(): void;
 }

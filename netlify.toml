@@ -38,6 +38,19 @@
   [headers.values]
     Cache-Control = "no-store"
 
+# The clinics' booking pages can sit inside their own websites (in a frame), so these allow framing.
+[[headers]]
+  for = "/book/*"
+  [headers.values]
+    Content-Security-Policy = "frame-ancestors *"
+    X-Frame-Options = "ALLOWALL"
+    Cache-Control = "no-cache"
+
+[[redirects]]
+  from = "/book/*"
+  to = "/book.html"
+  status = 200
+
 # Single-page app: every route serves the app shell.
 [[redirects]]
   from = "/*"

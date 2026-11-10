@@ -64,6 +64,26 @@ export async function intake(userId: string, sourceId: string | null, raw: any, 
     history.push({ at: e.receivedAt, text: returning ? RETURNING_CLIENT : NEW_CLIENT });
   }
 
+  // The receptionist booked during this call with her diary tools, so the booking exists already: the call's
+  // summary, transcript and recording join it, rather than making a second enquiry.
+  if (e.externalId) {
+    const [made] = await db<any[]>(`enquiries?select=*&user_id=eq.${userId}&external_id=eq.${enc(e.externalId)}&limit=1`);
+    if (made && (made.history ?? []).some((h: any) => /^(Booked by your receptionist during the call|Asked for a time on the call)$/.test(h?.text))) {
+      const rank = { normal: 0, urgent: 1, emergency: 2 } as const;
+      const urgency = rank[t.urgency] > rank[(made.urgency as keyof typeof rank) ?? 'normal'] ? t.urgency : made.urgency;
+      const [merged] = await db<any[]>(`enquiries?id=eq.${made.id}`, {
+        method: 'PATCH', prefer: 'return=representation',
+        body: {
+          summary: [e.summary, made.summary].filter(Boolean).join(' ').slice(0, 2000), transcript: e.transcript, recording_url: e.recordingUrl,
+          email: made.email || e.email, postcode: made.postcode || e.postcode, name: made.name || e.name, urgency,
+          reasons: [...new Set([...(made.reasons ?? []), ...t.reasons])], after_hours: afterHours,
+          history: [...(made.history ?? []), { at: new Date().toISOString(), text: 'Call summary added' }].slice(-100), updated_at: new Date().toISOString(),
+        },
+      });
+      return { saved: toRecord(merged ?? made) };
+    }
+  }
+
   const rows = await db<any[]>(e.externalId ? 'enquiries?on_conflict=user_id,external_id' : 'enquiries', {
     method: 'POST', prefer: 'resolution=ignore-duplicates,return=representation',
     body: {

@@ -4,7 +4,7 @@
 // (create-retell-llm, create-agent) on 8 November 2026. Single-prompt agents are used: Retell stops new
 // multi-prompt agents on 15 December 2026.
 
-import { featuresOf, greetingFor, isBeauty, lines, packFromSettings, type CaptureSettings } from './capture';
+import { effectiveBookingMode, featuresOf, greetingFor, isBeauty, lines, packFromSettings, type CaptureSettings } from './capture';
 import { callerRules } from './callers';
 
 export interface RetellSetup {
@@ -27,6 +27,9 @@ export interface RetellOptions {
   recogniseCallers?: boolean;
   /** The app's caller lookup link (made with the enquiry link). Goes on the Retell phone number, not the agent. */
   lookupUrl?: string;
+  /** The diary tools link (made with the enquiry link), e.g. https://capture.gainora.co.uk/api/diary-tool/<token>.
+   *  With it, and a diary she can see, she checks free times and books during the call. */
+  toolsUrl?: string;
 }
 
 const e164 = (raw: string) => {
@@ -59,6 +62,40 @@ export function retellSetup(s: CaptureSettings, o: RetellOptions = {}): RetellSe
       description: 'End the call politely once the caller has nothing else, after summing up what happens next. Also end it if the caller is abusive, or if it is a sales call for the business.',
     },
   ];
+  // Booking during the call: her diary tools, when the clinic's diary is one she can see (Gainora's own, or connected).
+  const mode = effectiveBookingMode(s.bookings);
+  const diaryTools = appts && mode !== 'callback';
+  if (diaryTools) {
+    const base = (o.toolsUrl || 'https://capture.gainora.co.uk/api/diary-tool/PASTE_THE_TOKEN').replace(/\/$/, '');
+    const names = s.bookings.types.map((t) => t.name).filter(Boolean);
+    tools.push({
+      type: 'custom', name: 'check_availability',
+      description: `Find free times in ${name}'s diary for a treatment. Use it whenever the caller wants to book or move an appointment, before offering any time.`,
+      url: `${base}/times`, method: 'POST', speak_during_execution: true, speak_after_execution: true,
+      execution_message_description: 'A short, natural line while you look, such as "Let me just have a look at the diary for you."', timeout_ms: 10000,
+      parameters: { type: 'object', required: ['treatment'], properties: {
+        treatment: { type: 'string', description: `What they want to book, using one of these names: ${names.join(', ') || 'the treatments listed in your instructions'}.` },
+        team_member: { type: 'string', description: 'First name of the person they asked for, if any. Leave out for whoever is free.' },
+        date: { type: 'string', description: 'The first day to look from, as YYYY-MM-DD, if they named a day. Work it out from the current date.' },
+        part_of_day: { type: 'string', enum: ['morning', 'afternoon', 'evening', 'any'], description: 'If they said when suits them.' },
+      } },
+    });
+    if (mode === 'book') tools.push({
+      type: 'custom', name: 'book_appointment',
+      description: 'Book the time the caller chose from check_availability. Only after you have their full name and the best number, and they have said yes to the time.',
+      url: `${base}/book`, method: 'POST', speak_during_execution: true, speak_after_execution: true,
+      execution_message_description: 'A short line while you book it, such as "Lovely, I’ll pop that in for you now."', timeout_ms: 10000,
+      parameters: { type: 'object', required: ['slot', 'treatment', 'name'], properties: {
+        slot: { type: 'string', description: 'The slot of the option they chose, exactly as check_availability gave it.' },
+        treatment: { type: 'string', description: 'The treatment being booked.' },
+        name: { type: 'string', description: 'Their full name, as spelled.' },
+        phone: { type: 'string', description: 'Their number, only if different from the number they are calling from.' },
+        email: { type: 'string', description: 'Their email, only if they gave one.' },
+        new_client: { type: 'boolean', description: 'True if they said this is their first visit, false if they have been before.' },
+        notes: { type: 'string', description: 'Anything the team should know, in a few words. Never medical details.' },
+      } },
+    });
+  }
   if (canTransfer) {
     tools.push({
       type: 'transfer_call', name: 'transfer_to_clinic_emergency_line',
@@ -105,6 +142,13 @@ export function retellSetup(s: CaptureSettings, o: RetellOptions = {}): RetellSe
     `- When the caller is done, sum up in one sentence what happens next, thank them, then use end_call.`,
     ...(canTransfer ? ['- For a concern after a treatment, say "I’m putting you straight through to the clinic now", then use transfer_to_clinic_emergency_line. If the transfer fails, give them the emergency line number and say the team is being alerted.'] : []),
     '- If you cannot do something, say so plainly and offer to pass a message on.',
+    ...(diaryTools ? [
+      '- To find times, use check_availability with the treatment (and the person, day and part of day if they said). Offer two of the options it returns, in its words. Never make up a time.',
+      mode === 'book'
+        ? '- When they choose, check their full name (spell it back) and the best number, ask whether they have been to us before, then use book_appointment with that option’s slot exactly as given. Only say it’s booked once book_appointment says booked, then read back the day, date, time and who it’s with.'
+        : '- When they choose, take their name and number and say the team will confirm that time by text shortly. Don’t say it’s booked.',
+      '- If a diary tool says to take details for a call back, do that kindly. If a time has just gone, apologise and offer the new options.',
+    ] : []),
   ];
 
   const demoRules = o.demo ? [
@@ -189,6 +233,7 @@ export function retellSetup(s: CaptureSettings, o: RetellOptions = {}): RetellSe
   if (!s.calls.recording) todo.push('Recording is off for this client: check the data storage setting in the dashboard matches.');
   if (!o.demo && appts && s.bookings.mode !== 'callback' && s.bookings.status !== 'connected') todo.push(`Diary: connect ${s.bookings.system || 'the booking system'} and mark it connected in the app, so the receptionist can see free times${s.bookings.mode === 'book' ? ' and book them' : ''}. Until then the script makes her take details for a call back, so she never offers times she can't see.`);
   todo.push('Phone number: buy or connect a UK number in Retell and attach this agent to it for inbound calls.');
+  if (diaryTools) todo.push(`Diary tools: ${o.toolsUrl ? 'the check_availability' + (mode === 'book' ? ' and book_appointment tools point' : ' tool points') + ` at ${o.toolsUrl}` : 'replace PASTE_THE_TOKEN in the tool URLs with the token from the enquiry link (the diary tools link is shown with it)'}. Test: ask for a time, choose one, and check it appears in the app's Diary.`);
   if (recognise) todo.push(`Returning callers: on that phone number in Retell, set the Inbound Webhook URL to ${o.lookupUrl ? o.lookupUrl : 'the caller lookup link from the app (shown with the enquiry link when it is made)'}. Then ring from a number that has an enquiry in the inbox and check she asks your name first and then knows you.`);
 
   return { llm, agent, todo };

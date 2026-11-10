@@ -1,3 +1,4 @@
+import { DiaryPage } from './pages/diary';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { api } from './lib/api';
 import type { CaptureSettings, EnquiryRecord, MessageRecord, Plan, User } from './lib/types';
@@ -98,19 +99,22 @@ function Store(props: { user: User; settings: CaptureSettings; plan: Plan; setSe
 
 const NAV = [
   { path: '/', label: 'Today', icon: 'home' },
+  { path: '/diary', label: 'Diary', icon: 'calendar', appts: true },
   { path: '/enquiries', label: 'Enquiries', icon: 'inbox' },
   { path: '/follow-ups', label: 'Follow-ups', icon: 'repeat' },
   { path: '/automations', label: 'Automations', icon: 'bolt' },
   { path: '/receptionist', label: 'Receptionist', icon: 'headset' },
   { path: '/report', label: 'Report', icon: 'results' },
 ];
-/** On phones the bar has room for five; Receptionist moves to the top bar. */
-const TABS = NAV.filter((n) => n.path !== '/receptionist');
+/** On phones the bar has room for five; Receptionist (and, for clinics, Report) move to the top bar. */
+const navFor = (appts: boolean) => NAV.filter((n) => !('appts' in n) || appts);
+const tabsFor = (appts: boolean) => navFor(appts).filter((n) => n.path !== '/receptionist' && !(appts && n.path === '/report'));
 
 function Shell() {
   const path = usePath();
   const { settings, enquiries, messages } = useApp();
   const active = (p: string) => (p === '/' ? path === '/' : path.startsWith(p)) ? 'page' : undefined;
+  const appts = settings.business.kind === 'appointments';
   const counts = useMemo(() => {
     const list = enquiries ?? [];
     return {
@@ -133,6 +137,7 @@ function Shell() {
     if (path.startsWith('/automations')) return <AutomationsPage />;
     if (path.startsWith('/report')) return <ReportPage />;
     if (path.startsWith('/settings')) return <Settings />;
+    if (path.startsWith('/diary') && appts) return <DiaryPage />;
     return <Today />;
   })();
 
@@ -144,7 +149,7 @@ function Shell() {
           <span className="side-product">Capture &amp; Convert</span>
         </div>
         <nav className="nav" aria-label="Sections">
-          {NAV.map((n) => (
+          {navFor(appts).map((n) => (
             <Link key={n.path} to={n.path} aria-current={active(n.path)}>
               <Icon name={n.icon} />{n.label}
               {badge(n.path) > 0 && <span className={`nav-badge ${n.path === '/enquiries' && counts.urgent ? 'hot' : ''}`}>{badge(n.path)}<span className="sr-only"> waiting</span></span>}
@@ -163,6 +168,7 @@ function Shell() {
         <header className="topbar">
           <span className="topbar-brand"><img src={`${BASE}gainora-logo.svg`} alt="Gainora" /><span>Capture &amp; Convert</span></span>
           <span className="row gap-4">
+            {appts && <Link to="/report" className="btn btn-quiet btn-small" aria-current={active('/report')}><Icon name="results" /><span className="sr-only">Report</span></Link>}
             <Link to="/receptionist" className="btn btn-quiet btn-small" aria-current={active('/receptionist')}><Icon name="headset" /><span className="sr-only">Receptionist</span></Link>
             <Link to="/settings" className="btn btn-quiet btn-small" aria-current={active('/settings')}><Icon name="settings" /><span className="sr-only">Settings</span></Link>
           </span>
@@ -179,7 +185,7 @@ function Shell() {
         </div>
         <main key={path} className="route-in">{page}</main>
         <nav className="tabbar" aria-label="Sections">
-          {TABS.map((n) => (
+          {tabsFor(appts).map((n) => (
             <Link key={n.path} to={n.path} aria-current={active(n.path)}>
               <span className="tab-ico"><Icon name={n.icon} />{badge(n.path) > 0 && <span className="tab-dot" aria-hidden="true" />}</span>{n.label}
             </Link>

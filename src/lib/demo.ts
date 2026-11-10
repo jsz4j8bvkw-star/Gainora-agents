@@ -3,8 +3,9 @@
 import type { Api } from './api';
 import type { CaptureSettings, EnquiryRecord, MessageRecord, Source, User } from './types';
 import { afterSend, defaultAutomations, dueNow, fieldsFor, ownerAlert, patchForStep, render, stepDef, type MessageLite, type StepId, type WorkflowId } from '../../shared/automations';
-import { applyPatch, bookedOnCall, NEW_CLIENT, DEFAULT_BEAUTY_SAFETY, DEFAULT_GREETING, DEFAULT_SAFETY, greetingFor, isAfterHours, isBeauty, lines, normaliseEnquiry, rebookWeeksFor, triage } from '../../shared/capture';
+import { applyPatch, bookedOnCall, GAINORA_DIARY, NEW_CLIENT, normPhone, DEFAULT_BEAUTY_SAFETY, DEFAULT_GREETING, DEFAULT_SAFETY, greetingFor, isAfterHours, isBeauty, lines, normaliseEnquiry, rebookWeeksFor, triage } from '../../shared/capture';
 import { suggestReply } from '../../shared/insight';
+import { busyFromBookings, findType, freeTimes, pageOf, sayTime, slotId, slugify, stillFree } from '../../shared/diary';
 import { uid } from './format';
 
 const KEY = 'gainora.capture.demo.v3';
@@ -73,7 +74,7 @@ export const BEAUTY_SETTINGS: CaptureSettings = {
     greeting: DEFAULT_GREETING, announceAi: false, safety: DEFAULT_BEAUTY_SAFETY, alertText: 'emergencies', emergencyLine: '07700 900444', transferEmergency: true,
   },
   bookings: {
-    system: 'Phorest', systemOther: '', account: 'Willow Skin & Beauty', mode: 'book', address: '4 Arwenack Street, Falmouth TR11 3JA',
+    system: GAINORA_DIARY, systemOther: '', account: 'Willow Skin & Beauty', mode: 'book', address: '4 Arwenack Street, Falmouth TR11 3JA',
     arrival: 'Please arrive 5 minutes early with clean skin and no make-up on the area being treated. Pay-and-display parking on Arwenack Street.',
     types: [
       { name: 'Free consultation', minutes: 30, price: 'Free', who: 'Amy' },
@@ -87,6 +88,7 @@ export const BEAUTY_SETTINGS: CaptureSettings = {
     staff: 'Amy Carter\nLeah Price\nJess Morgan', noticeHours: 2, aheadWeeks: 8, cancellation: 'Please give 48 hours’ notice to cancel or move, or the deposit is kept.', deposit: '£30, taken off your treatment', depositLink: 'https://pay.example/willow-skin/deposit', status: 'connected',
   },
   followUps: { reviewLink: 'https://g.page/r/willow-skin/review', payLink: 'https://pay.example/willow-skin', paymentDays: 0 },
+  page: { on: true, slug: 'willow-skin-beauty', mode: 'book', intro: 'Book your treatment in under a minute. New to us? Start with a free consultation.', showPrices: true, types: [], chooseStaff: true, accent: '#1F3A33' },
   provider: { name: 'Retell', aiNumber: '01326 000201' },
   automations: defaultAutomations('appointments', new Date(Date.now() - 60 * DAY).toISOString()),
   texting: { number: '07700 900700', status: 'on' },
@@ -405,6 +407,35 @@ export function createDemoApi(): Api {
     }
   };
   const find = (id: string) => { const e = s.enquiries.find((x) => x.id === id); if (!e) throw new Error('That enquiry no longer exists.'); return e; };
+  /** The demo's version of the server's makeBooking: same rules, same history lines. */
+  const demoBook = async (b: { type: string; slot: string; name: string; phone: string; email?: string; notes?: string; newClient?: boolean }, source: 'owner' | 'page') => {
+    await wait(400);
+    const st = s.settings!;
+    const type = findType(st, b.type);
+    if (!type) throw new Error('Choose a treatment.');
+    if (String(b.name || '').trim().length < 2) throw new Error('Add the client’s name.');
+    const phone = normPhone(b.phone || '');
+    if (!/^\+\d{10,15}$/.test(phone)) throw new Error('Add a phone number.');
+    const [start, who = ''] = String(b.slot || '').split('|');
+    const busy = busyFromBookings(s.enquiries, st);
+    if (!stillFree(st, type.name, start, who, busy)) throw new Error('That time has just gone. Choose another.');
+    const request = source === 'page' && pageOf(st).mode === 'request';
+    const at = new Date().toISOString();
+    const returning = b.newClient === false || s.enquiries.some((e) => normPhone(e.phone) === phone && e.status === 'won');
+    const rec: EnquiryRecord = {
+      id: uid('e_'), channel: source === 'page' ? 'form' : 'call', name: String(b.name).trim(), phone, email: String(b.email || '').trim(), postcode: '',
+      summary: `${request ? 'Asked for' : 'Booked'} ${type.name.toLowerCase()} ${request ? 'on' : 'for'} ${sayTime({ start, end: start, who })}${source === 'page' ? ' online' : ''}.${b.notes ? ` Note: “${b.notes}”` : ''}`,
+      transcript: '', recordingUrl: '', urgency: 'normal', kind: 'booking', reasons: [], status: request ? 'new' : 'booked', afterHours: isAfterHours(at, st.calls), notes: '',
+      history: [
+        { at, text: source === 'owner' ? 'Logged by you' : request ? 'Asked online for a time' : 'Booked online by the client' },
+        ...(b.newClient === true && !returning ? [{ at, text: NEW_CLIENT }] : returning ? [{ at, text: 'Returning client' }] : []),
+        ...(request ? [{ at, text: `Requested: ${new Date(start).toISOString()}|${who}|${type.name}` }] : [{ at, text: `Booked in for ${new Date(start).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}: ${type.name}${who ? ` with ${who}` : ''}` }]),
+      ],
+      repliedAt: request ? null : at, quoteAmount: null, quotedAt: null, chasersSent: 0, bookedFor: request ? null : start, bookedType: request ? '' : type.name, bookedWith: request ? '' : who,
+      jobValue: null, invoiceDue: null, paidAt: null, paymentRemindersSent: 0, reviewAskedAt: null, receivedAt: at, isTest: false,
+    };
+    s.enquiries = [rec, ...s.enquiries]; run([rec.id]); save(); return find(rec.id);
+  };
 
   return {
     mode: 'demo',
@@ -487,9 +518,19 @@ export function createDemoApi(): Api {
       const src: Source = { id: uid('src_'), label, channel, active: true, createdAt: new Date().toISOString(), lastUsedAt: null };
       s.sources = [src, ...s.sources]; save();
       const t = token32();
-      return { ...src, url: `https://capture.gainora.co.uk/api/enquiry-in/${t}`, ...(channel === 'call' ? { lookupUrl: `https://capture.gainora.co.uk/api/caller-in/${t}` } : {}) };
+      return { ...src, url: `https://capture.gainora.co.uk/api/enquiry-in/${t}`, ...(channel === 'call' ? { lookupUrl: `https://capture.gainora.co.uk/api/caller-in/${t}`, toolsUrl: `https://capture.gainora.co.uk/api/diary-tool/${t}` } : {}) };
     },
     async revokeSource(id) { s.sources = s.sources.map((x) => (x.id === id ? { ...x, active: false } : x)); save(); },
+
+    async diaryTimes(type, who, from, days) {
+      await wait(250);
+      const st = s.settings!;
+      const out = freeTimes(st, { type, who, from, days, busy: busyFromBookings(s.enquiries, st) });
+      return { days: out.map((d) => ({ date: d.date, label: d.label, slots: d.slots.map((x) => ({ id: slotId(x), start: x.start, who: x.who })) })) };
+    },
+    async diaryBook(b) { return demoBook(b, 'owner'); },
+    async pageBook(b) { return demoBook(b, 'page'); },
+    async slugFree(slug) { await wait(200); return { slug: slugify(slug), free: true }; },
 
     resetDemo() { try { localStorage.removeItem(KEY); } catch { /* ignore */ } s = fresh(); },
   };
