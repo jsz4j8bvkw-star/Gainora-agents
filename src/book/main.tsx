@@ -21,4 +21,11 @@ const api: PageApi = {
   },
 };
 document.title = 'Book online';
-createRoot(document.getElementById('root')!).render(<BookingPage api={api} />);
+// Inside a business's own website (an iframe): tell the page around us how tall we are and which step we're on,
+// so it can size the frame to fit and bring it into view. Only the height and the step name are sent.
+const framed = window.parent !== window;
+let lastStep = 'type';
+const height = () => Math.ceil((document.querySelector('.bk') as HTMLElement | null)?.getBoundingClientRect().height || document.body.scrollHeight);
+const tell = () => { if (framed) window.parent.postMessage({ gainoraBookHeight: height(), gainoraBookStep: lastStep }, '*'); };
+if (framed && 'ResizeObserver' in window) new ResizeObserver(tell).observe(document.body);
+createRoot(document.getElementById('root')!).render(<BookingPage api={api} onStep={(s) => { lastStep = s; tell(); }} />);

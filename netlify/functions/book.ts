@@ -2,6 +2,7 @@ import { HttpError, json } from '../lib/core';
 import { clinicBySlug, makeBooking, timesFor } from '../lib/diary';
 import { depositRule } from '../../shared/capture';
 import { publicPage, slotId } from '../../shared/diary';
+import { fromNumber, textingReady } from '../lib/messages';
 
 // The clinic's public booking page talks to this. No sign-in: the page address (slug) picks the clinic, and
 // only clinics that switched their page on, on an active plan, answer.
@@ -20,7 +21,7 @@ export default async (req: Request) => {
 
     if (req.method === 'GET' && !sub) {
       const r = depositRule(s.bookings);
-      return json(publicPage(s, r ? { what: r.what, forWho: r.forWho, types: r.types } : null));
+      return json(publicPage(s, r ? { what: r.what, forWho: r.forWho, types: r.types } : null, { texts: textingReady() && !!fromNumber(s) }));
     }
     if (req.method === 'GET' && sub === 'times') {
       const type = String(url.searchParams.get('type') || '');

@@ -15,7 +15,7 @@ export interface PageApi {
   preview?: boolean;
 }
 
-type Step = 'type' | 'time' | 'details' | 'done';
+export type Step = 'type' | 'time' | 'details' | 'done';
 const TZ = 'Europe/London';
 const fmt = (iso: string, o: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat('en-GB', { timeZone: TZ, ...o }).format(new Date(iso));
 const time12 = (iso: string) => fmt(iso, { hour: 'numeric', minute: '2-digit', hour12: true }).replace(':00', '').replace(' ', '');
@@ -23,7 +23,7 @@ const hourOf = (iso: string) => Number(fmt(iso, { hour: '2-digit', hourCycle: 'h
 const todayUk = () => new Intl.DateTimeFormat('en-CA', { timeZone: TZ }).format(new Date());
 const mins = (m: number) => (m >= 60 ? `${Math.floor(m / 60)} hr${m % 60 ? ` ${m % 60} min` : ''}` : `${m} min`);
 
-export function BookingPage({ api }: { api: PageApi }) {
+export function BookingPage({ api, onStep }: { api: PageApi; onStep?: (step: Step) => void }) {
   const [page, setPage] = useState<PublicPage | null>(null);
   const [failed, setFailed] = useState('');
   const [step, setStep] = useState<Step>('type');
@@ -37,8 +37,14 @@ export function BookingPage({ api }: { api: PageApi }) {
   const [result, setResult] = useState<Extract<BookResult, { ok: true }> | null>(null);
   const heading = useRef<HTMLHeadingElement | null>(null);
 
-  useEffect(() => { api.info().then(setPage).catch((e) => setFailed(e?.message || 'This booking page isn’t available.')); }, []);
-  useEffect(() => { heading.current?.focus(); window.scrollTo({ top: 0, behavior: 'smooth' }); }, [step]);
+  useEffect(() => {
+    api.info().then((p) => {
+      setPage(p);
+      // Only one thing to book: skip straight to the times.
+      if (p.types.length === 1) { setType(p.types[0]); setStep('time'); loadTimes(p.types[0], ''); }
+    }).catch((e) => setFailed(e?.message || 'This booking page isn’t available.'));
+  }, []);
+  useEffect(() => { heading.current?.focus({ preventScroll: true }); window.scrollTo({ top: 0, behavior: 'smooth' }); onStep?.(step); }, [step]);
 
   const loadTimes = async (t: PublicType, w: string) => {
     setLoadingTimes(true); setTimes(null);
@@ -55,6 +61,7 @@ export function BookingPage({ api }: { api: PageApi }) {
 
   const eligible = type ? page.team.filter((t) => !type.who.length || type.who.includes(t)) : [];
   const choose = (t: PublicType) => { setType(t); setWho(''); setSlot(null); setNote(''); setStep('time'); loadTimes(t, ''); };
+  const words = page.words ?? { item: 'Treatment', returning: 'Have you been to us before?', yes: 'Yes', no: 'No, it’s my first visit' };
   const depositFor = (t: PublicType | null) => !!(page.deposit && t && (!page.deposit.types.length || page.deposit.types.some((x) => x.toLowerCase() === t.name.toLowerCase())));
 
   return (
@@ -63,14 +70,14 @@ export function BookingPage({ api }: { api: PageApi }) {
         <p className="bk-eyebrow">{page.mode === 'request' ? 'Request an appointment' : 'Book online'}</p>
         <h1 className="bk-clinic">{page.name}</h1>
         {(page.location || page.address) && <p className="bk-muted bk-where">{page.address || page.location}</p>}
-        {page.intro && step === 'type' && <p className="bk-intro">{page.intro}</p>}
+        {page.intro && (step === 'type' || (step === 'time' && page.types.length === 1)) && <p className="bk-intro">{page.intro}</p>}
       </header>
 
       {step !== 'done' && (
         <ol className="bk-steps" aria-label="Steps">
           {(['type', 'time', 'details'] as const).map((s, i) => {
             const at = ['type', 'time', 'details'].indexOf(step);
-            return <li key={s} className={i < at ? 'done' : i === at ? 'now' : ''} aria-current={i === at ? 'step' : undefined}><span>{i + 1}</span>{['Treatment', 'Time', 'Your details'][i]}</li>;
+            return <li key={s} className={i < at ? 'done' : i === at ? 'now' : ''} aria-current={i === at ? 'step' : undefined}><span>{i + 1}</span>{[words.item, 'Time', 'Your details'][i]}</li>;
           })}
         </ol>
       )}
@@ -231,16 +238,16 @@ function Details({ page, type, slot, api, heading, deposit, onBack, onTaken, onD
         </label>
         <label className="bk-field"><span>Mobile number</span>
           <input type="tel" inputMode="tel" autoComplete="tel" value={phone} onChange={(e: any) => setPhone(e.target.value)} aria-invalid={err?.field === 'phone'} placeholder="07…" />
-          <small>We’ll text your confirmation here.</small>
+          <small>{page.texts === false ? 'So we can reach you about your booking.' : 'We’ll text your confirmation here.'}</small>
         </label>
         <label className="bk-field"><span>Email <em>optional</em></span>
           <input type="email" autoComplete="email" value={email} onChange={(e: any) => setEmail(e.target.value)} aria-invalid={err?.field === 'email'} />
         </label>
         <fieldset className="bk-field bk-fieldset">
-          <legend>Have you been to us before?</legend>
+          <legend>{page.words?.returning ?? 'Have you been to us before?'}</legend>
           <div className="bk-who">
-            <button type="button" className={`bk-chip ${been === 'yes' ? 'on' : ''}`} aria-pressed={been === 'yes'} onClick={() => setBeen('yes')}>Yes</button>
-            <button type="button" className={`bk-chip ${been === 'no' ? 'on' : ''}`} aria-pressed={been === 'no'} onClick={() => setBeen('no')}>No, it’s my first visit</button>
+            <button type="button" className={`bk-chip ${been === 'yes' ? 'on' : ''}`} aria-pressed={been === 'yes'} onClick={() => setBeen('yes')}>{page.words?.yes ?? 'Yes'}</button>
+            <button type="button" className={`bk-chip ${been === 'no' ? 'on' : ''}`} aria-pressed={been === 'no'} onClick={() => setBeen('no')}>{page.words?.no ?? 'No, it’s my first visit'}</button>
           </div>
         </fieldset>
         <label className="bk-field"><span>Anything we should know? <em>optional</em></span>
@@ -263,7 +270,7 @@ function Done({ page, type, slot, result, heading, onAgain }: { page: PublicPage
     const start = new Date(slot.start); const end = new Date(start.getTime() + type.minutes * 60_000);
     const z = (d: Date) => d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
     const body = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Gainora//Booking//EN', 'BEGIN:VEVENT', `UID:${z(start)}-${Math.random().toString(36).slice(2)}@gainora`, `DTSTAMP:${z(new Date())}`, `DTSTART:${z(start)}`, `DTEND:${z(end)}`,
-      `SUMMARY:${type.name} at ${page.name}`.replace(/[,;]/g, ' '), `LOCATION:${(page.address || page.location).replace(/[,;]/g, ' ')}`, 'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
+      `SUMMARY:${type.name} ${page.remote ? 'with' : 'at'} ${page.name}`.replace(/[,;]/g, ' '), `LOCATION:${(page.address || page.location).replace(/[,;]/g, ' ')}`, 'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([body], { type: 'text/calendar' }));
     a.download = 'appointment.ics'; a.click(); URL.revokeObjectURL(a.href);
@@ -273,17 +280,19 @@ function Done({ page, type, slot, result, heading, onAgain }: { page: PublicPage
       <span className="bk-tick" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2}><path d="M5 12.5l4.5 4.5L19 7.5" /></svg></span>
       <h2 className="bk-h" id="bk-h" tabIndex={-1} ref={heading}>{booked ? 'You’re booked in' : 'Request sent'}</h2>
       <p className="bk-done-when">{type.name}<br />{result.when}</p>
-      <p className="bk-muted">{booked ? 'A confirmation text is on its way.' : `${page.name} will confirm your time by text shortly.`}</p>
+      <p className="bk-muted">{booked ? (page.texts === false ? `${page.name} has your booking and will be in touch if anything changes.` : 'A confirmation text is on its way, and a reminder the day before.') : page.texts === false ? `${page.name} will be in touch to confirm your time.` : `${page.name} will confirm your time by text shortly.`}</p>
       {result.deposit && <a className="bk-primary" href={result.deposit.link} target="_blank" rel="noreferrer">Pay your deposit ({result.deposit.what})</a>}
       {booked && <button className="bk-secondary" onClick={ics}>Add to my calendar</button>}
       {(page.address || page.arrival) && (
         <div className="bk-card bk-left">
-          {page.address && <p><strong>Where</strong><br />{page.address} · <a href={`https://www.google.com/maps/search/${encodeURIComponent(page.address)}`} target="_blank" rel="noreferrer">Map</a></p>}
-          {page.arrival && <p><strong>Before you come</strong><br />{page.arrival}</p>}
+          {page.address && (page.remote
+            ? <p><strong>How</strong><br />{page.address}</p>
+            : <p><strong>Where</strong><br />{page.address} · <a href={`https://www.google.com/maps/search/${encodeURIComponent(page.address)}`} target="_blank" rel="noreferrer">Map</a></p>)}
+          {page.arrival && <p><strong>{page.remote ? 'Before the call' : 'Before you come'}</strong><br />{page.arrival}</p>}
           {page.cancellation && <p className="bk-small bk-muted">{page.cancellation}</p>}
         </div>
       )}
-      <button className="bk-link" onClick={onAgain}>Book something else</button>
+      <button className="bk-link" onClick={onAgain}>{page.types.length > 1 ? 'Book something else' : 'Book another time'}</button>
     </section>
   );
 }

@@ -1,0 +1,8 @@
+- Model: pick Retell’s recommended fast model for phone calls in the dashboard (the API value changes as Retell adds models).
+- Sounding real: in the dashboard, turn on the Colloquial model, and Expressive mode with only the empathetic, happy and pause tags (Expressive mode works with Retell platform voices only, so audition 2–3 British female platform voices). Then one test call per change, keeping only what sounds better.
+- Voice: a British woman’s voice. Audition the British female voices in the dashboard (the expressive, conversational ones, not the newsreader ones) with the test calls, and pick the one that sounds most like a friendly receptionist. Keep the speed at 1, or just under if she sounds rushed.
+- Webhook: paste the enquiry link from the app’s Receptionist → Connect tab into the agent’s webhook URL, with only the call_analyzed event, so every call lands in the inbox.
+- Diary tools: replace PASTE_THE_TOKEN in the tool URLs with the token from the enquiry link (the diary tools link is shown with it). Test: ask for a time, choose one, and check it appears in the app's Diary.
+- Returning callers: on that phone number in Retell, set the Inbound Webhook URL to the caller lookup link from the app (shown with the enquiry link when it is made). Then ring from a number that has an enquiry in the inbox and check she asks your name first and then knows you.
+- Phone number: import the Twilio UK number into Retell (Elastic SIP trunk) and attach this agent to it for inbound calls.
+- Hello@’s Capture & Convert runs on gainoraLineSettings(): load them with the SQL from scripts/retell-export.mjs gainora, then connect Adelin’s Google Calendar in Connections so his website bookings count as busy and these calls land in it.

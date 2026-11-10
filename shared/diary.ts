@@ -6,7 +6,7 @@
 // length, who does it, the shortest notice and how far ahead people may book, an optional gap after each
 // appointment, and nobody booked twice at once.
 
-import { lines, normPhone, type AppointmentType, type CaptureSettings, type EnquiryRecord } from './capture';
+import { CLINICS, lines, normPhone, type AppointmentType, type CaptureSettings, type EnquiryRecord } from './capture';
 
 export interface Busy { start: string; end: string; /** A team member's first name, or '' when it blocks everyone. */ who: string }
 export interface Slot { start: string; end: string; who: string }
@@ -224,10 +224,28 @@ export interface PublicPage {
   team: string[]; types: PublicType[];
   deposit: { what: string; forWho: 'new' | 'all'; types: string[] } | null;
   cancellation: string; arrival: string; aheadWeeks: number;
+  /** Clinics book a "Treatment"; everyone else an "Appointment" (a consultant's call, a trade's visit). */
+  words: { item: string; returning: string; yes: string; no: string };
+  /** Held by phone or video, so there's no map and no "before you come". */
+  remote: boolean;
+  /** Whether confirmations go out by text yet. Until they do, the page doesn't promise one. */
+  texts: boolean;
+}
+
+/** "By phone or video", "Online", "On Zoom": nowhere to travel to. */
+const REMOTE = '(phone|telephone|video|video call|online|zoom|teams|google meet)';
+export const isRemote = (address: string) => new RegExp(`^(by |on |over |via )?${REMOTE}( (or|and) ${REMOTE})?\\.?$`, 'i').test(clean(address, 200));
+
+/** The words the booking page uses for this kind of business. */
+export function pageWords(s: Pick<CaptureSettings, 'business'>): PublicPage['words'] {
+  const clinic = !s.business.trade || CLINICS.includes(s.business.trade);
+  return clinic
+    ? { item: 'Treatment', returning: 'Have you been to us before?', yes: 'Yes', no: 'No, it’s my first visit' }
+    : { item: 'Appointment', returning: 'Have you worked with us before?', yes: 'Yes', no: 'No, this is my first time' };
 }
 
 /** Only what a client needs to book: no emails, no settings, no private notes. */
-export function publicPage(s: CaptureSettings, deposit: { what: string; forWho: 'new' | 'all'; types: string[] } | null): PublicPage {
+export function publicPage(s: CaptureSettings, deposit: { what: string; forWho: 'new' | 'all'; types: string[] } | null, o: { texts?: boolean } = {}): PublicPage {
   const p = pageOf(s);
   const offered = s.bookings.types.filter((t) => clean(t.name) && (!p.types.length || p.types.some((x) => x.toLowerCase() === t.name.toLowerCase())));
   return {
@@ -237,6 +255,7 @@ export function publicPage(s: CaptureSettings, deposit: { what: string; forWho: 
     team: teamOf(s),
     types: offered.map((t) => ({ name: clean(t.name, 80), minutes: t.minutes || 60, price: p.showPrices ? clean(t.price, 30) : '', who: whoDoes(s, t).filter(Boolean) })),
     deposit, cancellation: clean(s.bookings.cancellation, 300), arrival: clean(s.bookings.arrival, 300), aheadWeeks: s.bookings.aheadWeeks || 4,
+    words: pageWords(s), remote: isRemote(s.bookings.address), texts: o.texts ?? true,
   };
 }
 

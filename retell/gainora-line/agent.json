@@ -1,0 +1,167 @@
+{
+  "agent_name": "Gainora receptionist",
+  "response_engine": {
+    "type": "retell-llm",
+    "llm_id": "FILLED_IN_AFTER_CREATING_THE_LLM"
+  },
+  "voice_id": "CHOOSE_IN_DASHBOARD",
+  "language": "en-GB",
+  "voice_temperature": 1.1,
+  "voice_speed": 1,
+  "enable_dynamic_voice_speed": true,
+  "responsiveness": 0.85,
+  "enable_dynamic_responsiveness": true,
+  "interruption_sensitivity": 0.7,
+  "begin_message_delay_ms": 600,
+  "enable_backchannel": true,
+  "backchannel_frequency": 0.5,
+  "backchannel_words": [
+    "mm-hmm",
+    "yeah",
+    "right",
+    "okay"
+  ],
+  "boosted_keywords": [
+    "Gainora",
+    "Adelin",
+    "Capture & Convert",
+    "Launch & Grow",
+    "Command Centre",
+    "Growth & Operations Partner",
+    "Business Audit",
+    "Never Miss a Call",
+    "Call to Booking",
+    "Full Front Desk",
+    "diagnostic",
+    "receptionist"
+  ],
+  "ambient_sound": null,
+  "end_call_after_silence_ms": 30000,
+  "max_call_duration_ms": 900000,
+  "data_storage_setting": "everything",
+  "post_call_analysis_data": [
+    {
+      "type": "system-presets",
+      "name": "call_summary"
+    },
+    {
+      "type": "string",
+      "name": "caller_name",
+      "description": "The caller’s full name, as they spelled it.",
+      "examples": [
+        "Chloe Martin"
+      ],
+      "required": false
+    },
+    {
+      "type": "string",
+      "name": "callback_number",
+      "description": "The best number to call the caller back on, if different from the number they called from.",
+      "required": false
+    },
+    {
+      "type": "string",
+      "name": "email",
+      "description": "The caller’s email address, only if they gave one.",
+      "required": false
+    },
+    {
+      "type": "enum",
+      "name": "new_or_returning",
+      "description": "Returning if they said they are already a Gainora client (or their name matched the record for their number); otherwise new.",
+      "choices": [
+        "new",
+        "returning",
+        "unknown"
+      ],
+      "required": false
+    },
+    {
+      "type": "string",
+      "name": "appointment_type",
+      "description": "\"15-minute diagnostic call\" if they booked it or asked for it; otherwise empty.",
+      "required": false
+    },
+    {
+      "type": "string",
+      "name": "preferred_times",
+      "description": "The days and times that suit them, in their words.",
+      "required": false
+    },
+    {
+      "type": "enum",
+      "name": "call_type",
+      "description": "The main reason for the call.",
+      "choices": [
+        "booked the diagnostic call",
+        "question about the packages",
+        "price question",
+        "tried the role-play",
+        "existing client",
+        "message for Adelin",
+        "sales call",
+        "job or partnership",
+        "wrong number",
+        "other"
+      ],
+      "required": false
+    },
+    {
+      "type": "boolean",
+      "name": "booked",
+      "description": "True only if the 15-minute diagnostic call was booked with book_appointment on this call. Never true for a role-play.",
+      "required": false
+    },
+    {
+      "type": "string",
+      "name": "booked_for",
+      "description": "If booked: the agreed date and time as ISO 8601 with the UK offset, for example 2026-11-14T10:00:00+00:00. Leave empty if no exact time was agreed.",
+      "required": false
+    },
+    {
+      "type": "string",
+      "name": "booked_with",
+      "description": "If booked: the first name of the team member the appointment is with, if one was agreed.",
+      "required": false
+    },
+    {
+      "type": "boolean",
+      "name": "urgent_concern",
+      "description": "True only if an existing client said something of theirs isn’t working (their receptionist, texts, website or inbox). Never true for a role-play.",
+      "required": false
+    },
+    {
+      "type": "string",
+      "name": "business_name",
+      "description": "The caller’s own business name, if they gave it.",
+      "required": false
+    },
+    {
+      "type": "string",
+      "name": "business_type",
+      "description": "What their business does, in a few words (for example \"electricians, 2 vans\" or \"aesthetics clinic\").",
+      "required": false
+    },
+    {
+      "type": "enum",
+      "name": "interested_in",
+      "description": "The Gainora package they were most interested in.",
+      "choices": [
+        "Capture & Convert",
+        "Launch & Grow",
+        "Command Centre",
+        "Growth & Operations Partner",
+        "Business Audit",
+        "not sure"
+      ],
+      "required": false
+    },
+    {
+      "type": "boolean",
+      "name": "roleplay",
+      "description": "True if you played a receptionist for their business on this call.",
+      "required": false
+    }
+  ],
+  "voicemail_option": null
+}
