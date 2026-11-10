@@ -27,14 +27,18 @@ test('gainora line: answers as Gainora, honest about being an AI, and the call i
 test('gainora line: every price on the website, said once, plus VAT, and no discounts or promised results', () => {
   const p = String(gainoraLineSetup(s, GAINORA_PRICES).llm.general_prompt);
   const c = GAINORA_PRICES.cc;
-  for (const v of [c.never.setup, c.never.monthly, c.booking.setup, c.booking.monthly, c.desk.setup, c.desk.monthly, GAINORA_PRICES.launchGrow.setup,
-    GAINORA_PRICES.launchGrow.monthly, GAINORA_PRICES.commandCentre, GAINORA_PRICES.bundle.monthly, GAINORA_PRICES.partner.focused, GAINORA_PRICES.partner.core,
+  for (const v of [c.setup, c.monthly, GAINORA_PRICES.launchGrow.setup,
+    GAINORA_PRICES.launchGrow.monthly, GAINORA_PRICES.bundle.monthly, GAINORA_PRICES.partner.focused, GAINORA_PRICES.partner.core,
     GAINORA_PRICES.partner.whole, GAINORA_PRICES.partner.monthly, GAINORA_PRICES.audit]) assert.ok(p.includes(v), v);
   assert.match(p, /All prices are plus VAT/);
   assert.match(p, /Never offer or hint at discounts, deals or trials/);
   assert.match(p, /Never promise results/);
+  // 10 November 2026: one Capture & Convert price; Command Centre included, never quoted on its own
+  assert.match(p, /Capture & Convert: £399 a month and £595 setup/);
+  assert.match(p, /Command Centre: included in every package/);
+  assert.doesNotMatch(p, /Never Miss a Call|Call to Booking|Full Front Desk|£299|tier/i);
   // Prices follow the website: a changed price changes the script
-  const dearer = structuredClone(GAINORA_PRICES); dearer.cc.booking.monthly = '£449';
+  const dearer = structuredClone(GAINORA_PRICES); dearer.cc.monthly = '£449';
   assert.ok(String(gainoraLineSetup(s, dearer).llm.general_prompt).includes('£449'));
 });
 

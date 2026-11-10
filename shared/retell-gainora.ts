@@ -9,15 +9,11 @@ import { retellSetup, type RetellOptions, type RetellSetup } from './retell';
 
 /** The website's price book (gainora-web/site.config.json, "prices"). The export reads the live file when it can. */
 export interface GainoraPrices {
-  audit: string; auditCreditDays: string; commandCentre: string;
+  audit: string; auditCreditDays: string;
   launchGrow: { setup: string; monthly: string; minimumMonths: string };
   bundle: { setup: string; monthly: string; separateSetup: string; separateMonthly: string };
-  cc: {
-    never: { name: string; setup: string; monthly: string; minutes: string };
-    booking: { name: string; setup: string; monthly: string; minutes: string };
-    desk: { name: string; setup: string; monthly: string; minutes: string };
-    extraMinutes: string; minimumMonths: string;
-  };
+  /** One Capture & Convert price since 10 November 2026; bigger needs are priced on the call. */
+  cc: { setup: string; monthly: string; minutes: string; extraMinutes: string; minimumMonths: string };
   partner: { audit: string; focused: string; core: string; whole: string; monthly: string; minimumMonths: string };
 }
 
@@ -93,12 +89,13 @@ export function gainoraLineSetup(s: CaptureSettings, p: GainoraPrices, o: Omit<R
 
   const facts = [
     '## What Gainora does',
-    '- Four packages, each built around one problem owners describe in the same words, each with one fixed price. Plus a Business Audit for anyone who isn’t sure what to fix first.',
+    '- Three packages, each built around one problem owners describe in the same words, each with one fixed price, plus Launch & Grow and Capture & Convert together as one bundle. Command Centre, a weekly watch on the business, is included in every package and isn’t sold on its own. Plus a Business Audit for anyone who isn’t sure what to fix first.',
     '- For businesses of every kind: trades, clinics, salons, agencies, shops, property, hospitality, professional services. What they share: enquiries matter, and the owner’s time is the scarcest thing in the building.',
     '- Match their problem to a package in one sentence, then ask if they’d like to know more:',
     '  - "I miss calls and enquiries", "I forget to follow up" → Capture & Convert.',
     '  - "Nobody finds me online", "I’m paying for shared leads" → Launch & Grow.',
-    '  - "I don’t know what’s going on and have no time to find out" → Command Centre.',
+    '  - Both of those → Launch & Grow with Capture & Convert, the bundle.',
+    '  - "I don’t know what’s going on and have no time to find out" → Command Centre, which comes with every package: match them to the package that fits what else they said.',
     '  - "The business runs on me and it’s breaking", with a team of roughly 5 to 50 → Growth & Operations Partner.',
     `  - Not sure → the free ${call}, where ${owner} says honestly which package fits, or whether none does. If the right fix isn’t obvious, the Business Audit finds out.`,
     '',
@@ -106,7 +103,7 @@ export function gainoraLineSetup(s: CaptureSettings, p: GainoraPrices, o: Omit<R
     '- A receptionist like you answers every call, day and night: takes the details properly, spells names back, and texts the customer a confirmation. Urgent calls are texted to the owner’s mobile straight away.',
     '- Every call lands in one inbox, with calls, website forms, texts and emails together: the details, a summary, the recording and what the receptionist promised.',
     '- Follow-ups send themselves on the right day: thank-yous, quote chasers, payment reminders and review requests. The owner decides which are on, what they say, and which ask them first. Texting stops the moment a customer replies, and never goes before 8am or after 8pm unless it’s urgent.',
-    `- Three tiers. ${cc.never.name}: answers, takes details, texts confirmations, urgent alerts, the inbox and follow-ups. ${cc.booking.name}, the one most businesses pick: all of that, plus booking straight into their diary with confirmation and reminder texts, and recognising returning customers. ${cc.desk.name}: adds several staff or locations, and transferring calls.`,
+    '- One package, one price. It includes booking straight into their diary with confirmation and reminder texts, recognising returning customers, a monthly report, and Command Centre. Several staff or locations, call transfers or a lot of calls are priced with ' + owner + ' on the call.',
     '- They keep their own number. Calls go to the receptionist first, or only when they don’t answer or they’re closed: their choice, and they can change it any time.',
     '- It connects to the common booking systems. If theirs isn’t one of them, the receptionist offers times and the business confirms them. For a specific system, say ' + owner + ' will check it on the call.',
     '- Setup is about an hour’s call: their services, areas, prices, hours, what counts as urgent and how they like to book. The script is written from their answers and they approve it before it goes live. What they need: a mobile for alerts, their diary or booking system if they want bookings made, and that hour.',
@@ -119,9 +116,9 @@ export function gainoraLineSetup(s: CaptureSettings, p: GainoraPrices, o: Omit<R
     '- The website, domain, Google profile and ad account are in their name and stay with them if they leave. Ad spend is paid by them, directly to Google or Meta.',
     '- For businesses that already trade. If they’re starting from nothing, the call is still worth it: ' + owner + ' will say honestly if it’s too early.',
     '',
-    '### Command Centre: "I don’t know what’s going on"',
+    '### Command Centre: included in every package',
     '- A weekly watch on the business and a brief they can read in five minutes. The Watcher checks their website every week (up, fast, nothing broken) and watches competitors’ prices, offers and launches. The Scout finds opportunities: public contracts, local demand, things customers ask for that they don’t yet offer. The Brief: every week what changed, what it might mean and the three things worth doing; every month the results; Google review replies drafted for them to approve; leads and follow-ups they’d otherwise forget, flagged.',
-    '- It’s already live, and works on its own or inside the other packages.',
+    '- It comes with Capture & Convert, Launch & Grow and the Partner at no extra cost, and isn’t sold on its own. It’s also how they see every month what their package is doing.',
     '',
     '### Growth & Operations Partner: "The business runs on me, and it’s breaking"',
     '- For businesses with a team of roughly 5 to 50, where the owner has become the bottleneck. Three steps, each with a fixed price, committing to one at a time: an Operations Audit (talking to them and the team, mapping how work moves from enquiry to job to invoice, a costed fix plan); then the fix, built, tested and handed over; then running it monthly. Command Centre is included.',
@@ -141,11 +138,11 @@ export function gainoraLineSetup(s: CaptureSettings, p: GainoraPrices, o: Omit<R
     '- Gainora is a UK company and works with businesses all over the UK, by phone and video. It isn’t a big agency or a software company selling a login: it sets up a small number of things that work, runs them, and stays close.',
     '',
     '## Prices: give them plainly when asked',
-    '- All prices are plus VAT. Say them naturally ("three hundred and ninety-nine pounds a month, plus VAT"), and name the package or tier the price is for. Give the one that fits what they’ve told you, not the whole list, unless they ask for everything.',
-    `- For Capture & Convert, say it starts at ${cc.never.monthly} a month for ${cc.never.name}, and that most businesses pick ${cc.booking.name} at ${cc.booking.monthly} a month, which also books into their diary. Then the setup fee if they ask.`,
-    `- Capture & Convert: ${cc.never.name}, ${cc.never.setup} setup and ${cc.never.monthly} a month, with ${cc.never.minutes} call minutes. ${cc.booking.name}, ${cc.booking.setup} setup and ${cc.booking.monthly} a month, with ${cc.booking.minutes} minutes. ${cc.desk.name}, ${cc.desk.setup} setup and ${cc.desk.monthly} a month, with ${cc.desk.minutes} minutes. Extra call time is ${cc.extraMinutes}. ${cc.minimumMonths}-month minimum, then month to month.`,
-    `- Launch & Grow: ${p.launchGrow.setup} setup and ${p.launchGrow.monthly} a month, ${p.launchGrow.minimumMonths}-month minimum. Ad spend is on top, paid by them to Google or Meta. Together with ${cc.never.name}: ${p.bundle.setup} setup and ${p.bundle.monthly} a month, instead of ${p.bundle.separateSetup} and ${p.bundle.separateMonthly} bought separately.`,
-    `- Command Centre: ${p.commandCentre} a month. No setup fee, cancel any time.`,
+    '- All prices are plus VAT. Say them naturally ("three hundred and ninety-nine pounds a month, plus VAT"), and name the package the price is for. Give the one that fits what they’ve told you, not the whole list, unless they ask for everything.',
+    `- Capture & Convert: ${cc.monthly} a month and ${cc.setup} setup, with ${cc.minutes} call minutes a month. Extra call time is ${cc.extraMinutes}. ${cc.minimumMonths}-month minimum, then month to month. Command Centre included.`,
+    `- Launch & Grow: ${p.launchGrow.monthly} a month and ${p.launchGrow.setup} setup, ${p.launchGrow.minimumMonths}-month minimum. Ad spend is on top, paid by them to Google or Meta. Command Centre included.`,
+    `- Both together, Launch & Grow with Capture & Convert: ${p.bundle.monthly} a month and ${p.bundle.setup} setup, instead of ${p.bundle.separateMonthly} a month and ${p.bundle.separateSetup} setup bought separately.`,
+    '- Command Centre: included in every package, so there’s nothing extra to pay. It isn’t sold on its own. If they want only Command Centre, say ' + owner + ' can talk it through on the call.',
     `- Growth & Operations Partner: the Operations Audit is ${p.partner.audit}. The fix is ${p.partner.focused} for one area (about 4 weeks), ${p.partner.core} for two or three areas (about 8 weeks) or ${p.partner.whole} for the whole business (about 12 weeks); the audit says which. Then ${p.partner.monthly} a month to run it, ${p.partner.minimumMonths}-month minimum.`,
     `- Business Audit: ${p.audit}, credited in full against any package they take within ${p.auditCreditDays} days.`,
     `- The diagnostic call is free.`,
@@ -155,9 +152,9 @@ export function gainoraLineSetup(s: CaptureSettings, p: GainoraPrices, o: Omit<R
     '## Good answers to the questions owners ask',
     '- "My customers hate talking to robots." Fair: most people hate phone menus and bad bots. The point is they get a friendly answer straight away instead of voicemail, the details are taken properly, and anyone who wants a person gets a call back. And they can judge for themselves: this call is what their customers would hear.',
     '- "What if it gets something wrong?" The script is written from their answers and they approve it. Every call lands in their inbox with a summary and the recording, so they can see exactly what was said, and Gainora tunes it every month.',
-    '- "Can it put calls through to me?" Urgent calls are texted to their mobile on every tier. Transferring calls is part of ' + cc.desk.name + '.',
+    '- "Can it put calls through to me?" Urgent calls are always texted to their mobile. Transferring calls can be added: ' + owner + ' prices it with them on the call.',
     '- "How long does it take to set up?" Capture & Convert starts with about an hour’s setup call; ' + owner + ' agrees the go-live date with them. Launch & Grow setup takes 4 to 6 weeks. Don’t promise dates.',
-    '- "Is there a contract?" ' + cc.minimumMonths + '-month minimum on the packages, then month to month. Command Centre can be cancelled any time. Prices are fixed and agreed in writing first.',
+    '- "Is there a contract?" ' + cc.minimumMonths + '-month minimum on the packages, then month to month. Prices are fixed and agreed in writing first.',
     '- "What about my data, GDPR, recordings?" Their data is used only for the work they ask for, and stays theirs. Callers are told when calls are recorded. For the detail, the privacy policy is on the website, and ' + owner + ' will happily go through it.',
     '- "Who else uses it?" or "Have you got examples?" Don’t name clients or invent results: say ' + owner + ' can walk them through real examples on the call.',
     '- "How are you different from other AI receptionists?" Don’t talk about other companies. Say what Gainora does: sets it up from their answers, a person checks it, the inbox and follow-ups come with it, it’s one fixed price, and Gainora keeps tuning it every month.',
@@ -229,7 +226,7 @@ export function gainoraLineSetup(s: CaptureSettings, p: GainoraPrices, o: Omit<R
 
   const general_prompt = [persona, who, facts, roleplay, booking, others, known, phone].map((x) => x.join('\n')).join('\n\n');
 
-  const PACKAGES = ['Capture & Convert', 'Launch & Grow', 'Command Centre', 'Growth & Operations Partner', 'Business Audit', 'not sure'];
+  const PACKAGES = ['Capture & Convert', 'Launch & Grow', 'Launch & Grow with Capture & Convert', 'Growth & Operations Partner', 'Business Audit', 'not sure'];
   const analysis = (base.agent.post_call_analysis_data as any[])
     .filter((f) => f.name !== 'demo_lead')
     .map((f) => {
@@ -250,7 +247,7 @@ export function gainoraLineSetup(s: CaptureSettings, p: GainoraPrices, o: Omit<R
   const agent: Record<string, unknown> = {
     ...base.agent,
     agent_name: 'Gainora receptionist',
-    boosted_keywords: ['Gainora', owner, 'Capture & Convert', 'Launch & Grow', 'Command Centre', 'Growth & Operations Partner', 'Business Audit', cc.never.name, cc.booking.name, cc.desk.name, 'diagnostic', 'receptionist'],
+    boosted_keywords: ['Gainora', owner, 'Capture & Convert', 'Launch & Grow', 'Command Centre', 'Growth & Operations Partner', 'Business Audit', 'diagnostic', 'receptionist'],
     post_call_analysis_data: analysis,
   };
 

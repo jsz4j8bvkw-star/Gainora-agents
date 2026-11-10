@@ -9,17 +9,12 @@ import type { GainoraPrices } from '../../shared/retell-gainora';
 export type { GainoraPrices };
 
 
-/** A copy of the website's prices on 10 November 2026, used when the website repo isn't next to this one. */
+/** A copy of the website's prices on 10 November 2026 (one Capture & Convert price, Command Centre included), used when the website repo isn't next to this one. */
 export const GAINORA_PRICES: GainoraPrices = {
-  audit: '£495', auditCreditDays: '30', commandCentre: '£299',
-  launchGrow: { setup: '£1,995', monthly: '£595', minimumMonths: '3' },
-  bundle: { setup: '£2,295', monthly: '£795', separateSetup: '£2,590', separateMonthly: '£844' },
-  cc: {
-    never: { name: 'Never Miss a Call', setup: '£595', monthly: '£249', minutes: '300' },
-    booking: { name: 'Call to Booking', setup: '£995', monthly: '£399', minutes: '600' },
-    desk: { name: 'Full Front Desk', setup: '£1,995', monthly: '£599', minutes: '1,200' },
-    extraMinutes: '£25 per 100 extra minutes', minimumMonths: '3',
-  },
+  audit: '£495', auditCreditDays: '30',
+  launchGrow: { setup: '£1,995', monthly: '£599', minimumMonths: '3' },
+  bundle: { setup: '£2,295', monthly: '£849', separateSetup: '£2,590', separateMonthly: '£998' },
+  cc: { setup: '£595', monthly: '£399', minutes: '600', extraMinutes: '£25 per 100 extra minutes', minimumMonths: '3' },
   partner: { audit: '£495', focused: '£4,950', core: '£7,500', whole: '£12,500', monthly: '£950', minimumMonths: '3' },
 };
 

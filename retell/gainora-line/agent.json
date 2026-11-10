@@ -29,9 +29,6 @@
     "Command Centre",
     "Growth & Operations Partner",
     "Business Audit",
-    "Never Miss a Call",
-    "Call to Booking",
-    "Full Front Desk",
     "diagnostic",
     "receptionist"
   ],
@@ -149,7 +146,7 @@
       "choices": [
         "Capture & Convert",
         "Launch & Grow",
-        "Command Centre",
+        "Launch & Grow with Capture & Convert",
         "Growth & Operations Partner",
         "Business Audit",
         "not sure"
