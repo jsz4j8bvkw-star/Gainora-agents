@@ -73,7 +73,11 @@ export interface WebsiteState {
   publishedAt: string | null; updatedAt: string; live: boolean; liveUrl: string; previewUrl: string;
   /** The draft has changes that aren't live yet. */
   changed: boolean;
+  /** 'gainora' when Gainora's team is working on it (everything editable); 'owner' for the client. */
+  role: 'owner' | 'gainora';
 }
+export type { ChangeRequest } from '../../shared/site/data';
+export interface WebsiteListItem { slug: string; name: string; domain: string | null; live: boolean; updatedAt: string; openRequests: number }
 export interface WebsiteEnquiry { id: string; at: string; name: string; phone: string; email: string; service: string; postcode: string; message: string; page: string; source: string; forwarded: boolean }
 
 /** The last seven days from Capture & Convert, for The Brief. */

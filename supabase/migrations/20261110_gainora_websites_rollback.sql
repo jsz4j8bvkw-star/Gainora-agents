@@ -3,6 +3,7 @@
 drop policy if exists "site-media: owner uploads" on storage.objects;
 drop policy if exists "site-media: owner replaces" on storage.objects;
 drop policy if exists "site-media: owner deletes" on storage.objects;
+drop table if exists public.site_requests;
 drop table if exists public.site_enquiries;
 drop table if exists public.site_events;
 drop table if exists public.sites;

@@ -2,7 +2,7 @@ import { captureWeekFrom } from '../../shared/capture-week';
 import type { Api } from './api';
 import type {
   Action, AgentId, Alert, BriefReport, BusinessProfile, ChatMessage, Client, ClientAction, ClientsData, FeedbackRecord, HomeData, Lead, Outcome, PlaceSummary, Plan, ScoutSearch,
-  Tender, User, ValueEvent, Visit, WatcherState, WeekNumbers, WinbackDrafts, WebsiteState, WebsiteEnquiry,
+  Tender, User, ValueEvent, Visit, WatcherState, WeekNumbers, WinbackDrafts, WebsiteState, WebsiteEnquiry, WebsiteListItem, ChangeRequest,
 } from './types';
 import type { Performance } from '../../shared/site/stats';
 import { emptyClientsData } from './types';
@@ -218,6 +218,10 @@ const mapFeedback = (r: any): FeedbackRecord => ({
   host: r.host, changeKind: r.change_kind, createdAt: r.created_at,
 });
 
+/** Gainora's team can work on a client's website; every website call then names it. */
+let websiteAs: string | null = null;
+const site = <T,>(body: Record<string, unknown>, doing: string) => fn<T>('site', websiteAs ? { ...body, as: websiteAs } : body, { doing });
+
 export function createLiveApi(): Api {
   return {
     mode: 'live',
@@ -278,16 +282,21 @@ export function createLiveApi(): Api {
     async billingUrl() { return (await fn<{ url: string }>('billing-portal', {})).url; },
 
     async getWebsite() {
-      try { return (await fn<{ site: WebsiteState }>('site', { op: 'get' }, { doing: 'opening your website' })).site; }
+      try { return (await site<{ site: WebsiteState }>({ op: 'get' }, 'opening your website')).site; }
       catch (e: any) { if (e?.status === 403) return null; throw e; }
     },
-    async saveWebsite(data) { return (await fn<{ site: WebsiteState }>('site', { op: 'save', data }, { doing: 'saving your website' })).site; },
-    async publishWebsite(data) { return (await fn<{ site: WebsiteState }>('site', { op: 'publish', data }, { doing: 'publishing your website' })).site; },
-    async unpublishWebsite() { return (await fn<{ site: WebsiteState }>('site', { op: 'unpublish' }, { doing: 'taking your website offline' })).site; },
-    async setWebsiteSlug(slug) { return (await fn<{ site: WebsiteState }>('site', { op: 'slug', slug }, { doing: 'changing the address' })).site; },
-    async setWebsiteDomain(domain) { return (await fn<{ site: WebsiteState }>('site', { op: 'domain', domain }, { doing: 'saving the domain' })).site; },
-    async websiteStats(days) { return (await fn<{ performance: Performance }>('site', { op: 'stats', days }, { doing: 'loading your website numbers' })).performance; },
-    async websiteEnquiries() { return (await fn<{ enquiries: WebsiteEnquiry[] }>('site', { op: 'enquiries' }, { doing: 'loading your enquiries' })).enquiries; },
+    async saveWebsite(data) { return (await site<{ site: WebsiteState }>({ op: 'save', data }, 'saving your website')).site; },
+    async publishWebsite(data) { return (await site<{ site: WebsiteState }>({ op: 'publish', data }, 'publishing your website')).site; },
+    async unpublishWebsite() { return (await site<{ site: WebsiteState }>({ op: 'unpublish' }, 'taking the website offline')).site; },
+    async setWebsiteSlug(slug) { return (await site<{ site: WebsiteState }>({ op: 'slug', slug }, 'changing the address')).site; },
+    async setWebsiteDomain(domain) { return (await site<{ site: WebsiteState }>({ op: 'domain', domain }, 'saving the domain')).site; },
+    async websiteStats(days) { return (await site<{ performance: Performance }>({ op: 'stats', days }, 'loading the website numbers')).performance; },
+    async websiteEnquiries() { return (await site<{ enquiries: WebsiteEnquiry[] }>({ op: 'enquiries' }, 'loading the enquiries')).enquiries; },
+    async websiteRequests() { return (await site<{ requests: ChangeRequest[] }>({ op: 'requests' }, 'loading the change requests')).requests; },
+    async requestWebsiteChange(page, text) { return (await site<{ request: ChangeRequest }>({ op: 'request', page, text }, 'sending your request')).request; },
+    async completeWebsiteRequest(id, reply) { return (await site<{ request: ChangeRequest }>({ op: 'request-done', id, reply }, 'marking it done')).request; },
+    async listWebsites() { return (await fn<{ sites: WebsiteListItem[] }>('site', { op: 'list' }, { doing: 'loading the client websites' })).sites; },
+    setWebsiteClient(slug) { websiteAs = slug; },
     async uploadSitePhoto(file) {
       // Photos go straight to the site-media bucket, into a folder only this account can write to.
       if (!/^image\/(jpeg|png|webp|svg\+xml)$/.test(file.type)) throw new ApiError('Use a JPG, PNG, WebP or SVG image.', 400);

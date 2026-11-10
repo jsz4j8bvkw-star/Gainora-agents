@@ -8,7 +8,7 @@
 
 import {
   areasOf, clock, ctaOf, DAYS, type Faq, fromPrice, hoursLabel, industryOf, iso, nameOf, openDays, personOf, readHours,
-  type Service, type Site, slug, telHref, townOf, tradeOf,
+  type FontPair, type Service, type Site, slug, telHref, townOf, tradeOf, DEFAULT_SECTIONS,
 } from './data';
 
 export interface RenderOptions {
@@ -31,6 +31,9 @@ const para = (text: string) => text.split(/\n{2,}/).map((p) => p.trim()).filter(
 const safeUrl = (u: string) => (/^https:\/\/[^\s"'<>]+$/i.test(u.trim()) ? u.trim() : '');
 
 /* ---------- The words on the site ---------- */
+
+/** Whole sentences, in order, for as long as they fit. */
+const upTo = (max: number, parts: string[]) => parts.filter(Boolean).reduce((out, p) => (out ? `${out} ${p}` : p).length <= max ? (out ? `${out} ${p}` : p) : out, '');
 
 export interface CopyField { key: string; label: string; long?: boolean; page: string }
 
@@ -94,7 +97,7 @@ export function defaultCopy(s: Site): Record<string, string> {
     'contact.intro': ind.mobile
       ? `Tell us what you need and where you are. We cover ${areas.slice(0, 6).join(', ') || 'the local area'}.`
       : `Call, ${s.booking.url ? 'book online, ' : ''}or send a message and we’ll reply as soon as we can${openDays(s) ? `. ${openDays(s)}` : ''}.`,
-    'meta.description': `${name}: ${trade}${town ? ` in ${town}` : ''}. ${s.services.slice(0, 3).map((x) => x.name).join(', ')}.${fromPrice(s) ? ` Prices from ${fromPrice(s)}.` : ''} ${ctaOf(s)}.`.slice(0, 158),
+    'meta.description': upTo(158, [`${name}: ${trade}${town ? ` in ${town}` : ''}.`, s.services.length ? `${s.services.slice(0, 3).map((x) => x.name).join(', ')}.` : '', fromPrice(s) ? `Prices from ${fromPrice(s)}.` : '', `${ctaOf(s)}.`]),
   };
   for (const x of servicePages(s)) {
     c[`svc.${x.id}.title`] = `${x.name}${town ? ` in ${town}` : ''}`;
@@ -162,11 +165,16 @@ export function pagesOf(s: Site): PageDef[] {
 
 /* ---------- Look ---------- */
 
-const FONTS: Record<Site['look']['style'], { display: string; body: string; href: string; displayWeight: number }> = {
-  calm: { display: '"Cormorant Garamond", Georgia, serif', body: '"Figtree", system-ui, sans-serif', displayWeight: 500, href: 'family=Cormorant+Garamond:wght@500;600&family=Figtree:wght@400;500;600' },
-  warm: { display: '"DM Serif Display", Georgia, serif', body: '"Karla", system-ui, sans-serif', displayWeight: 400, href: 'family=DM+Serif+Display&family=Karla:wght@400;500;700' },
-  bold: { display: '"Archivo", system-ui, sans-serif', body: '"Archivo", system-ui, sans-serif', displayWeight: 800, href: 'family=Archivo:wght@400;500;600;800' },
+export const FONTS: Record<FontPair, { label: string; display: string; body: string; href: string; displayWeight: number; serif: boolean }> = {
+  classic: { label: 'Classic', display: '"Cormorant Garamond", Georgia, serif', body: '"Figtree", system-ui, sans-serif', displayWeight: 500, serif: true, href: 'family=Cormorant+Garamond:wght@500;600&family=Figtree:wght@400;500;600' },
+  editorial: { label: 'Editorial', display: '"Fraunces", Georgia, serif', body: '"Inter", system-ui, sans-serif', displayWeight: 500, serif: true, href: 'family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600' },
+  grand: { label: 'Grand', display: '"Playfair Display", Georgia, serif', body: '"Source Sans 3", system-ui, sans-serif', displayWeight: 600, serif: true, href: 'family=Playfair+Display:wght@600;700&family=Source+Sans+3:wght@400;600' },
+  friendly: { label: 'Friendly', display: '"DM Serif Display", Georgia, serif', body: '"Karla", system-ui, sans-serif', displayWeight: 400, serif: true, href: 'family=DM+Serif+Display&family=Karla:wght@400;500;700' },
+  modern: { label: 'Modern', display: '"Archivo", system-ui, sans-serif', body: '"Archivo", system-ui, sans-serif', displayWeight: 800, serif: false, href: 'family=Archivo:wght@400;500;600;800' },
+  clean: { label: 'Clean', display: '"Manrope", system-ui, sans-serif', body: '"Manrope", system-ui, sans-serif', displayWeight: 700, serif: false, href: 'family=Manrope:wght@400;500;600;700;800' },
+  geometric: { label: 'Geometric', display: '"Outfit", system-ui, sans-serif', body: '"Outfit", system-ui, sans-serif', displayWeight: 600, serif: false, href: 'family=Outfit:wght@400;500;600;700' },
 };
+const fontsOf = (s: Site) => FONTS[s.look.fonts] ?? FONTS.classic;
 
 const hexOk = (h: string) => (/^#[0-9a-f]{6}$/i.test(h) ? h : '#3D4F6B');
 /** Relative luminance, to choose readable text on the accent colour. */
@@ -184,15 +192,17 @@ export function readableAccent(hex: string): string {
 }
 
 export function siteCss(s: Site): string {
-  const f = FONTS[s.look.style] ?? FONTS.calm;
+  const f = fontsOf(s);
   const a = readableAccent(s.look.accent);
   const bold = s.look.style === 'bold';
-  return `:root{--accent:${a};--accent-soft:color-mix(in srgb,${a} 9%,#fff);--accent-line:color-mix(in srgb,${a} 22%,#fff);--ink:#1B1C1E;--ink-2:#4A4C50;--ink-3:#6B6D72;--bg:${bold ? '#FFFFFF' : `color-mix(in srgb,${a} 3%,#FCFCFA)`};--card:#FFFFFF;--line:#E4E3DF;--display:${f.display};--body:${f.body};--dw:${f.displayWeight};--r:${bold ? '6px' : '14px'}}
+  const warm = s.look.style === 'warm';
+  const bg = s.look.surface === 'tinted' ? `color-mix(in srgb,${a} 5%,#FCFBF8)` : bold ? '#FFFFFF' : '#FCFCFA';
+  return `:root{--accent:${a};--accent-soft:color-mix(in srgb,${a} 9%,#fff);--accent-line:color-mix(in srgb,${a} 22%,#fff);--deep:color-mix(in srgb,${a} 38%,#0E0F11);--ink:#1B1C1E;--ink-2:#4A4C50;--ink-3:#6B6D72;--bg:${bg};--card:#FFFFFF;--line:#E4E3DF;--display:${f.display};--body:${f.body};--dw:${f.displayWeight};--r:${bold ? '4px' : warm ? '22px' : '12px'}}
 *{box-sizing:border-box}html{-webkit-text-size-adjust:100%}body{margin:0;background:var(--bg);color:var(--ink);font:400 1.0625rem/1.65 var(--body);padding-bottom:76px}
 img{max-width:100%;height:auto;display:block}a{color:var(--accent)}a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 .wrap{width:100%;max-width:1120px;margin:0 auto;padding-left:max(20px,env(safe-area-inset-left,0px));padding-right:max(20px,env(safe-area-inset-right,0px))}
-h1,h2,h3{font-family:var(--display);font-weight:var(--dw);line-height:1.08;letter-spacing:${bold ? '-0.02em' : '-0.005em'};text-wrap:balance;margin:0}
-h1{font-size:clamp(2.3rem,5.4vw,3.9rem)}h2{font-size:clamp(1.75rem,3.4vw,2.6rem)}h3{font-size:1.3rem;${bold ? '' : 'font-family:var(--body);font-weight:600;letter-spacing:0;'}}
+h1,h2,h3{font-family:var(--display);font-weight:var(--dw);line-height:1.08;letter-spacing:${f.serif ? '-0.005em' : '-0.025em'};text-wrap:balance;margin:0}
+h1{font-size:clamp(2.3rem,5.4vw,3.9rem)}h2{font-size:clamp(1.75rem,3.4vw,2.6rem)}h3{font-size:1.3rem;${f.serif ? 'font-family:var(--body);font-weight:600;letter-spacing:0;' : ''}}
 p{margin:0}.lede{font-size:1.18rem;color:var(--ink-2);max-width:56ch}.muted{color:var(--ink-3)}
 .eyebrow{font:600 .78rem/1 var(--body);letter-spacing:.14em;text-transform:uppercase;color:var(--accent)}
 .skip{position:absolute;left:-999px}.skip:focus{left:12px;top:12px;background:#fff;padding:8px 12px;z-index:50}
@@ -200,7 +210,7 @@ header.top{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--b
 .top .wrap{display:flex;align-items:center;gap:20px;min-height:72px}
 .brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--ink);font:var(--dw) 1.35rem/1.1 var(--display);margin-right:auto}.brand img{height:40px;width:auto}
 nav.main{display:flex;gap:22px}nav.main a{color:var(--ink-2);text-decoration:none;font-weight:500;font-size:.98rem}nav.main a[aria-current=page],nav.main a:hover{color:var(--ink);text-decoration:underline;text-underline-offset:6px;text-decoration-thickness:2px;text-decoration-color:var(--accent)}
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:48px;padding:0 22px;border-radius:${bold ? '6px' : '999px'};font:600 1rem/1 var(--body);text-decoration:none;border:2px solid var(--accent);cursor:pointer}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:48px;padding:0 22px;border-radius:${bold ? '4px' : warm ? '999px' : '10px'};font:600 1rem/1 var(--body);text-decoration:none;border:2px solid var(--accent);cursor:pointer}
 .btn-primary{background:var(--accent);color:#fff}.btn-primary:hover{filter:brightness(1.08)}.btn-ghost{background:transparent;color:var(--accent)}.btn-ghost:hover{background:var(--accent-soft)}
 .top .phone{font-weight:600;color:var(--ink);text-decoration:none;white-space:nowrap}
 .hero{padding:clamp(40px,7vw,88px) 0 clamp(40px,6vw,72px)}.hero .wrap{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr);gap:clamp(28px,5vw,64px);align-items:center}
@@ -230,6 +240,11 @@ footer.foot{background:#16171A;color:#D9D7D2;padding:48px 0 32px;margin-top:clam
 .mbar{position:fixed;left:0;right:0;bottom:0;z-index:30;display:none;gap:10px;padding:10px max(12px,env(safe-area-inset-right,0px)) calc(10px + env(safe-area-inset-bottom,0px)) max(12px,env(safe-area-inset-left,0px));background:var(--card);border-top:1px solid var(--line)}.mbar .btn{flex:1}
 .consent{position:fixed;left:12px;right:12px;bottom:calc(84px + env(safe-area-inset-bottom,0px));z-index:40;max-width:520px;background:#16171A;color:#fff;border-radius:12px;padding:16px;display:grid;gap:12px;font-size:.92rem}.consent .actions .btn{min-height:40px;padding:0 16px;font-size:.92rem}.consent .btn-ghost{color:#fff;border-color:#fff}
 .notice{background:var(--accent-soft);border-radius:var(--r);padding:16px 18px}
+.hero.deep{background:var(--deep);color:#F4F2EE}.hero.deep .lede,.hero.deep .facts{color:rgba(244,242,238,.82)}.hero.deep .eyebrow{color:color-mix(in srgb,var(--accent) 35%,#fff)}.hero.deep .btn-ghost{color:#fff;border-color:rgba(255,255,255,.6)}.hero.deep .btn-ghost:hover{background:rgba(255,255,255,.08)}.hero.deep .btn-primary{background:#fff;color:var(--deep);border-color:#fff}.hero.deep .facts li::before{background:#fff}.hero.deep .hero-panel{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16)}
+.hero.full{position:relative;color:#fff;min-height:min(78vh,720px);display:flex;align-items:flex-end;background:var(--deep) center/cover no-repeat}.hero.full::before{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(10,10,12,.15) 0%,rgba(10,10,12,.72) 78%)}.hero.full .wrap{position:relative;grid-template-columns:minmax(0,760px)}.hero.full .lede,.hero.full .facts{color:rgba(255,255,255,.88)}.hero.full .eyebrow{color:#fff}.hero.full .btn-ghost{color:#fff;border-color:rgba(255,255,255,.7)}.hero.full .btn-primary{background:#fff;color:var(--ink);border-color:#fff}.hero.full .facts li::before{background:#fff}
+.hero.centred .wrap{grid-template-columns:1fr;justify-items:center;text-align:center}.hero.centred .stack{justify-items:center;max-width:820px}.hero.centred .actions,.hero.centred .facts{justify-content:center}.hero.centred .hero-wide{width:100%;border-radius:var(--r);overflow:hidden;aspect-ratio:21/9;background:var(--accent-soft)}.hero.centred .hero-wide img{width:100%;height:100%;object-fit:cover}
+.deep-cta .cta-band{background:var(--deep)}
+.strip{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.strip img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:var(--r)}@media (max-width:640px){.strip{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media (max-width:860px){nav.main{display:none}.top .phone{display:none}.hero .wrap,.split,.cta-band{grid-template-columns:1fr}.hero-media{aspect-ratio:4/3}.mbar{display:flex}}
 @media (min-width:861px){body{padding-bottom:0}}
 @media (max-width:520px){form.enquiry .row2{grid-template-columns:1fr}.top .btn{display:none}}
@@ -300,7 +315,7 @@ ${ind.mobile ? '<label>Postcode<input name="postcode" autocomplete="postal-code"
 }
 
 function ctaBand(s: Site, o: RenderOptions, copy: Record<string, string>, preselect?: string) {
-  return `<section class="band" aria-labelledby="cta-h"><div class="wrap"><div class="cta-band"><div class="stack" style="display:grid;gap:18px;align-content:start"><h2 id="cta-h">${esc(copy['cta.title'])}</h2><p class="lede">${esc(copy['cta.text'])}</p><div class="actions">${s.booking.url ? primaryCta(s, o, 'btn btn-primary') : ''}${s.business.phone ? `<a class="btn btn-ghost" href="${attr(telHref(s.business.phone))}" data-track="call">Call ${esc(s.business.phone)}</a>` : ''}</div></div>${enquiryForm(s, o, preselect)}</div></div></section>`;
+  return `<section class="band${s.look.surface === 'deep' ? ' deep-cta' : ''}" aria-labelledby="cta-h"><div class="wrap"><div class="cta-band"><div class="stack" style="display:grid;gap:18px;align-content:start"><h2 id="cta-h">${esc(copy['cta.title'])}</h2><p class="lede">${esc(copy['cta.text'])}</p><div class="actions">${s.booking.url ? primaryCta(s, o, 'btn btn-primary') : ''}${s.business.phone ? `<a class="btn btn-ghost" href="${attr(telHref(s.business.phone))}" data-track="call">Call ${esc(s.business.phone)}</a>` : ''}</div></div>${enquiryForm(s, o, preselect)}</div></div></section>`;
 }
 
 function hoursTable(s: Site) {
@@ -321,20 +336,31 @@ function mobileBar(s: Site, o: RenderOptions) {
 
 function homeBody(s: Site, o: RenderOptions, copy: Record<string, string>) {
   const ind = industryOf(s);
+  const sec = { ...DEFAULT_SECTIONS, ...(s.look.sections || {}) };
   const facts = [openDays(s), fromPrice(s) ? `Prices from ${fromPrice(s)}` : '', ...s.business.credentials.slice(0, 2)].filter(Boolean);
-  const media = s.look.hero?.url
-    ? `<div class="hero-media"><img src="${attr(s.look.hero.url)}" alt="${attr(s.look.hero.alt || nameOf(s))}" width="800" height="1000" fetchpriority="high"></div>`
-    : `<div class="hero-panel"><dl>${[
-      ['Where', s.business.showAddress && s.business.line1 ? `${s.business.line1}, ${townOf(s)}` : (areasOf(s).slice(0, 3).join(', ') || townOf(s))],
-      ['When', openDays(s).replace(/^Open /, '')],
-      [ind.mobile ? 'Prices' : 'From', fromPrice(s) ? `${ind.mobile ? 'Clear quotes, from ' : ''}${fromPrice(s)}` : 'Clear prices, agreed first'],
-    ].filter((x) => x[1]).map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl></div>`;
-  return `<section class="hero"><div class="wrap"><div class="stack"><p class="eyebrow">${esc(tradeOf(s))}${townOf(s) ? ` · ${esc(townOf(s))}` : ''}</p><h1>${esc(copy['home.title'])}</h1><p class="lede">${esc(copy['home.intro'])}</p><div class="actions">${primaryCta(s, o, 'btn btn-primary')}${s.business.phone ? `<a class="btn btn-ghost" href="${attr(telHref(s.business.phone))}" data-track="call">Call ${esc(s.business.phone)}</a>` : ''}</div>${facts.length ? `<ul class="facts">${facts.map((f) => `<li>${esc(f)}</li>`).join('')}</ul>` : ''}</div>${media}</div></section>
+  const photo = s.look.hero?.url ? s.look.hero : null;
+  const panel = `<div class="hero-panel"><dl>${[
+    ['Where', s.business.showAddress && s.business.line1 ? `${s.business.line1}, ${townOf(s)}` : (areasOf(s).slice(0, 3).join(', ') || townOf(s))],
+    ['When', openDays(s).replace(/^Open /, '')],
+    [ind.mobile ? 'Prices' : 'From', fromPrice(s) ? `${ind.mobile ? 'Clear quotes, from ' : ''}${fromPrice(s)}` : 'Clear prices, agreed first'],
+  ].filter((x) => x[1]).map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl></div>`;
+  const text = `<div class="stack"><p class="eyebrow">${esc(tradeOf(s))}${townOf(s) ? ` · ${esc(townOf(s))}` : ''}</p><h1>${esc(copy['home.title'])}</h1><p class="lede">${esc(copy['home.intro'])}</p><div class="actions">${primaryCta(s, o, 'btn btn-primary')}${s.business.phone ? `<a class="btn btn-ghost" href="${attr(telHref(s.business.phone))}" data-track="call">Call ${esc(s.business.phone)}</a>` : ''}</div>${facts.length ? `<ul class="facts">${facts.map((f) => `<li>${esc(f)}</li>`).join('')}</ul>` : ''}</div>`;
+  const deep = s.look.surface === 'deep' ? ' deep' : '';
+  // Three ways to open the page: text beside a photo, text over a full-width photo, or centred text above a wide photo.
+  const layout = s.look.heroLayout === 'full' && photo ? 'full' : s.look.heroLayout === 'centred' ? 'centred' : 'split';
+  const hero = layout === 'full'
+    ? `<section class="hero full" style="background-image:url('${attr(photo!.url).replace(/'/g, '%27')}')" role="img" aria-label="${attr(photo!.alt || nameOf(s))}"><div class="wrap">${text}</div></section>`
+    : layout === 'centred'
+      ? `<section class="hero centred${deep}"><div class="wrap">${text}${photo ? `<div class="hero-wide"><img src="${attr(photo.url)}" alt="${attr(photo.alt || nameOf(s))}" width="1600" height="686" fetchpriority="high"></div>` : ''}</div></section>`
+      : `<section class="hero${deep}"><div class="wrap">${text}${photo ? `<div class="hero-media"><img src="${attr(photo.url)}" alt="${attr(photo.alt || nameOf(s))}" width="800" height="1000" fetchpriority="high"></div>` : panel}</div></section>`;
+  const gallery = sec.gallery && s.look.gallery.length >= 4 ? `<section class="band" aria-label="Photos"><div class="wrap"><div class="strip">${s.look.gallery.slice(0, 4).map((g) => `<img src="${attr(g.url)}" alt="${attr(g.alt || nameOf(s))}" width="400" height="400" loading="lazy">`).join('')}</div></div></section>` : '';
+  return `${hero}
 <section class="band alt" aria-labelledby="svc-h"><div class="wrap"><div class="head"><p class="eyebrow">${ind.mobile ? 'Services' : 'Treatments'}</p><h2 id="svc-h">${esc(copy['home.services'])}</h2></div>${servicesGrid(s, o, 6)}${s.services.length > 6 ? `<p style="margin-top:20px"><a href="${attr(o.base)}services/">See everything we do →</a></p>` : ''}</div></section>
-<section class="band" aria-labelledby="how-h"><div class="wrap"><div class="head"><p class="eyebrow">How it works</p><h2 id="how-h">Simple from the first call</h2></div><ol class="steps">${ind.steps.map(([t, d]) => `<li><h3>${esc(t)}</h3><p class="muted">${esc(d)}</p></li>`).join('')}</ol></div></section>
-${s.business.differences.filter(Boolean).length || s.look.about?.url ? `<section class="band alt" aria-labelledby="why-h"><div class="wrap split">${s.look.about?.url ? `<div class="photo"><img src="${attr(s.look.about.url)}" alt="${attr(s.look.about.alt || nameOf(s))}" width="800" height="600" loading="lazy"></div>` : ''}<div class="prose"><p class="eyebrow">Why ${esc(nameOf(s))}</p><h2 id="why-h">${esc(copy['about.title'])}</h2>${s.business.differences.filter(Boolean).length ? `<ul class="ticks">${s.business.differences.filter(Boolean).map((d) => `<li>${esc(d)}</li>`).join('')}</ul>` : ''}<p><a href="${attr(o.base)}about/">About us →</a></p></div></div></section>` : ''}
-${reviewsBlock(s)}
-${faqBlock(faqsOf(s).slice(0, 5))}
+${sec.how ? `<section class="band" aria-labelledby="how-h"><div class="wrap"><div class="head"><p class="eyebrow">How it works</p><h2 id="how-h">Simple from the first call</h2></div><ol class="steps">${ind.steps.map(([t, d]) => `<li><h3>${esc(t)}</h3><p class="muted">${esc(d)}</p></li>`).join('')}</ol></div></section>` : ''}
+${gallery}
+${sec.why && (s.business.differences.filter(Boolean).length || s.look.about?.url) ? `<section class="band alt" aria-labelledby="why-h"><div class="wrap split">${s.look.about?.url ? `<div class="photo"><img src="${attr(s.look.about.url)}" alt="${attr(s.look.about.alt || nameOf(s))}" width="800" height="600" loading="lazy"></div>` : ''}<div class="prose"><p class="eyebrow">Why ${esc(nameOf(s))}</p><h2 id="why-h">${esc(copy['about.title'])}</h2>${s.business.differences.filter(Boolean).length ? `<ul class="ticks">${s.business.differences.filter(Boolean).map((d) => `<li>${esc(d)}</li>`).join('')}</ul>` : ''}<p><a href="${attr(o.base)}about/">About us →</a></p></div></div></section>` : ''}
+${sec.reviews ? reviewsBlock(s) : ''}
+${sec.faq ? faqBlock(faqsOf(s).slice(0, 5)) : ''}
 ${ctaBand(s, o, copy)}`;
 }
 
@@ -425,7 +451,7 @@ export function renderPage(s: Site, path: string, o: RenderOptions): { html: str
   const page = pages.find((p) => p.path === clean || p.path === `${clean}/`);
   if (!page) return null;
   const copy = copyOf(s);
-  const f = FONTS[s.look.style] ?? FONTS.calm;
+  const f = fontsOf(s);
   const canonical = `${o.origin.replace(/\/$/, '')}/${page.path}`;
   const body = page.kind === 'home' ? homeBody(s, o, copy)
     : page.kind === 'services' ? servicesBody(s, o, copy)

@@ -1,6 +1,6 @@
-import { db, env, insert } from '../lib/core';
+import { db, insert } from '../lib/core';
 import { sendEmail } from '../lib/email';
-import { APP_ORIGIN, isBot, siteById, visitorCode } from '../lib/sites';
+import { APP_ORIGIN, isBot, ownerEmail, siteById, visitorCode } from '../lib/sites';
 
 // A message sent through a live website's form.
 //   POST /api/site-enquiry/<site id>   (a normal form post)
@@ -41,9 +41,9 @@ export default async (req: Request) => {
       if (ok && saved?.id) await db(`site_enquiries?id=eq.${saved.id}`, { method: 'PATCH', body: { forwarded: true } }).catch(() => {});
     }
     // Email the owner.
-    const owner = await fetch(`${env('SUPABASE_URL')}/auth/v1/admin/users/${site.user_id}`, { headers: { apikey: env('SUPABASE_SERVICE_ROLE_KEY'), Authorization: `Bearer ${env('SUPABASE_SERVICE_ROLE_KEY')}` } }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
-    if (owner?.email) {
-      await sendEmail(owner.email, `New website enquiry from ${name}`, [
+    const to = await ownerEmail(site.user_id);
+    if (to) {
+      await sendEmail(to, `New website enquiry from ${name}`, [
         `${name} sent a message through your website${row.service ? ` about ${row.service.toLowerCase()}` : ''}.`,
         [phone && `Phone: ${phone}`, row.email && `Email: ${row.email}`, row.postcode && `Postcode: ${row.postcode}`].filter(Boolean).join('\n'),
         row.message ? `“${row.message}”` : '',

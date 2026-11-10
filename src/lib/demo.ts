@@ -4,7 +4,7 @@ import { performance } from '../../shared/site/stats';
 import { demoEnquiries, demoEvents } from './demo-site';
 import type {
   Action, Alert, BriefReport, BusinessProfile, ChatMessage, Client, ClientAction, FeedbackRecord, HomeData, Lead, Outcome, ScoutResult, ScoutSearch, Tender,
-  User, ValueEvent, ValueKind, WebsiteState, Visit, WatcherState, WeekNumbers,
+  User, ValueEvent, ValueKind, WebsiteState, ChangeRequest, Visit, WatcherState, WeekNumbers,
 } from './types';
 import { likelyOutcomes } from '../../shared/money';
 import { uuid } from './format';
@@ -53,6 +53,9 @@ interface DemoState {
   seededAt?: string;
   /** Launch & Grow: the sample website. */
   website?: WebsiteState | null;
+  websiteRequests?: ChangeRequest[];
+  /** Demo only: see the Website page the way Gainora's team does. */
+  websiteRole?: 'owner' | 'gainora';
 }
 
 /** How long a freshly set-up demo behaves like a new account, so the first ten minutes can be seen. */
@@ -510,18 +513,26 @@ export function createDemoApi(): Api {
         if (!data.business.credentials.length) data.business.credentials = ['Fully insured', 'Level 7 qualified'];
         data.reviewLink = 'https://g.page/r/sample-review-link/review';
         const at = new Date(Date.now() - 40 * DAY).toISOString();
-        s.website = { id: '00000000-0000-4000-8000-000000000001', slug: data.slug, domain: null, data, publishedAt: at, updatedAt: at, live: true, liveUrl: `https://app.gainora.co.uk/site/${data.slug}/`, previewUrl: `https://app.gainora.co.uk/site/${data.slug}/`, changed: false };
+        s.website = { id: '00000000-0000-4000-8000-000000000001', slug: data.slug, domain: null, data, publishedAt: at, updatedAt: at, live: true, liveUrl: `https://app.gainora.co.uk/site/${data.slug}/`, previewUrl: `https://app.gainora.co.uk/site/${data.slug}/`, changed: false, role: 'owner' };
+        s.websiteRequests = [{ id: 'demo-req-1', at: new Date(Date.now() - 9 * DAY).toISOString(), page: 'Home', text: 'Could the main photo be the new treatment room picture I sent over?', status: 'done', done_at: new Date(Date.now() - 8 * DAY).toISOString(), reply: 'Done. It’s on the home page now.' }];
         save();
       }
-      return s.website;
+      return { ...s.website, role: s.websiteRole ?? 'owner' };
     },
-    async saveWebsite(data) { await wait(250); const w = s.website!; s.website = { ...w, data, updatedAt: new Date().toISOString(), changed: w.live }; save(); return s.website; },
-    async publishWebsite(data) { await wait(700); const at = new Date().toISOString(); s.website = { ...s.website!, data, publishedAt: at, updatedAt: at, live: true, changed: false }; save(); return s.website; },
-    async unpublishWebsite() { await wait(400); s.website = { ...s.website!, live: false, publishedAt: null, changed: false }; save(); return s.website; },
-    async setWebsiteSlug(slug) { await wait(300); s.website = { ...s.website!, slug, data: { ...s.website!.data, slug }, liveUrl: `https://app.gainora.co.uk/site/${slug}/`, previewUrl: `https://app.gainora.co.uk/site/${slug}/` }; save(); return s.website; },
-    async setWebsiteDomain(domain) { await wait(300); const d = domain.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/.*$/, ''); s.website = { ...s.website!, domain: d || null, liveUrl: d ? `https://${d}/` : s.website!.previewUrl, data: { ...s.website!.data, business: { ...s.website!.data.business, domain: d } } }; save(); return s.website; },
+    async saveWebsite(data) { await wait(250); const w = s.website!; s.website = { ...w, data, updatedAt: new Date().toISOString(), changed: w.live }; save(); return { ...s.website, role: s.websiteRole ?? 'owner' }; },
+    async publishWebsite(data) { await wait(700); const at = new Date().toISOString(); s.website = { ...s.website!, data, publishedAt: at, updatedAt: at, live: true, changed: false }; save(); return { ...s.website, role: s.websiteRole ?? 'owner' }; },
+    async unpublishWebsite() { await wait(400); s.website = { ...s.website!, live: false, publishedAt: null, changed: false }; save(); return { ...s.website!, role: s.websiteRole ?? 'owner' }; },
+    async setWebsiteSlug(slug) { await wait(300); s.website = { ...s.website!, slug, data: { ...s.website!.data, slug }, liveUrl: `https://app.gainora.co.uk/site/${slug}/`, previewUrl: `https://app.gainora.co.uk/site/${slug}/` }; save(); return { ...s.website!, role: s.websiteRole ?? 'owner' }; },
+    async setWebsiteDomain(domain) { await wait(300); const d = domain.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/.*$/, ''); s.website = { ...s.website!, domain: d || null, liveUrl: d ? `https://${d}/` : s.website!.previewUrl, data: { ...s.website!.data, business: { ...s.website!.data.business, domain: d } } }; save(); return { ...s.website!, role: s.websiteRole ?? 'owner' }; },
     async websiteStats(days) { await wait(300); return performance(demoEvents(), days); },
     async websiteEnquiries() { await wait(200); return demoEnquiries(); },
+    async websiteRequests() { await wait(200); return s.websiteRequests ?? []; },
+    async requestWebsiteChange(page, text) { await wait(400); const r: ChangeRequest = { id: uid('req_'), at: new Date().toISOString(), page, text, status: 'open', done_at: null, reply: '' }; s.websiteRequests = [r, ...(s.websiteRequests ?? [])]; save(); return r; },
+    async completeWebsiteRequest(id, reply) { await wait(300); s.websiteRequests = (s.websiteRequests ?? []).map((r) => (r.id === id ? { ...r, status: 'done' as const, done_at: new Date().toISOString(), reply } : r)); save(); return s.websiteRequests.find((r) => r.id === id)!; },
+    async listWebsites() { await wait(200); const w = s.website; return w ? [{ slug: w.slug, name: w.data.business.name, domain: w.domain, live: w.live, updatedAt: w.updatedAt, openRequests: (s.websiteRequests ?? []).filter((r) => r.status === 'open').length }] : []; },
+    setWebsiteClient() { /* one sample client in the demo */ },
+    /** Demo only. */
+    setWebsiteRole(role: 'owner' | 'gainora') { s.websiteRole = role; save(); },
     async uploadSitePhoto(file) {
       await wait(300);
       const url = await new Promise<string>((res, rej) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result)); fr.onerror = rej; fr.readAsDataURL(file); });

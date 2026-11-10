@@ -1,5 +1,5 @@
 import type {
-  CaptureWeek, WebsiteState, WebsiteEnquiry,
+  CaptureWeek, WebsiteState, WebsiteEnquiry, WebsiteListItem, ChangeRequest,
   Action, BriefReport, BusinessProfile, ChatMessage, Client, ClientAction, ClientsData, FeedbackKind, FeedbackRecord, HomeData, Lead, LeadStage, Outcome, PlaceSummary, Plan,
   ScoutKind, ScoutSearch, Tender, User, ValueEvent, Visit, WatcherState, WeekNumbers, WinbackDrafts,
 } from './types';
@@ -53,6 +53,16 @@ export interface Api {
   websiteStats(days: number): Promise<Performance>;
   websiteEnquiries(): Promise<WebsiteEnquiry[]>;
   uploadSitePhoto(file: File): Promise<Photo>;
+  websiteRequests(): Promise<ChangeRequest[]>;
+  /** The client asks Gainora to change the design, wording, photos or pages. */
+  requestWebsiteChange(page: string, text: string): Promise<ChangeRequest>;
+  /** Gainora's team only. */
+  completeWebsiteRequest(id: string, reply: string): Promise<ChangeRequest>;
+  listWebsites(): Promise<WebsiteListItem[]>;
+  /** Gainora's team only: which client's website the Website page works on (null: their own). */
+  setWebsiteClient(slug: string | null): void;
+  /** Demo only: switch the Website page between the client's view and Gainora's. */
+  setWebsiteRole?(role: 'owner' | 'gainora'): void;
   saveNumbers(w: WeekNumbers): Promise<BriefReport>;
   listBriefs(): Promise<BriefReport[]>;
 

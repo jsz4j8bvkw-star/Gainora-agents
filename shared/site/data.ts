@@ -5,6 +5,20 @@
 
 export type IndustryId = 'aesthetics' | 'beauty' | 'hair' | 'physio' | 'dental' | 'plumber' | 'electrician' | 'builder' | 'other';
 export type Style = 'calm' | 'bold' | 'warm';
+/** Typeface pairings Gainora chooses from per client. */
+export type FontPair = 'classic' | 'editorial' | 'grand' | 'friendly' | 'modern' | 'clean' | 'geometric';
+/** How the top of the home page is laid out. */
+export type HeroLayout = 'split' | 'full' | 'centred';
+/** The overall tone: plain, softly tinted with the brand colour, or deep (dark top and call-to-action). */
+export type Surface = 'light' | 'tinted' | 'deep';
+export interface Sections { how: boolean; why: boolean; reviews: boolean; faq: boolean; gallery: boolean }
+export const DEFAULT_SECTIONS: Sections = { how: true, why: true, reviews: true, faq: true, gallery: true };
+/** Named brand colours to start from; Gainora can also set any colour. */
+export const PALETTES: { name: string; accent: string }[] = [
+  { name: 'Sage', accent: '#3E5C55' }, { name: 'Forest', accent: '#24463A' }, { name: 'Ink blue', accent: '#22395B' }, { name: 'Harbour', accent: '#2C6E73' },
+  { name: 'Plum', accent: '#5B3A57' }, { name: 'Rose clay', accent: '#9A5B5B' }, { name: 'Berry', accent: '#8A3B55' }, { name: 'Terracotta', accent: '#A4512F' },
+  { name: 'Ochre', accent: '#8C6A1C' }, { name: 'Olive', accent: '#5B6B3A' }, { name: 'Royal', accent: '#1F5FA8' }, { name: 'Charcoal', accent: '#2E3238' },
+];
 export type Day = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
 export const DAYS: { id: Day; label: string; short: string }[] = [
   { id: 'mon', label: 'Monday', short: 'Mon' }, { id: 'tue', label: 'Tuesday', short: 'Tue' }, { id: 'wed', label: 'Wednesday', short: 'Wed' },
@@ -40,13 +54,18 @@ export interface Site {
   captureFormUrl: string;
   tracking: { ga4: string; adsId: string; adsLabel: string };
   ads: { monthly: number; radiusMiles: number };
-  look: { style: Style; accent: string; logo: Photo | null; hero: Photo | null; about: Photo | null; gallery: Photo[] };
+  /** The design. Only Gainora changes it; clients ask for changes. */
+  look: { style: Style; fonts: FontPair; heroLayout: HeroLayout; surface: Surface; sections: Sections; accent: string; logo: Photo | null; hero: Photo | null; about: Photo | null; gallery: Photo[] };
   /** The words on the site the owner has changed. Anything not here is written by the Studio. */
   copy: Record<string, string>;
   faqs: Faq[] | null;
   plan: Record<string, boolean>;
+  /** Gainora's private notes about the site. Never shown to the client. */
   notes: string;
 }
+
+/** A change the client asked Gainora to make (kept in its own table, site_requests). */
+export interface ChangeRequest { id: string; at: string; page: string; text: string; status: 'open' | 'done'; done_at: string | null; reply: string }
 
 export interface Industry {
   id: IndustryId;
@@ -90,7 +109,7 @@ const CLINIC_STEPS: [string, string][] = [
   ['Your treatment', 'When you’re ready, we book your treatment and look after you before, during and after it.'],
 ];
 
-const POM = /\b(botox|botulinum|toxin|azzalure|bocouture|dysport|xeomin|letybo|relfydess|vistabel|fat.?dissolv\w*|aqualyx|lemon bottle|ozempic|wegovy|mounjaro|semaglutide|tirzepatide|skinny jab|weight.?loss injection\w*|vitamin b12 injection\w*)\b/i;
+const POM = /\b(botox|botulinum|toxin|anti.?wrinkle (?:injections?|treatments?|jabs?)|azzalure|bocouture|dysport|xeomin|letybo|relfydess|vistabel|fat.?dissolv\w*|aqualyx|lemon bottle|ozempic|wegovy|mounjaro|semaglutide|tirzepatide|skinny jab|weight.?loss injection\w*|vitamin b12 injection\w*)\b/i;
 const HEALTH_CLAIMS = /\b(guarantee[ds]?|pain.?free|painless|permanent(ly)?|cure[sd]?|risk.?free|no side.?effects|100%|best in (town|the uk|[a-z]+))\b/i;
 
 export const INDUSTRIES: Record<IndustryId, Industry> = {
@@ -298,7 +317,7 @@ export function newSite(industry: IndustryId = 'aesthetics'): Site {
     services: ind.services.map((s) => ({ ...s, id: uid() })),
     reviews: [], reviewLink: '', booking: { url: '', label: '' }, captureFormUrl: '',
     tracking: { ga4: '', adsId: '', adsLabel: '' }, ads: { monthly: 600, radiusMiles: ind.mobile ? 15 : 8 },
-    look: { style: ind.style, accent: ind.accent, logo: null, hero: null, about: null, gallery: [] },
+    look: { style: ind.style, fonts: ind.style === 'bold' ? 'modern' : ind.style === 'warm' ? 'friendly' : 'classic', heroLayout: 'split', surface: ind.style === 'bold' ? 'light' : 'tinted', sections: { ...DEFAULT_SECTIONS }, accent: ind.accent, logo: null, hero: null, about: null, gallery: [] },
     copy: {}, faqs: null, plan: {}, notes: '',
   };
 }
@@ -308,7 +327,9 @@ export function withDefaults(raw: any): Site {
   const base = newSite(raw?.business?.industry in INDUSTRIES ? raw.business.industry : 'other');
   const b = { ...base, ...raw } as Site;
   b.business = { ...base.business, ...(raw?.business ?? {}), hours: { ...base.business.hours, ...(raw?.business?.hours ?? {}) } };
-  b.look = { ...base.look, ...(raw?.look ?? {}) };
+  b.look = { ...base.look, ...(raw?.look ?? {}), sections: { ...DEFAULT_SECTIONS, ...(raw?.look?.sections ?? {}) } };
+  // Sites saved before font choices existed keep the fonts their style gave them.
+  if (!raw?.look?.fonts) b.look.fonts = b.look.style === 'bold' ? 'modern' : b.look.style === 'warm' ? 'friendly' : 'classic';
   b.booking = { ...base.booking, ...(raw?.booking ?? {}) };
   b.tracking = { ...base.tracking, ...(raw?.tracking ?? {}) };
   b.ads = { ...base.ads, ...(raw?.ads ?? {}) };
@@ -414,3 +435,32 @@ export function siteFromProfile(p: any): Site {
   s.slug = slug(s.business.name);
   return s;
 }
+
+
+/* ---------- Who can change what ----------
+ * Clients keep their everyday details up to date themselves: prices, services, opening hours, contact details,
+ * reviews and their booking link. The design, the wording and the pages are Gainora's work: clients ask for
+ * changes and Gainora makes them. The server applies this, whatever the browser sends. */
+
+/** The client's edit applied to the current site: only the fields a client may change are taken. */
+export function mergeClientEdit(current: Site, incoming: Site): Site {
+  const known = new Map(current.services.map((x) => [x.id, x]));
+  const b = incoming.business;
+  return {
+    ...current,
+    business: {
+      ...current.business,
+      phone: b.phone, email: b.email, line1: b.line1, line2: b.line2, town: b.town, postcode: b.postcode, areas: b.areas, hours: b.hours,
+    },
+    // Services: name, price, time and the one-line description are theirs; whether it has its own page is Gainora's.
+    services: incoming.services.map((x) => ({ ...x, page: known.get(x.id)?.page ?? false })),
+    reviews: incoming.reviews,
+    reviewLink: incoming.reviewLink,
+    booking: { ...current.booking, url: incoming.booking.url },
+    captureFormUrl: incoming.captureFormUrl,
+    plan: { ...current.plan, ...incoming.plan },
+  };
+}
+
+/** What the client's browser receives: everything except Gainora's private notes. */
+export function forClient(s: Site): Site { return { ...s, notes: '' }; }

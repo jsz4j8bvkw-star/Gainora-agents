@@ -70,6 +70,27 @@ test('Google tags load only after consent, and the accent colour is always reada
   assert.ok(1.05 / (lum(a) + 0.05) >= 4.5, a);
 });
 
+test('every design combination renders a complete page', () => {
+  const s = clinic();
+  s.look.hero = { id: 'h', url: 'https://cdn.example/hero.jpg', name: 'hero.jpg', alt: 'The treatment room' };
+  s.look.gallery = [1, 2, 3, 4].map((i) => ({ id: `g${i}`, url: `https://cdn.example/${i}.jpg`, name: `${i}.jpg`, alt: `Photo ${i}` }));
+  for (const fonts of ['classic', 'editorial', 'grand', 'friendly', 'modern', 'clean', 'geometric'] as const)
+    for (const heroLayout of ['split', 'full', 'centred'] as const)
+      for (const surface of ['light', 'tinted', 'deep'] as const) {
+        s.look = { ...s.look, fonts, heroLayout, surface };
+        const html = renderPage(s, '', OPTS)!.html;
+        assert.match(html, /<h1>/);
+        assert.match(html, /fonts\.googleapis\.com\/css2\?family=/);
+        if (heroLayout === 'full') assert.match(html, /class="hero full"/);
+      }
+  s.look.sections = { how: false, why: false, reviews: false, faq: false, gallery: false };
+  const bare = renderPage(s, '', OPTS)!.html;
+  assert.ok(!/id="how-h"/.test(bare) && !/id="faq-h"/.test(bare) && !/class="strip"/.test(bare));
+  // Full-photo layout without a photo falls back to the side-by-side layout.
+  s.look.hero = null; s.look.heroLayout = 'full';
+  assert.ok(!/class="hero full"/.test(renderPage(s, '', OPTS)!.html));
+});
+
 test('sitemap and robots: the live domain is listed, the Gainora address is not', () => {
   const s = clinic();
   const map = sitemap(s, 'https://willow.example');
@@ -84,6 +105,9 @@ test('aesthetics: prescription-only medicines are flagged on the site and kept o
   s.services.push({ id: 'b', name: 'Botox', price: '£180', duration: '30 minutes', summary: 'Anti-wrinkle.', page: false });
   const c = checks(s);
   assert.ok(c.some((x) => x.level === 'fix' && /Botox/.test(x.text) && /Prescription-only/.test(x.text)));
+  const aw = clinic(); aw.services.push({ id: 'a', name: 'Anti-wrinkle injections', price: '£150', duration: '', summary: '', page: false });
+  assert.ok(checks(aw).some((x) => x.level === 'fix' && /Anti-wrinkle injection/i.test(x.text)));
+  assert.ok(adsPlan(aw, 'https://willow.example').excluded.some((x) => /Anti-wrinkle/.test(x.service)));
   const ads = adsPlan(s, 'https://willow.example');
   assert.ok(ads.excluded.some((x) => x.service === 'Botox'));
   assert.ok(!ads.groups.some((g) => /botox/i.test(g.keywords.join(' '))));
@@ -135,6 +159,7 @@ test('a first draft comes from the onboarding answers', () => {
   assert.equal(readHours('closed'), null);
   assert.ok(defaultFaqs(s).length >= 3);
   assert.ok(copyOf(s)['meta.description'].length <= 158);
+  assert.match(copyOf(s)['meta.description'], /\.$/, 'the Google description ends on a whole sentence');
 });
 
 test('performance: people once a day, actions credited to where the visitor came from', () => {
@@ -198,9 +223,10 @@ test('end to end: draft from onboarding, publish, serve, count a visit, receive 
     assert.equal((await serve(new Request(`https://app.gainora.co.uk/site/${slug}/`))).status, 404);
 
     // Saving cleans what it's given: bad links dropped, long text cut.
-    const draft = { ...first.data, booking: { url: 'javascript:alert(1)', label: 'Book' }, business: { ...first.data.business, phone: '01632 960 123', name: 'Willow & Co', notes: 'x'.repeat(10) } };
+    const draft = { ...first.data, booking: { url: 'javascript:alert(1)', label: 'Book' }, business: { ...first.data.business, phone: '01632 960 123', name: 'Renamed by the client' } };
     const saved = (await (await call({ op: 'save', data: draft })).json()).site;
     assert.equal(saved.data.booking.url, '');
+    assert.equal(saved.data.business.name, 'Willow Aesthetics', 'the business name is Gainora’s to change');
     const pub = (await (await call({ op: 'publish', data: saved.data })).json()).site;
     assert.equal(pub.live, true);
     assert.equal(pub.changed, false);
@@ -209,15 +235,18 @@ test('end to end: draft from onboarding, publish, serve, count a visit, receive 
     const home = await serve(new Request(`https://app.gainora.co.uk/site/${slug}/`));
     assert.equal(home.status, 200);
     const html = await home.text();
-    assert.match(html, /<title>Willow &amp; Co/);
+    assert.match(html, /<title>Willow Aesthetics/);
     assert.match(html, /<meta name="robots" content="noindex">/);
     assert.equal((await serve(new Request(`https://app.gainora.co.uk/site/${slug}`))).status, 301);
     assert.equal((await serve(new Request(`https://app.gainora.co.uk/site/${slug}/nope/`))).status, 404);
 
     // Its own domain: indexable, canonical on the domain.
-    const dom = (await (await call({ op: 'domain', domain: 'https://www.Willow.example/' })).json()).site;
+    // Connecting the domain is Gainora's job.
+    fake.tables.__users.push({ id: '22222222-2222-4222-8222-222222222222', email: 'hello@gainora.co.uk', token: 'gtok' });
+    assert.equal((await call({ op: 'domain', domain: 'willow.example' })).status, 403);
+    const dom = (await (await call({ op: 'domain', domain: 'https://www.Willow.example/', as: slug }, 'gtok')).json()).site;
     assert.equal(dom.domain, 'willow.example');
-    assert.equal((await call({ op: 'domain', domain: 'evil.gainora.co.uk' })).status, 400);
+    assert.equal((await call({ op: 'domain', domain: 'evil.gainora.co.uk', as: slug }, 'gtok')).status, 400);
     const onDomain = await serve(new Request('https://app.gainora.co.uk/api/site-host?h=www.willow.example&p=/about/'));
     assert.equal(onDomain.status, 200);
     const about = await onDomain.text();
@@ -256,7 +285,39 @@ test('end to end: draft from onboarding, publish, serve, count a visit, receive 
     const list = (await (await call({ op: 'enquiries' })).json()).enquiries;
     assert.equal(list[0].name, 'Hannah M');
 
-    // Someone else can't take the address.
-    assert.equal((await call({ op: 'slug', slug: 'Bad Slug!' })).status, 400);
+    // The client can't change the address, domain, design or wording; Gainora's team can.
+    assert.equal((await call({ op: 'slug', slug: 'new-address' })).status, 403);
+    const before = fake.tables.sites[0].data;
+    const sneaky = { ...before, look: { ...before.look, accent: '#FF0000', fonts: 'grand' }, copy: { 'home.title': 'Cheapest in town!' }, notes: 'x',
+      services: before.services.map((x: any, i: number) => ({ ...x, price: i === 0 ? '£99' : x.price, page: !x.page })),
+      business: { ...before.business, name: 'Renamed Ltd', phone: '01632 960 999' } };
+    const afterClient = (await (await call({ op: 'save', data: sneaky })).json()).site;
+    assert.equal(afterClient.role, 'owner');
+    assert.equal(afterClient.data.business.phone, '01632 960 999', 'their phone number is theirs to change');
+    assert.equal(afterClient.data.services[0].price, '£99', 'and their prices');
+    assert.equal(afterClient.data.business.name, 'Willow Aesthetics', 'the name stays as Gainora set it');
+    assert.equal(afterClient.data.look.accent, before.look.accent, 'the design stays');
+    assert.deepEqual(afterClient.data.copy, before.copy, 'the wording stays');
+    assert.deepEqual(afterClient.data.services.map((x: any) => x.page), before.services.map((x: any) => x.page), 'which services have pages stays');
+
+    // The client asks for a change; Gainora gets an email, does it and the client hears back.
+    const asked = (await (await call({ op: 'request', page: 'Home', text: 'Please use the new photo at the top.' })).json()).request;
+    assert.equal(asked.status, 'open');
+    assert.ok(emails.some((e) => /Website change for Willow Aesthetics/.test(e.subject) && e.to[0] === 'hello@gainora.co.uk'));
+    const sitesList = (await (await call({ op: 'list' }, 'gtok')).json()).sites;
+    assert.deepEqual(sitesList.map((x: any) => [x.name, x.openRequests]), [['Willow Aesthetics', 1]]);
+    assert.equal((await call({ op: 'list' })).status, 403, 'clients can’t list other sites');
+    const asGainora = (b: any) => call({ ...b, as: slug }, 'gtok');
+    const gView = (await (await asGainora({ op: 'get' })).json()).site;
+    assert.equal(gView.role, 'gainora');
+    const redesigned = (await (await asGainora({ op: 'save', data: { ...gView.data, look: { ...gView.data.look, fonts: 'editorial', heroLayout: 'centred', surface: 'deep', accent: '#5B3A57' }, notes: 'Prefers plum' } })).json()).site;
+    assert.equal(redesigned.data.look.fonts, 'editorial');
+    assert.equal(redesigned.data.notes, 'Prefers plum');
+    assert.equal((await (await call({ op: 'get' })).json()).site.data.notes, '', 'Gainora’s notes never reach the client');
+    const doneReq = (await (await asGainora({ op: 'request-done', id: asked.id, reply: 'Done, have a look.' })).json()).request;
+    assert.equal(doneReq.status, 'done');
+    assert.ok(emails.some((e) => /Your website change is done/.test(e.subject)));
+    assert.equal((await (await call({ op: 'requests' })).json()).requests[0].reply, 'Done, have a look.');
+    assert.equal((await asGainora({ op: 'slug', slug: 'Bad Slug!' })).status, 400);
   } finally { fake.server.close(); }
 });

@@ -5,16 +5,19 @@ import { humanThrown } from '../lib/errors';
 import { Button, ErrorNote, Field, Icon, Loading, Modal, Tabs, copyText, useLoad, useToast } from '../components/ui';
 import { queryParam } from '../lib/router';
 import { relative, shortDate } from '../lib/format';
-import type { WebsiteEnquiry, WebsiteState } from '../lib/types';
+import type { ChangeRequest, WebsiteEnquiry, WebsiteListItem, WebsiteState } from '../lib/types';
 import {
-  DAYS, type Faq, hoursLabel, INDUSTRIES, INDUSTRY_LIST, type IndustryId, type Photo, type Service, type Site, type Style, uid, withDefaults,
+  DAYS, DEFAULT_SECTIONS, type Faq, type FontPair, type HeroLayout, hoursLabel, INDUSTRIES, INDUSTRY_LIST, type IndustryId, PALETTES, type Photo,
+  type Sections, type Service, type Site, type Style, type Surface, uid, withDefaults,
 } from '../../shared/site/data';
-import { copyFields, defaultCopy, defaultFaqs, pagesOf, renderPage } from '../../shared/site/render';
+import { copyFields, defaultCopy, defaultFaqs, FONTS, pagesOf, renderPage } from '../../shared/site/render';
 import { adsCsv, adsPlan, checks, directoriesFor, launchPlan, MONTHLY, napBlock, planProgress, profilePack, reviewKit } from '../../shared/site/kit';
 import type { Performance } from '../../shared/site/stats';
 
-type Tab = 'performance' | 'edit' | 'preview' | 'found' | 'plan' | 'settings';
-const TABS: Tab[] = ['performance', 'edit', 'preview', 'found', 'plan', 'settings'];
+type Tab = 'performance' | 'edit' | 'preview' | 'changes' | 'found' | 'plan' | 'settings';
+const TABS: Tab[] = ['performance', 'edit', 'preview', 'changes', 'found', 'plan', 'settings'];
+/** The client keeps their details up to date; the design, wording, pages and Google work are Gainora's. */
+const OWNER_TABS: Tab[] = ['performance', 'edit', 'preview', 'changes', 'plan'];
 
 const pctOf = (n: number | null) => (n == null ? '–' : `${(n * 100).toFixed(n < 0.1 ? 1 : 0)}%`);
 const change = (now: number, before: number) => {
@@ -27,16 +30,22 @@ const change = (now: number, before: number) => {
 
 export function Website() {
   const { plan } = useApp();
-  const { data: loaded, error, loading, reload } = useLoad(() => api.getWebsite());
+  const [client, setClient] = useState<string | null>(() => queryParam('site'));
+  useState(() => { api.setWebsiteClient(queryParam('site')); return 0; });
+  const { data: loaded, error, loading, reload } = useLoad(() => api.getWebsite(), [client]);
   const [site, setSite] = useState<WebsiteState | null>(null);
   const [draft, setDraft] = useState<Site | null>(null);
   const [tab, setTab] = useState<Tab>(() => { const t = queryParam('tab') as Tab | null; return t && TABS.includes(t) ? t : 'performance'; });
   const [saving, setSaving] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [publishing, setPublishing] = useState(false);
+  const [asking, setAsking] = useState(false);
+  const [requestsKey, setRequestsKey] = useState(0);
   const timer = useRef<any>(null);
   const toast = useToast();
 
   useEffect(() => { if (loaded) { setSite(loaded); setDraft(withDefaults(loaded.data)); if (!loaded.live && !queryParam('tab')) setTab('edit'); } }, [loaded]);
+  const gainora = site?.role === 'gainora';
+  useEffect(() => { if (site && !gainora && !OWNER_TABS.includes(tab)) setTab('performance'); }, [site?.role]);
 
   // Every change saves itself a moment later. Visitors only see it after Publish.
   const update = (next: Site) => {
@@ -49,59 +58,156 @@ export function Website() {
     }, 900);
   };
   useEffect(() => () => clearTimeout(timer.current), []);
+  const switchClient = (slug: string | null) => { clearTimeout(timer.current); api.setWebsiteClient(slug); setSite(null); setDraft(null); setClient(slug); };
 
-  if (loading && !loaded) return <Loading label="Opening your website" />;
+  if (loading && !loaded) return <Loading label="Opening the website" />;
   if (error) {
     return <div className="page"><ErrorNote message={/502|503|reach your saved data/i.test(error) ? 'Your website is being set up. Gainora will let you know when it’s ready.' : error} retry={reload} /></div>;
   }
   if (loaded === null) return <WebsiteUpsell hasCapture={!!plan.capture} />;
-  if (!site || !draft) return <Loading label="Opening your website" />;
+  if (!site || !draft) return <Loading label="Opening the website" />;
 
   const publish = async () => {
     clearTimeout(timer.current);
     setPublishing(true);
-    try { const s = await api.publishWebsite(draft); setSite(s); setSaving('saved'); toast('Published. Your changes are live.'); }
+    try { const s = await api.publishWebsite(draft); setSite(s); setDraft(withDefaults(s.data)); setSaving('saved'); toast('Published. The changes are live.'); }
     catch (e) { toast(humanThrown(e, 'Publishing didn’t work. Try again.')); }
     finally { setPublishing(false); }
   };
 
-  const fixes = checks(draft).filter((c) => c.level === 'fix').length;
+  const fixes = checks(draft).filter((c) => c.level === 'fix' && (gainora || OWNER_AREAS.includes(c.where))).length;
+  const tabs = ([
+    { id: 'performance', label: 'Performance' },
+    { id: 'edit', label: gainora ? 'Edit' : 'Your details', badge: fixes || null },
+    { id: 'preview', label: 'Preview' },
+    { id: 'changes', label: gainora ? 'Change requests' : 'Changes from Gainora' },
+    { id: 'found', label: 'Get found' },
+    { id: 'plan', label: 'Launch plan', badge: (() => { const p = planProgress(draft); return p.done < p.total ? `${p.done}/${p.total}` : null; })() },
+    { id: 'settings', label: 'Address and tracking' },
+  ] as { id: Tab; label: string; badge?: any }[]).filter((t) => gainora || OWNER_TABS.includes(t.id));
   return (
     <div className="page website">
+      {gainora && <ClientBar current={client} onPick={switchClient} />}
+      {api.mode === 'demo' && api.setWebsiteRole && (
+        <p className="demo-role small">Demo: <button type="button" className="linklike" onClick={() => { api.setWebsiteRole!(gainora ? 'owner' : 'gainora'); setSite(null); setDraft(null); reload(); }}>{gainora ? 'see it as the client sees it' : 'see it as Gainora sees it'}</button></p>
+      )}
       <div className="page-head">
         <div>
-          <h1 className="title">Your website</h1>
+          <h1 className="title">{gainora ? (draft.business.name || 'Website') : 'Your website'}</h1>
           <p className="lede">
             {site.live
               ? <>Live at <a href={site.liveUrl} target="_blank" rel="noreferrer">{site.liveUrl.replace(/^https:\/\//, '').replace(/\/$/, '')}</a>{site.publishedAt && <span className="faint"> · published {relative(site.publishedAt)}</span>}</>
-              : 'Not live yet. Fill it in, preview it, then publish.'}
+              : gainora ? 'Not live yet.' : 'Gainora is building your website. You can keep your details up to date here.'}
           </p>
         </div>
         <div className="row gap-12 wrap">
           <span className="small faint" aria-live="polite">{saving === 'saving' ? 'Saving…' : saving === 'saved' ? 'Changes saved' : saving === 'error' ? 'Not saved' : ''}</span>
+          {!gainora && <Button kind="secondary" icon="send" onClick={() => setAsking(true)}>Ask Gainora for a change</Button>}
           {site.live && <a className="btn btn-secondary" href={site.liveUrl} target="_blank" rel="noreferrer"><Icon name="external" />View site</a>}
-          <PublishButton site={site} fixes={fixes} busy={publishing} onPublish={publish} />
+          {(gainora || site.live) && <PublishButton site={site} fixes={fixes} busy={publishing} onPublish={publish} />}
         </div>
       </div>
-      <Tabs<Tab>
-        label="Website"
-        value={tab}
-        onChange={setTab}
-        tabs={[
-          { id: 'performance', label: 'Performance' },
-          { id: 'edit', label: 'Edit', badge: fixes || null },
-          { id: 'preview', label: 'Preview' },
-          { id: 'found', label: 'Get found' },
-          { id: 'plan', label: 'Launch plan', badge: (() => { const p = planProgress(draft); return p.done < p.total ? `${p.done}/${p.total}` : null; })() },
-          { id: 'settings', label: 'Address and tracking' },
-        ]}
-      />
+      <Tabs<Tab> label="Website" value={tab} onChange={setTab} tabs={tabs} />
       {tab === 'performance' && <PerformanceTab site={site} />}
-      {tab === 'edit' && <EditTab draft={draft} update={update} hasCapture={!!plan.capture} goPreview={() => setTab('preview')} />}
+      {tab === 'edit' && <EditTab draft={draft} update={update} gainora={gainora} hasCapture={!!plan.capture} goPreview={() => setTab('preview')} ask={() => setAsking(true)} />}
       {tab === 'preview' && <PreviewTab draft={draft} site={site} />}
-      {tab === 'found' && <FoundTab draft={draft} site={site} update={update} />}
-      {tab === 'plan' && <PlanTab draft={draft} update={update} />}
-      {tab === 'settings' && <SettingsTab site={site} setSite={(s) => { setSite(s); setDraft(withDefaults(s.data)); }} draft={draft} update={update} />}
+      {tab === 'changes' && <RequestsTab key={requestsKey} gainora={gainora} ask={() => setAsking(true)} />}
+      {tab === 'found' && gainora && <FoundTab draft={draft} site={site} update={update} />}
+      {tab === 'plan' && <PlanTab draft={draft} update={update} gainora={gainora} />}
+      {tab === 'settings' && gainora && <SettingsTab site={site} setSite={(s) => { setSite(s); setDraft(withDefaults(s.data)); }} draft={draft} update={update} />}
+      {asking && <AskChange draft={draft} onClose={() => setAsking(false)} onSent={() => { setAsking(false); setRequestsKey((k) => k + 1); toast('Sent to Gainora. You’ll get an email when it’s done.'); }} />}
+    </div>
+  );
+}
+
+/** Where on the Edit tab a client can fix something themselves. */
+const OWNER_AREAS = ['Services', 'Reviews', 'Contact'];
+
+/* ---------- Gainora's team: which client ---------- */
+
+function ClientBar({ current, onPick }: { current: string | null; onPick: (slug: string | null) => void }) {
+  const { data: sites } = useLoad<WebsiteListItem[]>(() => api.listWebsites().catch(() => []));
+  return (
+    <div className="client-bar">
+      <span className="tag tag-forest">Gainora</span>
+      <Field label="Working on">
+        {(id) => (
+          <select id={id} className="select" value={current ?? (api.mode === 'demo' ? sites?.[0]?.slug ?? '' : '')} onChange={(e: any) => onPick(e.target.value || null)}>
+            <option value="">Gainora’s own website</option>
+            {(sites ?? []).map((x) => <option key={x.slug} value={x.slug}>{x.name}{x.openRequests ? ` (${x.openRequests} to do)` : ''}{x.live ? '' : ' · not live'}</option>)}
+          </select>
+        )}
+      </Field>
+      <span className="xsmall faint">Only Gainora’s team sees this. The separate Gainora admin will replace it.</span>
+    </div>
+  );
+}
+
+/* ---------- Change requests ---------- */
+
+function AskChange({ draft, onClose, onSent }: { draft: Site; onClose: () => void; onSent: () => void }) {
+  const pages = pagesOf(draft).filter((p) => p.nav || p.kind === 'service');
+  const [page, setPage] = useState('Whole site');
+  const [text, setText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const send = async () => {
+    if (!text.trim()) { setErr('Say what you’d like changed.'); return; }
+    setBusy(true); setErr(null);
+    try { await api.requestWebsiteChange(page, text.trim()); onSent(); } catch (e) { setErr(humanThrown(e, 'That didn’t send. Try again.')); } finally { setBusy(false); }
+  };
+  return (
+    <Modal title="Ask Gainora for a change" onClose={onClose} footer={<><Button kind="secondary" onClick={onClose}>Cancel</Button><Button busy={busy} onClick={send}>Send to Gainora</Button></>}>
+      <div className="stack gap-16">
+        <p className="small muted">New photos, different wording, a new page, a change to the look: tell us what you’d like and we’ll do it, usually within two working days. Prices, services and opening hours you can change yourself under Your details.</p>
+        <Field label="Which page">{(id) => <select id={id} className="select" value={page} onChange={(e: any) => setPage(e.target.value)}><option>Whole site</option>{pages.map((p) => <option key={p.path}>{p.kind === 'service' ? p.service!.name : p.nav}</option>)}</select>}</Field>
+        <Field label="What would you like changed?" error={err ?? undefined}>{(id, d) => <textarea id={id} className="textarea" rows={5} value={text} aria-describedby={d} placeholder="For example: use the new photo of the treatment room at the top of the home page." onChange={(e: any) => setText(e.target.value)} />}</Field>
+        <p className="xsmall faint">To send photos, reply to the email we send you when this arrives, or email hello@gainora.co.uk.</p>
+      </div>
+    </Modal>
+  );
+}
+
+function RequestsTab({ gainora, ask }: { gainora: boolean; ask: () => void }) {
+  const { data, loading, error, reload } = useLoad<ChangeRequest[]>(() => api.websiteRequests());
+  const [replies, setReplies] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState<string | null>(null);
+  const toast = useToast();
+  if (loading && !data) return <Loading label="Loading the change requests" />;
+  if (error) return <ErrorNote message={error} retry={reload} />;
+  const list = data ?? [];
+  const done = async (r: ChangeRequest) => {
+    setBusy(r.id);
+    try { await api.completeWebsiteRequest(r.id, replies[r.id] || ''); toast('Marked done. The client has been emailed.'); reload(); } catch (e) { toast(humanThrown(e, 'That didn’t save.')); } finally { setBusy(null); }
+  };
+  return (
+    <div className="stack gap-16">
+      {!gainora && (
+        <section className="panel panel-pad row gap-16 wrap" style={{ justifyContent: 'space-between' }}>
+          <div className="stack gap-4"><h2 className="heading">Gainora looks after your website</h2><p className="small muted">Ask for anything: new photos, different wording, a new page or a change to the look. Prices, services and hours you can change yourself.</p></div>
+          <Button icon="send" onClick={ask}>Ask Gainora for a change</Button>
+        </section>
+      )}
+      {list.length ? (
+        <section className="panel" aria-label="Change requests">
+          <ul className="requests">{list.map((r) => (
+            <li key={r.id}>
+              <div className="row gap-8 wrap" style={{ justifyContent: 'space-between' }}>
+                <span className="row gap-8"><span className={`tag ${r.status === 'done' ? 'tag-forest' : 'tag-brass'}`}>{r.status === 'done' ? 'Done' : 'With Gainora'}</span><span className="small muted">{r.page}</span></span>
+                <span className="xsmall faint">{relative(r.at)}{r.done_at ? ` · done ${relative(r.done_at)}` : ''}</span>
+              </div>
+              <p>{r.text}</p>
+              {r.reply && <p className="small reply">{r.reply}</p>}
+              {gainora && r.status === 'open' && (
+                <div className="row gap-8 wrap">
+                  <input className="input" style={{ flex: 1, minWidth: 220 }} placeholder="Note for the client (optional)" aria-label="Note for the client" value={replies[r.id] ?? ''} onChange={(e: any) => setReplies({ ...replies, [r.id]: e.target.value })} />
+                  <Button small busy={busy === r.id} icon="check" onClick={() => done(r)}>Mark done and tell them</Button>
+                </div>
+              )}
+            </li>
+          ))}</ul>
+        </section>
+      ) : <div className="panel empty"><p className="muted">{gainora ? 'No change requests from this client.' : 'Nothing asked for yet.'}</p></div>}
     </div>
   );
 }
@@ -251,37 +357,50 @@ function Text({ label, value, onChange, help, placeholder, type = 'text', option
   );
 }
 
-function EditTab({ draft, update, hasCapture, goPreview }: { draft: Site; update: (s: Site) => void; hasCapture: boolean; goPreview: () => void }) {
+function EditTab({ draft, update, gainora, hasCapture, goPreview, ask }: { draft: Site; update: (s: Site) => void; gainora: boolean; hasCapture: boolean; goPreview: () => void; ask: () => void }) {
   const b = draft.business;
   const set = (patch: Partial<Site['business']>) => update({ ...draft, business: { ...b, ...patch } });
-  const list = checks(draft);
+  const list = checks(draft).filter((c) => gainora || c.level === 'good' || OWNER_AREAS.includes(c.where));
   return (
     <div className="stack gap-16">
       <ChecksPanel list={list} />
-      <Section title="The business" intro="Name, contact details and where you work" open>
+      {!gainora && (
+        <section className="panel panel-pad row gap-16 wrap" style={{ justifyContent: 'space-between' }}>
+          <div className="stack gap-4"><h2 className="heading">Design, wording and photos</h2><p className="small muted">Gainora looks after these for you. Tell us what you’d like and we’ll change it.</p></div>
+          <Button kind="secondary" icon="send" onClick={ask}>Ask Gainora for a change</Button>
+        </section>
+      )}
+      {gainora && (
+        <Section title="The business" intro="Name, kind of business and what sets it apart" open>
+          <div className="form-grid">
+            <Text label="Business name" value={b.name} onChange={(v) => set({ name: v })} help="Exactly as on the sign and the paperwork." />
+            <Field label="Kind of business">
+              {(id) => <select id={id} className="select" value={b.industry} onChange={(e: any) => { const ind = INDUSTRIES[e.target.value as IndustryId]; set({ industry: ind.id, trade: ind.trade, showAddress: !ind.mobile }); }}>{INDUSTRY_LIST.map((i) => <option key={i.id} value={i.id}>{i.label}</option>)}</select>}
+            </Field>
+            <Text label="What customers would call it" value={b.trade} onChange={(v) => set({ trade: v })} help="As people search: “skin clinic”, “plumber”." />
+            <Text label="Owner’s name" value={b.owner} onChange={(v) => set({ owner: v })} optional />
+            <Text label="Year they started" value={b.founded} onChange={(v) => set({ founded: v.replace(/\D/g, '').slice(0, 4) })} optional />
+            <label className="check-row"><input type="checkbox" checked={b.showAddress} onChange={(e: any) => set({ showAddress: e.target.checked })} /> Show the address (customers come to them)</label>
+          </div>
+          <div className="form-grid">
+            <Text long label="Qualifications, memberships and insurance" value={b.credentials.join('\n')} onChange={(v) => set({ credentials: lines(v) })} help="One per line. Only what’s true and they can show." optional />
+            <Text long label="What makes them different" value={b.differences.join('\n')} onChange={(v) => set({ differences: lines(v) })} help="One per line. These become the site’s “why us”." optional />
+          </div>
+        </Section>
+      )}
+      <Section title="Contact details" intro="Phone, email, address and the areas covered" open={!gainora}>
         <div className="form-grid">
-          <Text label="Business name" value={b.name} onChange={(v) => set({ name: v })} help="Exactly as on the sign and your paperwork." />
-          <Field label="Kind of business">
-            {(id) => <select id={id} className="select" value={b.industry} onChange={(e: any) => { const ind = INDUSTRIES[e.target.value as IndustryId]; set({ industry: ind.id, trade: ind.trade, showAddress: !ind.mobile }); }}>{INDUSTRY_LIST.map((i) => <option key={i.id} value={i.id}>{i.label}</option>)}</select>}
-          </Field>
-          <Text label="What you’d call it" value={b.trade} onChange={(v) => set({ trade: v })} help="As customers would search: “skin clinic”, “plumber”." />
           <Text label="Phone" type="tel" value={b.phone} onChange={(v) => set({ phone: v })} />
           <Text label="Email" type="email" value={b.email} onChange={(v) => set({ email: v })} optional />
-          <Text label="Town" value={b.town} onChange={(v) => set({ town: v })} />
           <Text label="Street address" value={b.line1} onChange={(v) => set({ line1: v })} optional={!b.showAddress} />
           <Text label="Address line 2" value={b.line2} onChange={(v) => set({ line2: v })} optional />
+          <Text label="Town" value={b.town} onChange={(v) => set({ town: v })} />
           <Text label="Postcode" value={b.postcode} onChange={(v) => set({ postcode: v.toUpperCase() })} />
-          <label className="check-row"><input type="checkbox" checked={b.showAddress} onChange={(e: any) => set({ showAddress: e.target.checked })} /> Show the address (customers come to you)</label>
-          <Text label="Towns and areas you cover" value={b.areas.join(', ')} onChange={(v) => set({ areas: v.split(',').map((x) => x.trim()).filter(Boolean) })} help="Separate with commas." long={false} />
-          <Text label="Owner’s name" value={b.owner} onChange={(v) => set({ owner: v })} optional />
-          <Text label="Year you started" value={b.founded} onChange={(v) => set({ founded: v.replace(/\D/g, '').slice(0, 4) })} optional />
+          <Text label="Towns and areas covered" value={b.areas.join(', ')} onChange={(v) => set({ areas: v.split(',').map((x) => x.trim()).filter(Boolean) })} help="Separate with commas." />
         </div>
-        <div className="form-grid">
-          <Text long label="Qualifications, memberships and insurance" value={b.credentials.join('\n')} onChange={(v) => set({ credentials: lines(v) })} help="One per line. Only what’s true and you can show." optional />
-          <Text long label="What makes you different" value={b.differences.join('\n')} onChange={(v) => set({ differences: lines(v) })} help="One per line, in plain words. These become the site’s “why us”." optional />
-        </div>
+        {!gainora && <p className="xsmall faint">Changing your phone or address? Tell Gainora too, so your Google profile and listings are updated to match.</p>}
       </Section>
-      <Section title="Opening hours" intro="Shown on the site and sent to Google">
+      <Section title="Opening hours" intro="Shown on the site and in Google">
         <div className="hours-grid">
           {DAYS.map((d) => (
             <Field key={d.id} label={d.label} help={hoursLabel(b.hours[d.id])}>
@@ -291,10 +410,10 @@ function EditTab({ draft, update, hasCapture, goPreview }: { draft: Site; update
         </div>
         <p className="xsmall faint">Type times like 9:00-17:30. Leave empty when closed.</p>
       </Section>
-      <ServicesEditor draft={draft} update={update} />
-      <WordsEditor draft={draft} update={update} />
+      <ServicesEditor draft={draft} update={update} gainora={gainora} />
+      {gainora && <WordsEditor draft={draft} update={update} />}
       <Section title="Reviews" intro="Only real reviews, with the name the customer used">
-        <Text label="Google review link" value={draft.reviewLink} onChange={(v) => update({ ...draft, reviewLink: v.trim() })} help="From your Google profile: Ask for reviews → copy the link." placeholder="https://g.page/r/…/review" />
+        <Text label="Google review link" value={draft.reviewLink} onChange={(v) => update({ ...draft, reviewLink: v.trim() })} help="From the Google profile: Ask for reviews → copy the link." placeholder="https://g.page/r/…/review" />
         {draft.reviews.map((r, i) => (
           <div key={r.id} className="repeat-row">
             <Text long label={`Review ${i + 1}`} value={r.text} onChange={(v) => update({ ...draft, reviews: draft.reviews.map((x) => (x.id === r.id ? { ...x, text: v } : x)) })} />
@@ -307,13 +426,13 @@ function EditTab({ draft, update, hasCapture, goPreview }: { draft: Site; update
         ))}
         {draft.reviews.length < 12 && <div><Button kind="secondary" small icon="plus" onClick={() => update({ ...draft, reviews: [...draft.reviews, { id: uid(), text: '', name: '', source: 'Google' }] })}>Add a review</Button></div>}
       </Section>
-      <LookEditor draft={draft} update={update} />
+      {gainora && <LookEditor draft={draft} update={update} />}
       <Section title="Booking and enquiries" intro="Where the main button goes">
         <div className="form-grid">
-          <Text label="Online booking link" value={draft.booking.url} onChange={(v) => update({ ...draft, booking: { ...draft.booking, url: v.trim() } })} placeholder="https://…" help="Your booking page (Capture & Convert, Fresha, Phorest…). Empty: the button opens the enquiry form." optional />
-          <Text label="Button wording" value={draft.booking.label} onChange={(v) => update({ ...draft, booking: { ...draft.booking, label: v } })} placeholder={INDUSTRIES[b.industry].cta.label} optional />
+          <Text label="Online booking link" value={draft.booking.url} onChange={(v) => update({ ...draft, booking: { ...draft.booking, url: v.trim() } })} placeholder="https://…" help="The booking page (Capture & Convert, Fresha, Phorest…). Empty: the button opens the enquiry form." optional />
+          {gainora && <Text label="Button wording" value={draft.booking.label} onChange={(v) => update({ ...draft, booking: { ...draft.booking, label: v } })} placeholder={INDUSTRIES[b.industry].cta.label} optional />}
         </div>
-        {hasCapture && <Text label="Capture & Convert website form link" value={draft.captureFormUrl} onChange={(v) => update({ ...draft, captureFormUrl: v.trim() })} help="From Capture & Convert → Receptionist → Website form. Every website enquiry then lands in your inbox there too, with its follow-ups." placeholder="https://capture.gainora.co.uk/api/enquiry-in/…" optional />}
+        {hasCapture && <Text label="Capture & Convert website form link" value={draft.captureFormUrl} onChange={(v) => update({ ...draft, captureFormUrl: v.trim() })} help="From Capture & Convert → Receptionist → Website form. Every website enquiry then lands there too, with its follow-ups." placeholder="https://capture.gainora.co.uk/api/enquiry-in/…" optional />}
       </Section>
       <div className="row gap-12"><Button kind="secondary" icon="watcher" onClick={goPreview}>Preview the site</Button></div>
     </div>
@@ -334,7 +453,7 @@ function ChecksPanel({ list }: { list: ReturnType<typeof checks> }) {
   );
 }
 
-function ServicesEditor({ draft, update }: { draft: Site; update: (s: Site) => void }) {
+function ServicesEditor({ draft, update, gainora }: { draft: Site; update: (s: Site) => void; gainora: boolean }) {
   const setSvc = (id: string, patch: Partial<Service>) => update({ ...draft, services: draft.services.map((x) => (x.id === id ? { ...x, ...patch } : x)) });
   const move = (i: number, dir: -1 | 1) => { const s = [...draft.services]; const j = i + dir; if (j < 0 || j >= s.length) return; [s[i], s[j]] = [s[j], s[i]]; update({ ...draft, services: s }); };
   const pages = draft.services.filter((x) => x.page).length;
@@ -349,7 +468,9 @@ function ServicesEditor({ draft, update }: { draft: Site; update: (s: Site) => v
           </div>
           <Text label="In a sentence" value={x.summary} onChange={(v) => setSvc(x.id, { summary: v })} />
           <div className="row gap-12 wrap">
-            <label className="check-row"><input type="checkbox" checked={x.page} disabled={!x.page && pages >= 4} onChange={(e: any) => setSvc(x.id, { page: e.target.checked })} /> Its own page (helps it get found on Google)</label>
+            {gainora
+              ? <label className="check-row"><input type="checkbox" checked={x.page} disabled={!x.page && pages >= 4} onChange={(e: any) => setSvc(x.id, { page: e.target.checked })} /> Its own page (helps it get found on Google)</label>
+              : x.page ? <span className="tag tag-plain">Has its own page</span> : null}
             <span className="row gap-4" style={{ marginLeft: 'auto' }}>
               <Button kind="quiet" small onClick={() => move(i, -1)} disabled={i === 0} aria-label={`Move ${x.name} up`}>Up</Button>
               <Button kind="quiet" small onClick={() => move(i, 1)} disabled={i === draft.services.length - 1} aria-label={`Move ${x.name} down`}>Down</Button>
@@ -422,16 +543,55 @@ function PhotoPicker({ label, photo, onChange, help }: { label: string; photo: P
   );
 }
 
-const STYLES: { id: Style; label: string; note: string }[] = [
-  { id: 'calm', label: 'Calm', note: 'Elegant serif headings. Clinics and practices.' },
-  { id: 'warm', label: 'Warm', note: 'Friendly and characterful. Salons and boutiques.' },
-  { id: 'bold', label: 'Bold', note: 'Strong and direct. Trades and builders.' },
+const SHAPES: { id: Style; label: string; note: string }[] = [
+  { id: 'calm', label: 'Soft', note: 'Gently rounded corners' },
+  { id: 'warm', label: 'Round', note: 'Pill buttons, generous curves' },
+  { id: 'bold', label: 'Square', note: 'Crisp edges, direct' },
 ];
+const HEROES: { id: HeroLayout; label: string; note: string }[] = [
+  { id: 'split', label: 'Side by side', note: 'Words beside the main photo' },
+  { id: 'full', label: 'Full photo', note: 'Words over a full-width photo (needs the main photo)' },
+  { id: 'centred', label: 'Centred', note: 'Centred words above a wide photo' },
+];
+const SURFACES: { id: Surface; label: string; note: string }[] = [
+  { id: 'light', label: 'Light', note: 'Clean and bright' },
+  { id: 'tinted', label: 'Tinted', note: 'A soft wash of the brand colour' },
+  { id: 'deep', label: 'Deep', note: 'Dark top and call-to-action' },
+];
+const SECTION_LABELS: [keyof Sections, string][] = [['how', 'How it works'], ['why', 'Why choose us'], ['gallery', 'Photo strip (4+ photos)'], ['reviews', 'Reviews'], ['faq', 'Questions']];
+
+/** Loads the site fonts once so the choices can be seen in the editor. */
+function useSiteFonts() {
+  useEffect(() => {
+    if (document.getElementById('site-fonts')) return;
+    const l = document.createElement('link');
+    l.id = 'site-fonts'; l.rel = 'stylesheet';
+    l.href = `https://fonts.googleapis.com/css2?${Object.values(FONTS).map((f) => f.href).join('&')}&display=swap`;
+    document.head.appendChild(l);
+  }, []);
+}
+
+function Choice<T extends string>({ label, value, options, onChange, render }: { label: string; value: T; options: { id: T; label: string; note: string }[]; onChange: (v: T) => void; render?: (id: T, label: string) => any }) {
+  return (
+    <div className="stack gap-8">
+      <strong className="small">{label}</strong>
+      <div className="style-pick" role="radiogroup" aria-label={label}>
+        {options.map((o) => (
+          <button key={o.id} type="button" role="radio" aria-checked={value === o.id} className="style-card" onClick={() => onChange(o.id)}>
+            {render ? render(o.id, o.label) : <span className="style-name">{o.label}</span>}<span className="xsmall muted">{o.note}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function LookEditor({ draft, update }: { draft: Site; update: (s: Site) => void }) {
+  useSiteFonts();
   const look = draft.look;
   const set = (patch: Partial<Site['look']>) => update({ ...draft, look: { ...look, ...patch } });
   const toast = useToast();
+  const sections = { ...DEFAULT_SECTIONS, ...look.sections };
   const addGallery = async (e: any) => {
     const files: File[] = Array.from(e.target.files ?? []);
     e.target.value = '';
@@ -441,20 +601,27 @@ function LookEditor({ draft, update }: { draft: Site; update: (s: Site) => void 
     if (added.length) set({ gallery: [...look.gallery, ...added] });
   };
   return (
-    <Section title="Look and photos" intro="Style, colour, logo and photos">
-      <div className="style-pick" role="radiogroup" aria-label="Style">
-        {STYLES.map((s) => (
-          <button key={s.id} type="button" role="radio" aria-checked={look.style === s.id} className={`style-card style-${s.id}`} onClick={() => set({ style: s.id })}>
-            <span className="style-name">{s.label}</span><span className="xsmall muted">{s.note}</span>
-          </button>
-        ))}
+    <Section title="Design" intro="Fonts, layout, colour and photos. Only Gainora sees this.">
+      <Choice<FontPair> label="Fonts" value={look.fonts} onChange={(v) => set({ fonts: v })}
+        options={(Object.keys(FONTS) as FontPair[]).map((k) => ({ id: k, label: FONTS[k].label, note: FONTS[k].display.split(',')[0].replace(/"/g, '') + (FONTS[k].display === FONTS[k].body ? '' : ` with ${FONTS[k].body.split(',')[0].replace(/"/g, '')}`) }))}
+        render={(id, label) => <span className="style-name" style={{ fontFamily: FONTS[id].display, fontWeight: FONTS[id].displayWeight }}>{label}</span>} />
+      <Choice<HeroLayout> label="Top of the home page" value={look.heroLayout} options={HEROES} onChange={(v) => set({ heroLayout: v })} />
+      <Choice<Surface> label="Tone" value={look.surface} options={SURFACES} onChange={(v) => set({ surface: v })} />
+      <Choice<Style> label="Shape" value={look.style} options={SHAPES} onChange={(v) => set({ style: v })} />
+      <div className="stack gap-8">
+        <strong className="small">Brand colour</strong>
+        <div className="swatches" role="radiogroup" aria-label="Brand colour">
+          {PALETTES.map((p) => <button key={p.accent} type="button" role="radio" aria-checked={look.accent.toLowerCase() === p.accent.toLowerCase()} className="swatch" style={{ background: p.accent }} title={p.name} aria-label={p.name} onClick={() => set({ accent: p.accent })} />)}
+        </div>
+        <div className="row gap-12"><input type="color" value={look.accent} aria-label="Any colour" onChange={(e: any) => set({ accent: e.target.value })} className="color-input" /><input className="input" style={{ maxWidth: 140 }} value={look.accent} aria-label="Colour code" onChange={(e: any) => /^#[0-9a-f]{0,6}$/i.test(e.target.value) && set({ accent: e.target.value })} /><span className="xsmall faint">Match their logo or shop front. Darkened automatically if white text wouldn’t be readable on it.</span></div>
       </div>
-      <Field label="Main colour" help="Buttons and highlights. It’s darkened automatically if white text wouldn’t be readable on it.">
-        {(id, d) => <div className="row gap-12"><input id={id} type="color" value={look.accent} aria-describedby={d} onChange={(e: any) => set({ accent: e.target.value })} className="color-input" /><input className="input" style={{ maxWidth: 140 }} value={look.accent} aria-label="Colour code" onChange={(e: any) => /^#[0-9a-f]{0,6}$/i.test(e.target.value) && set({ accent: e.target.value })} /></div>}
-      </Field>
-      <PhotoPicker label="Logo" photo={look.logo} onChange={(p) => set({ logo: p })} help="Optional. Without one, the name is set in the site’s heading font." />
+      <div className="stack gap-8">
+        <strong className="small">Sections on the home page</strong>
+        <div className="row gap-16 wrap">{SECTION_LABELS.map(([k, l]) => <label key={k} className="check-row"><input type="checkbox" checked={sections[k]} onChange={(e: any) => set({ sections: { ...sections, [k]: e.target.checked } })} /> {l}</label>)}</div>
+      </div>
+      <PhotoPicker label="Logo" photo={look.logo} onChange={(p) => set({ logo: p })} help="Without one, the name is set in the heading font." />
       <PhotoPicker label="Main photo" photo={look.hero} onChange={(p) => set({ hero: p })} help={`Top of the home page. Ideas: ${INDUSTRIES[draft.business.industry].photoIdeas[0].toLowerCase()}.`} />
-      <PhotoPicker label="About photo" photo={look.about} onChange={(p) => set({ about: p })} help="You or the team, or where you work." />
+      <PhotoPicker label="About photo" photo={look.about} onChange={(p) => set({ about: p })} help="The owner or team, or where they work." />
       <div className="stack gap-8">
         <strong className="small">More photos ({look.gallery.length} of 12)</strong>
         {look.gallery.length > 0 && <div className="gallery-edit">{look.gallery.map((g) => <figure key={g.id}><img src={g.url} alt={g.alt} /><input className="input" value={g.alt} placeholder="Describe it" aria-label="Describe this photo" onChange={(e: any) => set({ gallery: look.gallery.map((x) => (x.id === g.id ? { ...x, alt: e.target.value } : x)) })} /><Button kind="quiet" small onClick={() => set({ gallery: look.gallery.filter((x) => x.id !== g.id) })}>Remove</Button></figure>)}</div>}
@@ -641,7 +808,7 @@ function FoundTab({ draft, site, update }: { draft: Site; site: WebsiteState; up
 
 /* ---------- Launch plan ---------- */
 
-function PlanTab({ draft, update }: { draft: Site; update: (s: Site) => void }) {
+function PlanTab({ draft, update, gainora }: { draft: Site; update: (s: Site) => void; gainora: boolean }) {
   const weeks = launchPlan(draft);
   const p = planProgress(draft);
   const tick = (id: string, v: boolean) => update({ ...draft, plan: { ...draft.plan, [id]: v } });
@@ -650,6 +817,7 @@ function PlanTab({ draft, update }: { draft: Site; update: (s: Site) => void }) 
     <div className="stack gap-16">
       <section className="panel panel-pad stack gap-8">
         <div className="row gap-12 wrap" style={{ justifyContent: 'space-between' }}><h2 className="heading">The first six weeks</h2><span className="small muted">{p.done} of {p.total} done</span></div>
+        {!gainora && <p className="small muted">What Gainora is doing to get your business found, and the few things we need from you.</p>}
         <div className="progress" role="progressbar" aria-valuemin={0} aria-valuemax={p.total} aria-valuenow={p.done} aria-label="Launch progress"><span style={{ width: `${(p.done / Math.max(1, p.total)) * 100}%` }} /></div>
       </section>
       {weeks.map((w) => (
@@ -657,7 +825,7 @@ function PlanTab({ draft, update }: { draft: Site; update: (s: Site) => void }) 
           <div className="panel-head"><h3 className="heading">{w.title}</h3><span className="small faint">{w.tasks.filter((t) => draft.plan[t.id]).length}/{w.tasks.length}</span></div>
           <ul className="tasks">{w.tasks.map((t) => (
             <li key={t.id}>
-              <label className="check-row"><input type="checkbox" checked={!!draft.plan[t.id]} onChange={(e: any) => tick(t.id, e.target.checked)} /><span><span className={draft.plan[t.id] ? 'done' : ''}>{t.text}</span>{t.detail && <span className="xsmall faint task-detail">{t.detail}</span>}</span></label>
+              <label className="check-row"><input type="checkbox" checked={!!draft.plan[t.id]} disabled={!gainora && t.who === 'gainora'} onChange={(e: any) => tick(t.id, e.target.checked)} /><span><span className={draft.plan[t.id] ? 'done' : ''}>{t.text}</span>{t.detail && <span className="xsmall faint task-detail">{t.detail}</span>}</span></label>
               <span className={`tag ${t.who === 'owner' ? 'tag-brass' : t.who === 'both' ? 'tag-forest' : 'tag-plain'}`}>{WHO[t.who]}</span>
             </li>
           ))}</ul>

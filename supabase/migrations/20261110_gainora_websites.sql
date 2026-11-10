@@ -9,6 +9,8 @@
 --                  `visitor` is a one-way code that changes every day. Service role only.
 -- site_enquiries   messages sent through the website form. Personal data, owned by the business (the data
 --                  controller); readable and deletable only by that account.
+-- site_requests    changes the client asks Gainora to make to the design or wording (clients edit their own
+--                  prices, services, hours and contact details; everything else is Gainora's). Service role only.
 -- site-media       public bucket for the site's photos and logo, one folder per account.
 
 alter table public.entitlements drop constraint if exists entitlements_agent_check;
@@ -63,6 +65,19 @@ drop policy if exists "site_enquiries: owner reads" on public.site_enquiries;
 create policy "site_enquiries: owner reads" on public.site_enquiries for select using (user_id = auth.uid());
 drop policy if exists "site_enquiries: owner deletes" on public.site_enquiries;
 create policy "site_enquiries: owner deletes" on public.site_enquiries for delete using (user_id = auth.uid());
+
+create table if not exists public.site_requests (
+  id uuid primary key default gen_random_uuid(),
+  site_id uuid not null references public.sites(id) on delete cascade,
+  at timestamptz not null default now(),
+  page text not null default '',
+  text text not null check (char_length(text) between 1 and 2000),
+  status text not null default 'open' check (status in ('open','done')),
+  done_at timestamptz,
+  reply text not null default ''
+);
+create index if not exists site_requests_site_idx on public.site_requests(site_id, at desc);
+alter table public.site_requests enable row level security;   -- no policies: only the service role reads or writes
 
 -- Photos: public to read (they're on a public website), and each account writes only its own folder.
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)

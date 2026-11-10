@@ -2,7 +2,8 @@
 // cookieless visitor code. Pages are drawn by shared/site/render.ts, the same code as the editor's preview.
 import { createHash } from 'node:crypto';
 import { db, enc, env, HttpError, userFromRequest, type AuthedUser } from './core';
-import { type Site, slug as slugify, withDefaults } from '../../shared/site/data';
+import { DEFAULT_SECTIONS, type Site, slug as slugify, withDefaults } from '../../shared/site/data';
+import { FONTS } from '../../shared/site/render';
 
 export interface SiteRow { id: string; user_id: string; slug: string; domain: string | null; data: any; published: any; published_at: string | null; updated_at: string }
 
@@ -28,12 +29,24 @@ export async function siteById(id: string): Promise<SiteRow | null> {
   return (await db<SiteRow[]>(`sites?select=${COLS}&id=eq.${id}`))[0] ?? null;
 }
 
-/** Signed in, with Launch & Grow (the website entitlement) on their plan. */
-export async function requireWebsite(req: Request): Promise<AuthedUser> {
+/** Gainora's own team: can open any client's website and change everything on it. */
+export const gainoraEmails = () => (env('GAINORA_ADMIN_EMAILS') || 'hello@gainora.co.uk').split(',').map((e) => e.trim().toLowerCase()).filter(Boolean);
+export const isGainora = (user: Pick<AuthedUser, 'email'>) => gainoraEmails().includes(String(user.email || '').toLowerCase());
+
+/** The owner's email address, for telling them about their website. */
+export async function ownerEmail(userId: string): Promise<string | null> {
+  const r = await fetch(`${env('SUPABASE_URL')}/auth/v1/admin/users/${userId}`, { headers: { apikey: env('SUPABASE_SERVICE_ROLE_KEY'), Authorization: `Bearer ${env('SUPABASE_SERVICE_ROLE_KEY')}` } }).catch(() => null);
+  const u = r?.ok ? await r.json().catch(() => null) : null;
+  return u?.email ?? null;
+}
+
+/** Signed in, with Launch & Grow (the website entitlement) on their plan, or one of Gainora's team. */
+export async function requireWebsite(req: Request): Promise<AuthedUser & { gainora: boolean }> {
   const user = await userFromRequest(req);
+  if (isGainora(user)) return { ...user, gainora: true };
   const rows = await db<any[]>(`entitlements?select=agent&agent=eq.website&status=in.(active,trialing)&or=(user_id.eq.${user.id},email.eq.${enc(user.email)})`);
   if (!rows.length) throw new HttpError(403, 'Your website comes with Launch & Grow. Email hello@gainora.co.uk to add it.');
-  return user;
+  return { ...user, gainora: false };
 }
 
 const str = (v: unknown, max: number) => String(v ?? '').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, '').slice(0, max);
@@ -64,6 +77,10 @@ export function cleanSite(raw: any): Site {
     ads: { monthly: Math.max(0, Math.min(100_000, Number(s.ads.monthly) || 0)), radiusMiles: Math.max(1, Math.min(100, Number(s.ads.radiusMiles) || 10)) },
     look: {
       style: (['calm', 'bold', 'warm'] as const).includes(s.look.style) ? s.look.style : 'calm',
+      fonts: s.look.fonts in FONTS ? s.look.fonts : 'classic',
+      heroLayout: (['split', 'full', 'centred'] as const).includes(s.look.heroLayout) ? s.look.heroLayout : 'split',
+      surface: (['light', 'tinted', 'deep'] as const).includes(s.look.surface) ? s.look.surface : 'light',
+      sections: Object.fromEntries(Object.keys(DEFAULT_SECTIONS).map((k) => [k, (s.look.sections as any)?.[k] !== false])) as unknown as Site['look']['sections'],
       accent: /^#[0-9a-f]{6}$/i.test(s.look.accent) ? s.look.accent : '#3D4F6B',
       logo: photo(s.look.logo), hero: photo(s.look.hero), about: photo(s.look.about),
       gallery: (s.look.gallery || []).map(photo).filter((p): p is NonNullable<ReturnType<typeof photo>> => !!p).slice(0, 12),
