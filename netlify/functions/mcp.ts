@@ -15,6 +15,8 @@ import { fromPriceItem, money, proposalTotals } from '../../shared/admin/prices'
 import { askUrl, saveAsk } from '../lib/asks';
 import { answersText, ASK_TEMPLATES, type Ask, MAX_QUESTIONS, progressOf, templateFor } from '../../shared/admin/asks';
 import { addDays } from '../../shared/admin/templates';
+import { deleteBlock, deleteTask as deleteMeTask, findBlock, findTask, getRoutine, getSettings as getMeSettings, getTasks, plan as dayPlan, saveBlock, saveDay, saveSettings as saveMeSettings, saveTask as saveMeTask, weeks as myWeeks } from '../lib/me';
+import { anchorFor, BLOCK_KINDS, blocksFor, daysLabel, isDate, type MeTask, type Plan, REPEATS, SCORE_FIELDS, TASK_CATEGORIES, taskGroups } from '../../shared/admin/me';
 
 // The Claude connector for Gainora's admin. Added once in claude.ai (Settings → Connectors → Add custom connector)
 // with the link made in admin.gainora.co.uk → Settings. Any chat with Claude can then look up clients, work
@@ -26,7 +28,8 @@ import { addDays } from '../../shared/admin/templates';
 const VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'];
 const CLAUDE = 'Claude';
 
-type Tool = { name: string; description: string; inputSchema: any; run: (args: any, s: AdminState) => Promise<unknown> };
+/** light: the tool never looks at clients, so the whole admin state isn't loaded for it. */
+type Tool = { name: string; description: string; inputSchema: any; light?: boolean; run: (args: any, s: AdminState) => Promise<unknown> };
 const str = { type: 'string' };
 const QUESTION_ITEM = { type: 'object', properties: { id: { type: 'string' }, label: { type: 'string' }, type: { type: 'string', enum: ['text', 'long', 'links', 'photos', 'yesno', 'choice', 'multi'] }, options: { type: 'array', items: { type: 'string' }, maxItems: 12 }, help: { type: 'string' }, group: { type: 'string' } }, required: ['label'] };
 const client = { type: 'string', description: 'The client: their email, business name, or website address (slug).' };
@@ -331,7 +334,170 @@ const TOOLS: Tool[] = [
   },
 ];
 
-const INSTRUCTIONS = 'Gainora’s admin: Gainora’s clients (businesses), what they bought, the delivery checklist with deadlines, their websites and change requests; and sales: the outreach list, follow-ups due, the price book and draft proposals. Start with list_clients, list_tasks, list_client_questions or list_followups. Everything you change is recorded as done by Claude. Ask before publishing a website or emailing a client (complete_change_request emails them). Nothing here sends outreach, proposals or questions to clients: Adelin does that from the admin.';
+
+/* ---------- My day: Adelin's own routine, check-ins, to-do list, gym and trading journal ---------- */
+
+const day = { ...str, description: 'YYYY-MM-DD; today (UK) if left out.' };
+const dayOf = (d: unknown) => (isDate(d) ? d : ukToday());
+const planSummary = (p: Plan) => ({
+  date: p.date, day: p.dayName, level: p.status.label, minimum_day: p.status.minimum.map((c) => `${c.ok ? 'done' : 'not yet'}: ${c.label}`), good_day: p.status.good.map((c) => `${c.ok ? 'done' : 'not yet'}: ${c.label}`),
+  streak_days: p.streak, gym: { session: p.gym.label, done: p.gym.done, minutes: p.gym.minutes, usual_minutes: p.gym.usualMinutes },
+  routine: p.blocks.map((b) => ({ id: b.id, time: b.finish ? `${b.start}-${b.finish}` : b.start, title: b.title, kind: b.kind, done: b.ticked })),
+  must_dos: p.day.must_dos, scoreboard: { ...Object.fromEntries(SCORE_FIELDS.map((f) => [f.key, p.day[f.key]])), energy: p.day.energy, followups_cleared: p.day.followups_cleared },
+  targets: { minimum_contacts: p.settings.minimum.contacts, good_contacts: p.settings.good.contacts, weekly_contacts: p.settings.weeklyContacts },
+  this_week: p.week, energy_warning: p.energyWarning, notes: p.day.notes, trading: p.day.trading,
+  sales_followups_due: p.followUpsDue, client_steps_due: p.clientTasks.map((t) => `${t.client}: ${t.title} (due ${t.due_on})`),
+  my_tasks_due: p.tasks.due.map(taskOut), my_tasks_open: p.tasks.open, my_tasks_without_date: p.tasks.undated,
+});
+const taskOut = (t: MeTask & { next_due?: string | null }) => ({ id: t.id, title: t.title, category: t.category, due_on: t.due_on, repeat: t.repeat, done: t.done, notes: t.notes || undefined, ...(t.next_due !== undefined ? { next_due: t.next_due } : {}) });
+const SCORE_PROPS = Object.fromEntries(SCORE_FIELDS.map((f) => [f.key, { type: 'number', description: `${f.label} that day (the total, not an increase).` }]));
+
+const ME_TOOLS: Tool[] = [
+  {
+    name: 'get_my_day', light: false,
+    description: 'Adelin’s day: the routine blocks with what’s ticked, today’s gym session, the three must-dos, the scoreboard, whether the minimum and good day are reached, the streak, this week’s totals, the energy warning, notes, trading journal, sales follow-ups due, client steps due and his personal tasks due. Use it first in a morning or evening check-in.',
+    inputSchema: { type: 'object', properties: { date: day } },
+    run: async ({ date }, s) => planSummary(await dayPlan(dayOf(date), s)),
+  },
+  {
+    name: 'update_my_day', light: true,
+    description: 'Log Adelin’s check-in for a day: the three must-dos (morning), scoreboard numbers and energy 1 to 10 (evening), follow-ups cleared, routine blocks done (tick, by block id or part of the title, e.g. "gym", "in bed", "walk-ins"), and notes. Only what you send changes. Numbers are the day’s totals. append_note adds a timed line to the day’s notes; notes replaces them.',
+    inputSchema: { type: 'object', properties: {
+      date: day, must_dos: { type: 'array', items: str, maxItems: 3 }, ...SCORE_PROPS, energy: { type: 'number', description: '1 to 10.' }, followups_cleared: { type: 'boolean' },
+      tick: { type: 'array', items: str, description: 'Blocks done.' }, untick: { type: 'array', items: str, description: 'Blocks not done after all.' },
+      append_note: str, notes: { ...str, description: 'Replaces the day’s notes.' },
+    } },
+    run: async ({ date, tick, untick, ...rest }) => {
+      const d = dayOf(date);
+      const routine = blocksFor(await getRoutine(), d);
+      const ticks: Record<string, boolean> = {};
+      for (const ref of Array.isArray(tick) ? tick : []) ticks[findBlock(routine, ref).id] = true;
+      for (const ref of Array.isArray(untick) ? untick : []) ticks[findBlock(routine, ref).id] = false;
+      const keys = ['must_dos', ...SCORE_FIELDS.map((f) => f.key), 'energy', 'followups_cleared', 'append_note', 'notes'];
+      const patch: any = Object.fromEntries(keys.filter((k) => rest[k] !== undefined).map((k) => [k, rest[k]]));
+      if (Object.keys(ticks).length) patch.ticks = ticks;
+      if (!Object.keys(patch).length) throw new HttpError(400, 'Nothing to change.');
+      await saveDay(d, patch);
+      return planSummary(await dayPlan(d, null));
+    },
+  },
+  {
+    name: 'log_gym', light: true,
+    description: 'Log a gym session: done or not, minutes in the gym (not travel), and a note. session overrides the split’s session for that day only (e.g. if he trained legs instead).',
+    inputSchema: { type: 'object', properties: { date: day, done: { type: 'boolean' }, minutes: { type: 'number' }, session: str, note: str } },
+    run: async ({ date, done, minutes, session, note }) => {
+      const d = dayOf(date);
+      const gym = Object.fromEntries(Object.entries({ done, minutes, session, note }).filter(([, v]) => v !== undefined));
+      if (!Object.keys(gym).length) throw new HttpError(400, 'Nothing to log.');
+      const saved = await saveDay(d, { gym });
+      return { date: d, gym: saved.gym };
+    },
+  },
+  {
+    name: 'update_gym_plan', light: true,
+    description: 'Change the gym plan: the split (one session a day, in order, repeating), which session today is (1 = the first in the split), the usual session length in minutes, and what ends every session (e.g. heavy bag).',
+    inputSchema: { type: 'object', properties: { split: { type: 'array', items: str, maxItems: 14 }, today_session: { type: 'number', description: 'Position in the split, from 1.' }, usual_minutes: { type: 'number' }, finisher: str } },
+    run: async ({ split, today_session, usual_minutes, finisher }) => {
+      const cur = await getMeSettings();
+      const nextSplit = Array.isArray(split) && split.length ? split.map(String) : cur.gymSplit;
+      const patch: any = { gymSplit: nextSplit };
+      if (today_session !== undefined) patch.gymAnchor = anchorFor(nextSplit, ukToday(), Math.max(1, Math.round(Number(today_session))) - 1);
+      if (usual_minutes !== undefined) patch.gymMinutes = usual_minutes;
+      if (finisher !== undefined) patch.finisher = finisher;
+      const s = await saveMeSettings(patch);
+      return { split: s.gymSplit, usual_minutes: s.gymMinutes, finisher: s.finisher, today: (await dayPlan(ukToday(), null)).gym.label };
+    },
+  },
+  {
+    name: 'log_trading', light: true,
+    description: 'Add to Adelin’s trading journal for a day: news day (no trading, watch only), traded or not, the setup, the result and notes. Only what you send changes. Write what he tells you; never give trading advice or predictions.',
+    inputSchema: { type: 'object', properties: { date: day, news_day: { type: 'boolean' }, traded: { type: 'boolean' }, setup: str, result: str, notes: str } },
+    run: async ({ date, ...t }) => {
+      const trading = Object.fromEntries(['news_day', 'traded', 'setup', 'result', 'notes'].filter((k) => t[k] !== undefined).map((k) => [k, t[k]]));
+      if (!Object.keys(trading).length) throw new HttpError(400, 'Nothing to log.');
+      const saved = await saveDay(dayOf(date), { trading });
+      return { date: dayOf(date), trading: saved.trading };
+    },
+  },
+  {
+    name: 'update_trading_rules', light: true,
+    description: 'Replace Adelin’s written trading rules (what counts as a news day, setups, risk, when he stops). Send the whole text, one rule a line. Write his rules in his words; don’t add your own.',
+    inputSchema: { type: 'object', properties: { rules: str }, required: ['rules'] },
+    run: async ({ rules }) => ({ rules: (await saveMeSettings({ tradingRules: String(rules ?? '') })).tradingRules }),
+  },
+  {
+    name: 'get_my_routine', light: true,
+    description: 'Adelin’s repeating day: every routine block with its time, days and kind, plus the gym split, minimum and good day targets and his trading rules.',
+    inputSchema: { type: 'object', properties: {} },
+    run: async () => {
+      const settings = await getMeSettings();
+      const routine = await getRoutine(settings);
+      return {
+        blocks: routine.sort((a, b) => a.start.localeCompare(b.start) || a.sort - b.sort).map((b) => ({ id: b.id, start: b.start, end: b.finish, title: b.title, detail: b.detail || undefined, days: daysLabel(b.days), day_numbers: b.days, kind: b.kind })),
+        gym: { split: settings.gymSplit, usual_minutes: settings.gymMinutes, finisher: settings.finisher },
+        targets: { minimum_contacts: settings.minimum.contacts, good_contacts: settings.good.contacts, weekly_contacts: settings.weeklyContacts },
+        trading_rules: settings.tradingRules,
+      };
+    },
+  },
+  {
+    name: 'update_routine_block', light: true,
+    description: `Add, change or delete a block of Adelin’s routine. Without block, a new block is added (start and title needed). Times are 24-hour HH:MM. days: 1 = Monday … 7 = Sunday. kind is one of ${BLOCK_KINDS.map((k) => k.id).join(', ')}; gym, sleep and followups blocks count towards the minimum day. Moving the gym or breakfast once the session length is known is a typical use.`,
+    inputSchema: { type: 'object', properties: {
+      block: { ...str, description: 'The block’s id or part of its title. Leave out to add a new block.' }, start: str, end: { ...str, description: 'HH:MM, or empty for none.' }, title: str, detail: str,
+      days: { type: 'array', items: { type: 'number' } }, kind: { ...str, enum: BLOCK_KINDS.map((k) => k.id) }, delete: { type: 'boolean' },
+    } },
+    run: async ({ block, start, end, title, detail, days, kind, delete: del }) => {
+      const routine = await getRoutine();
+      const target = block ? findBlock(routine, block) : null;
+      if (del) { if (!target) throw new HttpError(400, 'Say which block to delete.'); await deleteBlock(target.id); return { deleted: `${target.start} ${target.title}` }; }
+      const input: any = { ...(target ? { id: target.id } : {}) };
+      if (start !== undefined) input.start = start;
+      if (end !== undefined) input.finish = end === '' ? null : end;
+      if (title !== undefined) input.title = title;
+      if (detail !== undefined) input.detail = detail;
+      if (days !== undefined) input.days = days;
+      if (kind !== undefined) input.kind = kind;
+      const b = await saveBlock(input);
+      return { id: b.id, start: b.start, end: b.finish, title: b.title, days: daysLabel(b.days), kind: b.kind };
+    },
+  },
+  {
+    name: 'list_my_tasks', light: true,
+    description: 'Adelin’s personal to-do list (business, trading, gym, personal), grouped: late, today, this week, later, no date.',
+    inputSchema: { type: 'object', properties: { category: { ...str, enum: TASK_CATEGORIES.map((c) => c.id) }, include_done: { type: 'boolean' } } },
+    run: async ({ category, include_done }) => {
+      const all = (await getTasks(!!include_done)).filter((t) => !category || t.category === category);
+      return { groups: taskGroups(all, ukToday()).map((g) => ({ group: g.label, tasks: g.tasks.map(taskOut) })), ...(include_done ? { done: all.filter((t) => t.done).slice(0, 50).map(taskOut) } : {}) };
+    },
+  },
+  {
+    name: 'add_my_task', light: true,
+    description: `Add a task to Adelin’s personal to-do list. repeat: ${REPEATS.map((r) => r.id).join(', ')} (a repeating task moves to its next date when ticked).`,
+    inputSchema: { type: 'object', properties: { title: str, notes: str, due_on: { ...str, description: 'YYYY-MM-DD, optional.' }, category: { ...str, enum: TASK_CATEGORIES.map((c) => c.id) }, repeat: { ...str, enum: REPEATS.map((r) => r.id) } }, required: ['title'] },
+    run: async (args) => taskOut(await saveMeTask(args, CLAUDE)),
+  },
+  {
+    name: 'update_my_task', light: true,
+    description: 'Change or complete one of Adelin’s personal tasks (by id or part of its title): done true/false, title, notes, due date (null for none), category, repeat, or delete.',
+    inputSchema: { type: 'object', properties: { task: { ...str, description: 'The task’s id or part of its title.' }, done: { type: 'boolean' }, title: str, notes: str, due_on: { type: ['string', 'null'] }, category: { ...str, enum: TASK_CATEGORIES.map((c) => c.id) }, repeat: { ...str, enum: REPEATS.map((r) => r.id) }, delete: { type: 'boolean' } }, required: ['task'] },
+    run: async ({ task, delete: del, ...rest }) => {
+      const t = findTask(await getTasks(true), task);
+      if (del) { await deleteMeTask(t.id); return { deleted: t.title }; }
+      const patch = Object.fromEntries(Object.entries(rest).filter(([k, v]) => v !== undefined && ['done', 'title', 'notes', 'due_on', 'category', 'repeat'].includes(k)));
+      if (!Object.keys(patch).length) throw new HttpError(400, 'Nothing to change.');
+      return taskOut(await saveMeTask({ id: t.id, ...patch }, CLAUDE));
+    },
+  },
+  {
+    name: 'get_my_week', light: true,
+    description: 'Adelin’s last few weeks: contacts against the weekly target, conversations, sales chats, proposals, new clients, days at minimum and good, average energy; the last two weeks day by day; the streak; and a warning if energy has averaged under 6 for two weeks running.',
+    inputSchema: { type: 'object', properties: { weeks: { type: 'number', description: '1 to 26, default 4.' } } },
+    run: async ({ weeks: n }) => myWeeks(Number(n) || 4),
+  },
+];
+
+const INSTRUCTIONS = 'Gainora’s admin: Gainora’s clients (businesses), what they bought, the delivery checklist with deadlines, their websites and change requests; and sales: the outreach list, follow-ups due, the price book and draft proposals. Start with list_clients, list_tasks, list_client_questions or list_followups. Everything you change is recorded as done by Claude. Ask before publishing a website or emailing a client (complete_change_request emails them). Nothing here sends outreach, proposals or questions to clients: Adelin does that from the admin. My day is Adelin’s own routine, check-ins, scoreboard, to-do list, gym and trading journal: start with get_my_day, and log what he tells you (update_my_day, log_gym, log_trading, add_my_task). Measure what he did, not results; on a bad day, the minimum day is the goal.';
 
 function askSummary(a: Ask) {
   const p = progressOf(a);
@@ -356,12 +522,12 @@ async function handle(msg: any): Promise<any | null> {
     return rpc(id, { protocolVersion: VERSIONS.includes(asked) ? asked : VERSIONS[0], capabilities: { tools: { listChanged: false } }, serverInfo: { name: 'gainora-admin', version: '1.0.0' }, instructions: INSTRUCTIONS });
   }
   if (msg.method === 'ping') return rpc(id, {});
-  if (msg.method === 'tools/list') return rpc(id, { tools: TOOLS.map(({ name, description, inputSchema }) => ({ name, description, inputSchema })) });
+  if (msg.method === 'tools/list') return rpc(id, { tools: [...TOOLS, ...ME_TOOLS].map(({ name, description, inputSchema }) => ({ name, description, inputSchema })) });
   if (msg.method === 'tools/call') {
-    const tool = TOOLS.find((t) => t.name === msg.params?.name);
+    const tool = [...TOOLS, ...ME_TOOLS].find((t) => t.name === msg.params?.name);
     if (!tool) return rpcError(id, -32602, `Unknown tool: ${msg.params?.name}`);
     try {
-      const out = await tool.run(msg.params?.arguments ?? {}, await loadState());
+      const out = await tool.run(msg.params?.arguments ?? {}, tool.light ? (null as unknown as AdminState) : await loadState());
       return rpc(id, { content: [{ type: 'text', text: JSON.stringify(out, null, 1) }], isError: false });
     } catch (e: any) {
       const text = e instanceof HttpError ? e.message : 'That didn’t work. Try again in a minute.';

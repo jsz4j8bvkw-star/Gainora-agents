@@ -11,11 +11,13 @@ import { Today, Clients, Delivery, Requests, Settings } from './pages';
 import { Health, Money, Paperwork, Prices } from './business';
 import { ProspectPage, Sales } from './sales';
 import { ClientPage } from './client';
+import { MyDay } from './me';
 
 declare const __DEMO__: boolean;
 const BASE = (typeof __DEMO__ !== 'undefined' && __DEMO__) ? './' : '/';
 
 const NAV: { path: string; label: string; icon: string; group?: string; tab?: boolean }[] = [
+  { path: '/me', label: 'My day', icon: 'clock', tab: true },
   { path: '/', label: 'Today', icon: 'home', tab: true },
   { path: '/sales', label: 'Sales', icon: 'send', tab: true },
   { path: '/clients', label: 'Clients', icon: 'clients', group: 'Clients', tab: true },
@@ -65,6 +67,7 @@ function Shell({ email }: { email: string }) {
   const path = usePath().split('?')[0];
   const active = (p: string) => (p === '/' ? path === '/' : path.startsWith(p)) ? 'page' : undefined;
   const page = (() => {
+    if (path === '/me') return <MyDay />;
     if (path.startsWith('/sales/')) return <ProspectPage id={decodeURIComponent(path.slice('/sales/'.length))} />;
     if (path.startsWith('/sales')) return <Sales />;
     if (path.startsWith('/clients/')) return <ClientPage email={decodeURIComponent(path.slice('/clients/'.length))} />;

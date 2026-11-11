@@ -48,6 +48,12 @@ Run `supabase/migrations/20261107_gainora_agents_v2.sql` in the SQL Editor (it o
 
 Run `supabase/migrations/20261109_gainora_clients.sql` in the SQL Editor (it only adds the five client tables, with owner-only row-level security) and redeploy. Until it has run, "Your clients" shows "being set up" and everything else works as before. Undo with `20261109_gainora_clients_rollback.sql`, which deletes every owner's client records: export first.
 
+### My day (Gainora admin)
+
+A private page in the admin at `/me` (first in the menu) for Adelin's own day: the repeating routine with a tick box per block (05:30 coffee and check-in, gym, follow-ups, walk-ins, trading, client work, evening calls, 21:30 bed), today's gym session from the 7-day split, three must-dos, the scoreboard (contacts, owner conversations, sales chats, proposals, new clients, energy 1 to 10), a minimum day and a good day with a streak that a minimum day keeps alive, a personal to-do list (business, trading, gym, personal; repeating tasks move to their next date when ticked), daily notes, a trading journal and written trading rules. My weeks adds up the last eight weeks and warns when energy has averaged under 6 for two weeks running. The Claude connector gets matching tools (`get_my_day`, `update_my_day`, `log_gym`, `update_gym_plan`, `log_trading`, `update_trading_rules`, `get_my_routine`, `update_routine_block`, `list_my_tasks`, `add_my_task`, `update_my_task`, `get_my_week`), so check-ins can be done by talking to Claude.
+
+To switch it on, run `supabase/migrations/20261114_gainora_my_day.sql` in the SQL Editor (it only adds four `me_` tables; nothing about clients changes) and redeploy. The default routine is written the first time the page opens. Only one person sees it: the emails in `MY_DAY_EMAILS`, or if that isn't set, the first email in `GAINORA_ADMIN_EMAILS`. Undo with `20261114_gainora_my_day_rollback.sql`.
+
 ### Schedules
 
 | When (UTC) | Function | What it does |

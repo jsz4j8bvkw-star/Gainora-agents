@@ -146,7 +146,7 @@
   .bars li { grid-template-columns: 90px 1fr 30px; }
   .item-prices { padding-left: 0; }
 }
-@media (max-width: 900px) { .admin-shell .tabbar { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+@media (max-width: 900px) { .admin-shell .tabbar { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
 
 /* Dialogs in the admin: room around the content, and the title and buttons stay in view on long forms. */
 .admin-shell .modal > :not(.panel-head) { padding: 20px 28px 24px; }
@@ -175,3 +175,20 @@
 .q-edit li { display: grid; gap: 6px; }
 .select-small { min-height: 36px; font-size: var(--t-sm); width: auto; }
 .rule { border: 0; border-top: 1px solid var(--line); margin: 4px 0; width: 100%; }
+
+/* My day */
+.me-block { align-items: center; flex-wrap: nowrap; }
+.me-time { flex: none; width: 92px; font: 600 var(--t-sm)/1.3 var(--sans); font-variant-numeric: tabular-nums; color: var(--ink); }
+.me-time .faint { font-weight: 500; }
+.me-block.is-now { background: var(--brass-tint); box-shadow: inset 3px 0 0 var(--gold); }
+.me-block.is-done .me-time { color: var(--ink-faint); }
+.me-checks { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 4px; }
+.me-check { display: flex; gap: 8px; font-size: var(--t-sm); color: var(--ink-soft); }
+.me-check > span:first-child { width: 16px; flex: none; color: var(--ink-faint); }
+.me-check.ok { color: var(--ink); }
+.me-check.ok > span:first-child { color: var(--forest); font-weight: 700; }
+.me-scores { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 12px; align-items: end; }
+.me-scores .input-num { width: 100%; }
+.me-energy > button { min-width: 36px; padding: 0 8px; }
+.me-nowrap { white-space: nowrap; }
+@media (max-width: 640px) { .me-block { gap: 10px; padding-left: 14px; padding-right: 14px; } .me-time { width: 46px; font-size: var(--t-xs); } .me-time .faint { display: block; } }
