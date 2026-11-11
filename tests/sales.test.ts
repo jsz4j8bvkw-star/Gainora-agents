@@ -34,6 +34,9 @@ test('sales, proposals, prices, books and paperwork end to end', async () => {
     if (method === 'POST' && path === '/v1/checkout/sessions') return { id: `cs_${stripe.length}`, url: `https://checkout.stripe.com/c/pay/cs_${stripe.length}` };
     if (method === 'POST' && path.startsWith('/v1/products')) return { id: path.split('/')[3] || `prod_${stripe.length}` };
     if (path.startsWith('/v1/subscriptions/sub_9')) return { status: 200, body: { id: 'sub_9', status: 'active', current_period_end: now + 30 * 86400, customer: { id: 'cus_9', email: 'Sam@CrewePhysio.example' }, items: { data: [{ price: { product: 'prod_LG' } }] } } };
+    // Bought through the Capture & Convert payment link (no proposal).
+    if (path.startsWith('/v1/subscriptions/sub_link')) return { status: 200, body: { id: 'sub_link', status: 'active', current_period_end: now + 30 * 86400, customer: { id: 'cus_link', email: 'jo@glowclinic.example' }, items: { data: [{ price: { product: 'prod_CC' } }] } } };
+    if (path.startsWith('/v1/products/prod_CC')) return { id: 'prod_CC', metadata: { gainora_key: 'capture-booking', gainora_grants: 'capture,watcher,scout,brief' } };
     if (path.startsWith('/v1/products/prod_LG')) return { id: 'prod_LG', metadata: { gainora_key: 'launch-grow', gainora_grants: 'watcher,scout,brief,website' } };
     if (path.startsWith('/v1/invoices?status=paid')) return { data: [{ status_transitions: { paid_at: now - 3600 }, amount_paid: 259000, customer_email: 'sam@crewephysio.example' }], has_more: false };
     if (path.startsWith('/v1/invoices?status=open')) return { data: [{ id: 'in_1', attempt_count: 2, amount_due: 29900, customer_email: 'late@clinic.example', hosted_invoice_url: 'https://invoice.stripe.com/i/1' }] };
@@ -200,6 +203,27 @@ test('sales, proposals, prices, books and paperwork end to end', async () => {
     // The funnel counts it.
     o = await ok(S({ op: 'overview' }));
     assert.equal(o.funnel.won ?? o.funnel.stages?.won ?? o.prospects.filter((p: any) => p.stage === 'won').length, 1);
+
+    /* ---------- Payment link → client (no proposal) ---------- */
+    {
+      const ev = JSON.stringify({ type: 'checkout.session.completed', data: { object: { id: 'cs_link', mode: 'subscription', subscription: 'sub_link', payment_status: 'paid', metadata: {}, customer_details: { email: 'Jo@GlowClinic.example', business_name: 'Glow Clinic' } } } });
+      const t2 = Math.floor(Date.now() / 1000);
+      const sig2 = createHmac('sha256', 'whsec_t').update(`${t2}.${ev}`).digest('hex');
+      const linkHook = () => webhook(new Request('https://app.gainora.co.uk/api/stripe-webhook', { method: 'POST', body: ev, headers: { 'stripe-signature': `t=${t2},v1=${sig2}` } }));
+      assert.equal((await linkHook()).status, 200);
+      assert.deepEqual(fake.tables.entitlements.filter((e) => e.email === 'jo@glowclinic.example').map((e) => e.agent).sort(), ['brief', 'capture', 'scout', 'watcher'], 'Capture & Convert includes Command Centre');
+      const jo = fake.tables.admin_accounts.find((a) => a.email === 'jo@glowclinic.example');
+      assert.deepEqual([jo.business_name, jo.status, jo.setup_paid], ['Glow Clinic', 'onboarding', true]);
+      const joTasks = fake.tables.admin_tasks.filter((x) => x.email === 'jo@glowclinic.example');
+      assert.ok(joTasks.length > 0, 'their set-up checklist starts');
+      assert.ok(emails.some((e) => e.to[0] === 'hello@gainora.co.uk' && /Glow Clinic just paid/.test(e.subject)), 'Gainora hears about it');
+      const welcome = emails.find((e) => e.to[0] === 'jo@glowclinic.example');
+      assert.match(welcome.text, /Command Centre is included/);
+      const told = emails.filter((e) => /Glow Clinic just paid/.test(e.subject)).length;
+      assert.equal((await linkHook()).status, 200);
+      assert.equal(fake.tables.admin_tasks.filter((x) => x.email === 'jo@glowclinic.example').length, joTasks.length, 'Stripe sending it twice changes nothing');
+      assert.equal(emails.filter((e) => /Glow Clinic just paid/.test(e.subject)).length, told, 'and Gainora is told once');
+    }
 
     /* ---------- Prices: one book for proposals and the website ---------- */
     const book = (await ok(B({ op: 'prices' }))).prices;

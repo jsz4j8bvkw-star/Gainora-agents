@@ -264,6 +264,27 @@ export async function proposalPaid(proposalId: string, session: any): Promise<vo
   await sendEmail(team, `${p.business_name} just paid`, [`${p.business_name} paid their proposal (${p.items.map((i) => i.name).join(', ')}).`, 'Their set-up checklist has started in the admin.'], { label: 'Open Gainora admin', url: 'https://admin.gainora.co.uk/' }).catch(() => {});
 }
 
+/**
+ * Someone paid through one of the package payment links (no proposal): the same set-up a paid proposal gets. Their
+ * record (business name from checkout, onboarding, set-up paid), the set-up checklist for each package the payment
+ * switched on, a line in their log, and an email to Gainora. Safe to run twice: the checklist ignores steps it already
+ * has, and the email only goes the first time (when the record has no start date yet).
+ */
+export async function paymentLinkPaid(session: any, agents: string[]): Promise<void> {
+  const email = normEmail(session?.customer_details?.email || session?.customer_email || '');
+  if (!email || !agents.length) return;
+  const name = String(session?.customer_details?.business_name || session?.customer_details?.name || '').trim();
+  const before = (await db<{ started_on: string | null }[]>(`admin_accounts?select=started_on&email=eq.${enc(email)}`).catch(() => []))[0];
+  await saveRecord(email, { ...(name ? { business_name: name } : {}), ...(before ? {} : { status: 'onboarding' as const }), setup_paid: true });
+  const pkgs = packagesFromGrants(agents.filter((a): a is Grant => GRANTS.includes(a as Grant)));
+  for (const pkg of pkgs) await startPackage(email, pkg, ukToday(), 'Gainora');
+  if (before?.started_on) return;
+  const what = pkgs.includes('launch') && pkgs.includes('capture') ? 'Launch & Grow with Capture & Convert' : pkgs.includes('launch') ? 'Launch & Grow' : pkgs.includes('capture') ? 'Capture & Convert' : 'Command Centre';
+  await log(email, 'Gainora', `Paid through the ${what} payment link. Command Centre included.`, 'system');
+  const team = env('GAINORA_ADMIN_EMAILS', 'hello@gainora.co.uk').split(',')[0].trim();
+  await sendEmail(team, `${name || email} just paid`, [`${name || email} paid for ${what} through the payment link.`, 'Their set-up checklist has started in the admin.'], { label: 'Open Gainora admin', url: 'https://admin.gainora.co.uk/' }).catch(() => {});
+}
+
 /* ---------- Stripe money ---------- */
 
 let invoiceCache: { at: number; rows: any[] } | null = null;
