@@ -19,6 +19,8 @@ export interface RenderOptions {
   /** The full address of the home page, for canonical links and the sitemap. */
   origin: string;
   preview?: boolean;
+  /** Where /api/site-event lives when the page isn't on Gainora's servers (a site Gainora hosts elsewhere). */
+  api?: string;
 }
 
 export interface PageDef { path: string; nav?: string; title: string; description: string; kind: 'home' | 'services' | 'service' | 'about' | 'areas' | 'contact' | 'privacy' | 'thanks'; service?: Service }
@@ -434,10 +436,10 @@ export function siteScript(s: Site, o: RenderOptions): string {
   const tagId = ga || aw;
   return `<script>(function(){var S=${JSON.stringify(o.siteId)},L=location,q=new URLSearchParams(L.search);
 function src(){var r=document.referrer,h='';try{h=r?new URL(r).hostname:''}catch(e){}if(q.get('gclid')||q.get('gbraid')||q.get('wbraid'))return'Google Ads';var u=(q.get('utm_source')||'').toLowerCase(),m=(q.get('utm_medium')||'').toLowerCase();if(u){if(/gbp|business|maps/.test(u+(q.get('utm_campaign')||'').toLowerCase()))return'Google Business Profile';if(/cpc|paid|ppc/.test(m))return u.indexOf('facebook')>-1||u.indexOf('instagram')>-1||u.indexOf('meta')>-1?'Facebook and Instagram ads':'Google Ads';return u.charAt(0).toUpperCase()+u.slice(1)}if(!h||h===L.hostname)return h?'This website':'Direct';if(/google\\./.test(h))return'Google search';if(/bing\\.|duckduckgo|yahoo|ecosia/.test(h))return'Other search engines';if(/facebook|instagram|fb\\.|messenger/.test(h))return'Facebook and Instagram';return h.replace(/^www\\./,'')}
-function send(k){try{var b=JSON.stringify({s:S,k:k,p:L.pathname,src:src(),d:innerWidth<760?'phone':'computer'});navigator.sendBeacon?navigator.sendBeacon('/api/site-event',b):fetch('/api/site-event',{method:'POST',body:b,keepalive:true})}catch(e){}}
+function send(k){try{var b=JSON.stringify({s:S,k:k,p:L.pathname,src:src(),d:innerWidth<760?'phone':'computer'});navigator.sendBeacon?navigator.sendBeacon(${JSON.stringify((o.api ?? '') + '/api/site-event')},b):fetch(${JSON.stringify((o.api ?? '') + '/api/site-event')},{method:'POST',body:b,keepalive:true})}catch(e){}}
 send('view');
 document.addEventListener('click',function(e){var a=e.target.closest&&e.target.closest('[data-track]');if(!a)return;var k=a.getAttribute('data-track');send(k);if(window.gtag&&k==='call')gtag('event','phone_call_click')});
-document.querySelectorAll('form[data-enquiry]').forEach(function(f){f.page.value=L.pathname;f.source.value=src();f.addEventListener('submit',function(){if(window.gtag){gtag('event','generate_lead');${aw && label ? `gtag('event','conversion',{send_to:'${aw}/${label}'})` : ''}}})});
+document.querySelectorAll('form[data-enquiry]').forEach(function(f){if(f.page)f.page.value=L.pathname;if(f.source)f.source.value=src();f.addEventListener('submit',function(){if(window.gtag){gtag('event','generate_lead');${aw && label ? `gtag('event','conversion',{send_to:'${aw}/${label}'})` : ''}}})});
 ${tagId ? `var K='gainora-consent';function load(){var t=document.createElement('script');t.async=1;t.src='https://www.googletagmanager.com/gtag/js?id=${tagId}';document.head.appendChild(t);window.dataLayer=window.dataLayer||[];window.gtag=function(){dataLayer.push(arguments)};gtag('js',new Date());${ga ? `gtag('config','${ga}');` : ''}${aw ? `gtag('config','${aw}');` : ''}}
 var c=null;try{c=localStorage.getItem(K)}catch(e){}if(c==='yes')load();else if(c!=='no'){var d=document.createElement('div');d.className='consent';d.setAttribute('role','dialog');d.setAttribute('aria-label','Cookies');d.innerHTML='<p>Can we use cookies to see how people find us and measure our adverts? Nothing else changes if you say no.</p><div class="actions"><button class="btn btn-primary" type="button">Accept</button><button class="btn btn-ghost" type="button">No thanks</button></div>';document.body.appendChild(d);var bs=d.querySelectorAll('button');bs[0].onclick=function(){try{localStorage.setItem(K,'yes')}catch(e){}d.remove();load()};bs[1].onclick=function(){try{localStorage.setItem(K,'no')}catch(e){}d.remove()}}` : ''}
 })();</script>`;

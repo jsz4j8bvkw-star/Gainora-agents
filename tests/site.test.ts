@@ -319,5 +319,33 @@ test('end to end: draft from onboarding, publish, serve, count a visit, receive 
     assert.ok(emails.some((e) => /Your website change is done/.test(e.subject)));
     assert.equal((await (await call({ op: 'requests' })).json()).requests[0].reply, 'Done, have a look.');
     assert.equal((await asGainora({ op: 'slug', slug: 'Bad Slug!' })).status, 400);
+
+    /* ---------- A website Gainora builds with Claude Code and hosts elsewhere ---------- */
+    const { default: track } = await import('../netlify/functions/site-track');
+    // Only Gainora can say the site lives elsewhere; a client's save keeps it as it was.
+    const clientTry = (await (await call({ op: 'save', data: { ...gView.data, external: { url: 'https://evil.example' } } })).json()).site;
+    assert.equal(clientTry.data.external.url, '');
+    assert.equal((await (await asGainora({ op: 'save', data: { ...gView.data, external: { url: 'javascript:alert(1)' } } })).json()).site.data.external.url, '', 'only real https addresses');
+    const ext = (await (await asGainora({ op: 'publish', data: { ...gView.data, external: { url: 'https://willowaesthetics.co.uk/' } } })).json()).site;
+    assert.equal(ext.data.external.url, 'https://willowaesthetics.co.uk');
+    // The builder's copy forwards to the real site, page for page.
+    const fwd = await serve(new Request(`https://app.gainora.co.uk/site/${slug}/about/`));
+    assert.equal(fwd.status, 301);
+    assert.equal(fwd.headers.get('location'), 'https://willowaesthetics.co.uk/about/');
+    // The tracking script for the real site: same counting, absolute addresses, safe to load from another domain.
+    const script = await track(new Request(`https://app.gainora.co.uk/api/site-track/${pub.id}.js`));
+    assert.equal(script.headers.get('content-type'), 'application/javascript; charset=utf-8');
+    assert.equal(script.headers.get('access-control-allow-origin'), '*');
+    const code = await script.text();
+    assert.ok(code.includes(`"${pub.id}"`) && code.includes('"https://app.gainora.co.uk/api/site-event"'), 'reports to Gainora');
+    assert.ok(!/<script>/.test(code));
+    assert.match(await (await track(new Request('https://app.gainora.co.uk/api/site-track/00000000-0000-4000-8000-000000000000.js'))).text(), /isn’t published/);
+    // A visit from the real site is counted, and its form sends visitors back to the real site's thank-you page.
+    const before2 = fake.tables.site_events.length;
+    await event(new Request('https://app.gainora.co.uk/api/site-event', { method: 'POST', headers: { 'user-agent': 'Mozilla/5.0 (iPhone)' }, body: JSON.stringify({ s: pub.id, k: 'book', p: '/treatments/', src: 'Instagram', d: 'phone' }) }));
+    assert.equal(fake.tables.site_events.length, before2 + 1);
+    const extForm = await enquiry(new Request(`https://app.gainora.co.uk/api/site-enquiry/${pub.id}`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'user-agent': 'Mozilla/5.0 (iPhone)' }, body: new URLSearchParams({ name: 'Amy K', phone: '07700 900222', message: 'Lips', page: '/contact/', source: 'Instagram' }).toString() }));
+    assert.equal(extForm.headers.get('location'), 'https://willowaesthetics.co.uk/thanks/');
+    assert.equal(fake.tables.site_enquiries.at(-1).name, 'Amy K');
   } finally { fake.server.close(); }
 });

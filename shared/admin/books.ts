@@ -20,7 +20,7 @@ export const VAT_THRESHOLD = 90_000;
 export function vatStatus(rolling12: number): { level: 'fine' | 'near' | 'over'; share: number; note: string } {
   const share = rolling12 / VAT_THRESHOLD;
   if (share >= 1) return { level: 'over', share, note: 'Over the VAT threshold. You must register for VAT within 30 days of the end of the month you went over. Talk to your accountant now.' };
-  if (share >= 0.75) return { level: 'near', share, note: `${Math.round(share * 100)}% of the VAT threshold. Plan with your accountant: prices on the website exclude VAT, so they won’t need to change.` };
+  if (share >= 0.75) return { level: 'near', share, note: `${Math.round(share * 100)}% of the VAT threshold. Plan with your accountant now: your prices don’t include VAT, so registering means deciding whether to add it on top or absorb it.` };
   return { level: 'fine', share, note: `${Math.round(share * 100)}% of the VAT threshold over the last 12 months.` };
 }
 

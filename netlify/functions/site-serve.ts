@@ -16,6 +16,8 @@ const NOT_LIVE = `<!doctype html><html lang="en-GB"><meta charset="utf-8"><meta 
 function serve(row: SiteRow | null, path: string, base: string, origin: string, indexable: boolean): Response {
   if (!row?.published) return page(NOT_LIVE, 404, 'no-store');
   const s = withDefaults(row.published);
+  // Built and hosted elsewhere: this copy only forwards there, so Google never sees two versions.
+  if (s.external.url) return new Response(null, { status: 301, headers: { Location: `${s.external.url}/${path.replace(/^(thanks|privacy)\/?$/, '$1/')}`.replace(/([^:]\/)\/+/g, '$1'), 'Cache-Control': 'public, max-age=300' } });
   if (path === 'sitemap.xml') return text(sitemap(s, origin), 'application/xml');
   if (path === 'robots.txt') return text(robots(origin, indexable), 'text/plain');
   const out = renderPage(s, path, { base, siteId: row.id, origin });

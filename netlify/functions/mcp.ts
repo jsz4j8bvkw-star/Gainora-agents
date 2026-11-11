@@ -162,7 +162,7 @@ const TOOLS: Tool[] = [
       'Change a client’s website draft. Send only what changes, shaped like the draft from get_website; objects are merged and lists (services, reviews, faqs, areas, credentials) replace the whole list.',
       'Main parts: business {name, trade, phone, email, line1, town, postcode, areas[], hours{mon..sun: "9:00-17:30" or ""}, owner, founded, credentials[], differences[]}; services[{id, name, price, duration, summary, page}];',
       'copy {"home.title", "home.intro", "home.services", "cta.title", "cta.text", "about.title", "about.text", "contact.intro", "meta.description", "svc.<service id>.title", "svc.<service id>.text"}; faqs[{q, a}] or null for the suggested ones;',
-      'look {fonts: classic|editorial|grand|friendly|modern|clean|geometric, heroLayout: split|full|centred, surface: light|tinted|deep, style: calm|warm|bold, accent: "#RRGGBB", sections {how, why, reviews, faq, gallery}}; booking {url, label}; reviewLink.',
+      'look {fonts: classic|editorial|grand|friendly|modern|clean|geometric, heroLayout: split|full|centred, surface: light|tinted|deep, style: calm|warm|bold, accent: "#RRGGBB", sections {how, why, reviews, faq, gallery}}; booking {url, label}; reviewLink; external {url} = the address of a site Gainora built with Claude Code and hosts elsewhere (its builder copy then forwards there; empty = the builder renders the site).',
       'Write in plain British English for the business’s customers. Never invent reviews, numbers, qualifications or claims; aesthetics clinics must not name prescription-only medicines. Visitors only see changes after publish_website.',
     ].join(' '),
     inputSchema: { type: 'object', properties: { client, changes: { type: 'object', description: 'The parts of the draft to change.' }, note: { ...str, description: 'What you changed and why, for the client’s record.' } }, required: ['client', 'changes'] },
@@ -306,7 +306,7 @@ const TOOLS: Tool[] = [
   },
   {
     name: 'get_prices',
-    description: 'Gainora’s price book: every package with its set-up, monthly and one-off price (excluding VAT) and minimum term. Use the keys in create_proposal.',
+    description: 'Gainora’s price book: every package with its set-up, monthly and one-off price (full prices: Gainora isn’t VAT-registered) and minimum term. Use the keys in create_proposal.',
     inputSchema: { type: 'object', properties: {} },
     run: async () => (await priceBook()).filter((p) => p.active).map((p) => ({ key: p.key, name: p.name, setup_gbp: p.setup, monthly_gbp: p.monthly, one_off_gbp: p.one_off, minimum_months: p.minimum_months, included: p.included, description: p.description })),
   },

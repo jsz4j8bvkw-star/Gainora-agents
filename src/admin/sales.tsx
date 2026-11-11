@@ -395,7 +395,7 @@ export function ProposalEditor({ initial, onClose, onDone }: { initial: Partial<
             </li>
           ))}</ul>
         )}</Field>
-        {items.length > 0 && <p className="small totals-line"><strong>{t.today ? `${money(t.today)} today` : 'Nothing today'}{t.monthly ? `, then ${money(t.monthly)} a month` : ''}</strong> <span className="faint">excluding VAT{t.minimum ? ` · ${t.minimum}-month minimum` : ''}</span></p>}
+        {items.length > 0 && <p className="small totals-line"><strong>{t.today ? `${money(t.today)} today` : 'Nothing today'}{t.monthly ? `, then ${money(t.monthly)} a month` : ''}</strong> <span className="faint">no VAT added{t.minimum ? ` · ${t.minimum}-month minimum` : ''}</span></p>}
         <Field label="Free trial on the monthly price (days)" optional>{(id) => <input id={id} className="input input-num" type="number" min={0} max={90} value={p.trial_days ?? 0} onChange={(e: any) => setP({ ...p, trial_days: Number(e.target.value) })} />}</Field>
         <Field label="A note at the top" optional help="Shown on the proposal page.">{(id, d) => <textarea id={id} className="textarea" rows={3} aria-describedby={d} value={p.note ?? ''} onChange={(e: any) => setP({ ...p, note: e.target.value })} />}</Field>
         <Field label="The email that goes with it" help="The proposal’s link, the price and the date it works until are added underneath.">{(id, d) => <textarea id={id} className="textarea" rows={3} aria-describedby={d} value={message} onChange={(e: any) => setMessage(e.target.value)} />}</Field>

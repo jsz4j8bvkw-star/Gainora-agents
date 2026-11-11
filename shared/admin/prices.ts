@@ -1,5 +1,5 @@
 // Gainora's price book: one list of packages and prices, used by proposals (what clients are charged) and published
-// to gainora.co.uk (what the website shows). Starts from the prices on the website today. All prices exclude VAT.
+// to gainora.co.uk (what the website shows). Starts from the prices on the website today. Full prices: Gainora isn't VAT-registered, so no VAT is added.
 
 /** What a package switches on in the apps (the entitlement rows the Stripe webhook writes). */
 export type Grant = 'watcher' | 'scout' | 'brief' | 'capture' | 'website';

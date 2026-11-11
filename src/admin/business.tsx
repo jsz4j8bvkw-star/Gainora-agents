@@ -113,7 +113,7 @@ export function Money() {
   const books = useLoad<Books>(() => biz.books(month), [month]);
   return (
     <div className="page">
-      <div className="page-head"><div><h1 className="title">Money</h1><p className="lede">What Gainora makes, spends and keeps. Prices exclude VAT.</p></div>
+      <div className="page-head"><div><h1 className="title">Money</h1><p className="lede">What Gainora makes, spends and keeps. Gainora isn’t VAT-registered.</p></div>
         {tab !== 'vat' && tab !== 'payments' && tab !== 'clients' && <Field label="Month">{(id) => <select id={id} className="select" value={month} onChange={(e: any) => setMonth(e.target.value)}>{months.map((m) => <option key={m} value={m}>{monthLabel(m)}</option>)}</select>}</Field>}
       </div>
       <Tabs<MoneyTab> label="Money" value={tab} onChange={setTab} tabs={[
@@ -251,7 +251,7 @@ export function Prices() {
   return (
     <div className="page">
       <div className="page-head">
-        <div><h1 className="title">Prices</h1><p className="lede">One price list for proposals, Stripe and gainora.co.uk. Prices exclude VAT. Existing clients keep what they pay now.</p></div>
+        <div><h1 className="title">Prices</h1><p className="lede">One price list for proposals, Stripe and gainora.co.uk. Full prices: Gainora isn’t VAT-registered, so no VAT is added. Existing clients keep what they pay now.</p></div>
         <div className="row gap-8 wrap"><Button kind="secondary" busy={busy === 'save'} disabled={!changed} onClick={() => save(false)}>Save</Button><Button icon="globe" busy={busy === 'publish'} disabled={!data.website} onClick={() => save(true)}>Save and update the website</Button></div>
       </div>
       {!data.website && <p className="small notice-box mb-16">To update gainora.co.uk from here, add a build hook for the website in Netlify and set it as WEBSITE_BUILD_HOOK on the Command Centre site.</p>}

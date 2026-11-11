@@ -14,7 +14,8 @@ export default async (req: Request) => {
   const id = url.pathname.split('/').filter(Boolean).pop() || '';
   const site = await siteById(id).catch(() => null);
   const onApp = url.hostname === new URL(APP_ORIGIN()).hostname || /netlify\.app$|localhost|127\.0\.0\.1/.test(url.hostname);
-  const base = site ? (onApp ? `/site/${site.slug}/` : '/') : '/';
+  const external = String(site?.published?.external?.url || '');
+  const base = external ? `${external}/` : site ? (onApp ? `/site/${site.slug}/` : '/') : '/';
   const back = (path: string) => new Response(null, { status: 303, headers: { Location: `${base}${path}`, 'Cache-Control': 'no-store' } });
   if (req.method !== 'POST' || !site?.published) return back('');
   try {

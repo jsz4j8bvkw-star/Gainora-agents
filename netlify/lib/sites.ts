@@ -87,6 +87,7 @@ export function cleanSite(raw: any): Site {
     },
     copy: Object.fromEntries(Object.entries(s.copy || {}).filter(([k, v]) => /^[\w.-]{1,60}$/.test(k) && typeof v === 'string').slice(0, 80).map(([k, v]) => [k, str(v, 2000)])),
     faqs: Array.isArray(s.faqs) ? s.faqs.slice(0, 12).map((f) => ({ q: str(f.q, 200), a: str(f.a, 1000) })) : null,
+    external: { url: /^https:\/\/[a-z0-9.-]+\.[a-z]{2,}(\/[\w\-./]*)?$/i.test(String(s.external?.url || '').trim()) ? String(s.external.url).trim().replace(/\/+$/, '') : '' },
     plan: Object.fromEntries(Object.entries(s.plan || {}).filter(([k]) => /^[\w-]{1,30}$/.test(k)).slice(0, 80).map(([k, v]) => [k, !!v])),
     notes: str(s.notes, 4000),
   };

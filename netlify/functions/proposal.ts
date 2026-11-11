@@ -45,7 +45,7 @@ ${p.note ? `<p class="note">${esc(p.note)}</p>` : ''}
   ${t.today ? `<div class="row total"><span>Due today</span><span class="num">${money(t.today)}</span></div>` : ''}
   ${t.monthly ? `<div class="row total"><span>Then each month</span><span class="num">${money(t.monthly)}</span></div>` : ''}
   ${p.trial_days ? `<p class="small muted">The monthly payments start after a ${p.trial_days}-day free trial.</p>` : ''}
-  <p class="small faint">Prices exclude VAT. ${t.minimum ? `${t.minimum}-month minimum, then month to month.` : ''}</p>
+  <p class="small faint">Full prices: no VAT is added. ${t.minimum ? `${t.minimum}-month minimum, then month to month.` : ''}</p>
   ${expired ? `<p><strong>This proposal has expired.</strong> Email <a href="mailto:hello@gainora.co.uk">hello@gainora.co.uk</a> and we’ll send a fresh one.</p>` : `<form method="post"><button class="btn" type="submit">Accept and pay securely</button></form>
   <p class="small faint">Payment by card through Stripe. By accepting you agree to <a href="https://gainora.co.uk/terms/">Gainora’s terms</a>, which include how we process your customers’ data on your behalf.</p>`}
 </section>

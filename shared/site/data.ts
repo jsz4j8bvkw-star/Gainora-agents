@@ -62,6 +62,12 @@ export interface Site {
   plan: Record<string, boolean>;
   /** Gainora's private notes about the site. Never shown to the client. */
   notes: string;
+  /**
+   * A website Gainora built separately (with Claude Code) and hosts elsewhere, e.g. https://aldereaseaesthetics.co.uk.
+   * Empty: the builder renders the site. Set: the builder's copy forwards there, and the site reports to Command
+   * Centre through the tracking script (/api/site-track/<site id>.js) and posts its form to /api/site-enquiry/<site id>.
+   */
+  external: { url: string };
 }
 
 /** A change the client asked Gainora to make (kept in its own table, site_requests). */
@@ -318,7 +324,7 @@ export function newSite(industry: IndustryId = 'aesthetics'): Site {
     reviews: [], reviewLink: '', booking: { url: '', label: '' }, captureFormUrl: '',
     tracking: { ga4: '', adsId: '', adsLabel: '' }, ads: { monthly: 600, radiusMiles: ind.mobile ? 15 : 8 },
     look: { style: ind.style, fonts: ind.style === 'bold' ? 'modern' : ind.style === 'warm' ? 'friendly' : 'classic', heroLayout: 'split', surface: ind.style === 'bold' ? 'light' : 'tinted', sections: { ...DEFAULT_SECTIONS }, accent: ind.accent, logo: null, hero: null, about: null, gallery: [] },
-    copy: {}, faqs: null, plan: {}, notes: '',
+    copy: {}, faqs: null, plan: {}, notes: '', external: { url: '' },
   };
 }
 
@@ -333,6 +339,7 @@ export function withDefaults(raw: any): Site {
   b.booking = { ...base.booking, ...(raw?.booking ?? {}) };
   b.tracking = { ...base.tracking, ...(raw?.tracking ?? {}) };
   b.ads = { ...base.ads, ...(raw?.ads ?? {}) };
+  b.external = { ...base.external, ...(raw?.external ?? {}) };
   b.copy = { ...(raw?.copy ?? {}) };
   b.plan = { ...(raw?.plan ?? {}) };
   for (const k of ['services', 'reviews'] as const) if (!Array.isArray(b[k])) (b as any)[k] = base[k];
