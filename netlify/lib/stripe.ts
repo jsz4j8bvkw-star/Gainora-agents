@@ -91,6 +91,7 @@ export async function syncSubscription(sub: any): Promise<string[]> {
         'Thank you for choosing Gainora Capture & Convert.',
         `Open ${app} and sign in with this email address. We’ll send you a sign-in link, so there’s no password to remember.`,
         'You’ll answer a few questions about your business and how you want calls handled. It takes about ten minutes. We then set up your AI receptionist with you on your onboarding call.',
+        'Command Centre is included with your package: open https://app.gainora.co.uk with the same login to see your weekly brief and your monthly results.',
         'If you have any questions, just reply to this email.',
         'Gainora',
       ]).catch((e) => console.error('[gainora] welcome email', e?.message));

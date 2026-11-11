@@ -56,7 +56,7 @@ export function Settings() {
         </div>
         {plan.alsoCommandCentre
           ? <p className="small muted plan-foot">You also have Gainora Command Centre. <a href="https://app.gainora.co.uk">Open it</a> with the same login.</p>
-          : <p className="small muted plan-foot">To change package, email <a href="mailto:hello@gainora.co.uk">hello@gainora.co.uk</a> and we’ll move you over. Want your website watched and new customers found too? <a href="https://gainora.co.uk/">See Gainora Command Centre</a>.</p>}
+          : <p className="small muted plan-foot">Command Centre comes with Capture &amp; Convert at no extra cost. If it isn’t switched on for you yet, email <a href="mailto:hello@gainora.co.uk">hello@gainora.co.uk</a> and we’ll turn it on. To change package, email us too.</p>}
       </section>
 
       {SETUP.map((sec) => <SectionEditor key={sec.id} sec={sec} />)}

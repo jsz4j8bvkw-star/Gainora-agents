@@ -229,12 +229,15 @@ function NotOnPlan({ email }: { email: string }) {
   );
 }
 
-/** The two Gainora apps, one login: jump to Command Centre, or see it if it isn't on their plan yet. */
+/**
+ * The two Gainora apps, one login. Command Centre is included with Capture & Convert (since 11 November 2026), so it
+ * opens straight away; anyone on an older plan without it is asked to email and have it switched on, never to buy it.
+ */
 function AppSwitch({ hasCommandCentre }: { hasCommandCentre: boolean }) {
   return (
     <nav className="app-switch" aria-label="Gainora apps">
-      <a href={hasCommandCentre ? 'https://app.gainora.co.uk/' : 'https://gainora.co.uk/packages/#command-centre'} target={hasCommandCentre ? undefined : '_blank'} rel="noreferrer">
-        Command Centre{!hasCommandCentre && <span className="app-switch-add">Add</span>}
+      <a href={hasCommandCentre ? 'https://app.gainora.co.uk/' : 'mailto:hello@gainora.co.uk?subject=Please%20switch%20on%20my%20Command%20Centre'} rel="noreferrer">
+        Command Centre{!hasCommandCentre && <span className="app-switch-add">Included</span>}
       </a>
       <span aria-current="page">Capture &amp; Convert</span>
     </nav>
