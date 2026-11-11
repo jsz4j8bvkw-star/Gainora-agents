@@ -54,6 +54,13 @@ const siteSummary = (row: any) => {
     live: !!row.published, liveUrl: liveOrigin(row) + '/', previewUrl: `${APP_ORIGIN()}/site/${row.slug}/`,
     unpublishedChanges: !!row.published && JSON.stringify(row.published) !== JSON.stringify(row.data),
     pages: pagesOf(data).map((p) => `/${p.path}`), checks: checks(data).filter((c) => c.level !== 'good'),
+    // For a site built with Claude Code and hosted elsewhere: what it pastes in so visits, taps and enquiries reach Command Centre.
+    claudeCode: {
+      siteId: row.id,
+      trackingTag: `<script src="${APP_ORIGIN()}/api/site-track/${row.id}.js" defer></script>`,
+      enquiryFormAction: `${APP_ORIGIN()}/api/site-enquiry/${row.id}`,
+      note: 'Tracking and enquiries only work once the site is published in the admin. Set external.url to the live address, then publish.',
+    },
   };
 };
 
