@@ -198,12 +198,12 @@ def head(title, desc, path, noindex=False):
 '''
 
 
-def header(active):
+def header(active, top=''):
     nav = [('treatments/', 'Treatments'), ('about/', 'About Mirela'), ('contact/', 'Contact')]
     items = ''.join(f'<li><a href="{link(p)}"{" aria-current=\"page\"" if active == p else ""}>{n}</a></li>' for p, n in nav)
     banner = '<div class="preview-bar">Preview for Mirela: not live yet. The booking button and phone links work; the contact form sends once the site is live.</div>' if PREVIEW else ''
     return f'''<body>
-{banner}<a class="skip" href="#main">Skip to content</a>
+{top}{banner}<a class="skip" href="#main">Skip to content</a>
 <header class="site-header">
   <div class="wrap header-in">
     <a class="brand" href="{link('')}" aria-label="Alder Ease Aesthetics, home">{logo_mark('sm')}<span class="brand-words"><span class="brand-name">Alder Ease</span><span class="brand-sub">Aesthetics</span></span></a>
@@ -255,9 +255,9 @@ def footer():
 '''
 
 
-def page(path, title, desc, active, body, noindex=False):
+def page(path, title, desc, active, body, noindex=False, top=''):
     root = '../' * path.count('/') if PREVIEW else '/'
-    doc = head(title, desc, path, noindex) + header(active) + body + footer()
+    doc = head(title, desc, path, noindex) + header(active, top) + body + footer()
     doc = doc.replace('__ROOT__', root)
     d = os.path.join(OUT, path)
     os.makedirs(d, exist_ok=True)
@@ -284,23 +284,32 @@ HERO = {
 }
 
 
-def intro():
-    """Opening film, home page only: Mirela's walk in through the door, full screen, ending on the gold logo, then it fades into the website.
-    Live it plays once per visit; in the preview it plays every time. Skipped for people who ask for less motion. A tap skips it."""
-    once = 'false' if PREVIEW else 'true'
-    return ('<div class="opening" id="intro" aria-hidden="true"><video muted playsinline preload="auto"></video></div>'
-            '<script>(function(){var d=document.documentElement,el=document.getElementById("intro"),v=el.firstChild,once=' + once + ',done=false;'
-            'function end(now){if(done)return;done=true;try{sessionStorage.setItem("ae-intro","1")}catch(e){}'
-            'if(now){d.classList.remove("intro-on");el.remove();return}'
-            'el.classList.add("out");setTimeout(function(){d.classList.remove("intro-on");el.remove()},1300)}'
-            'try{if((once&&sessionStorage.getItem("ae-intro"))||matchMedia("(prefers-reduced-motion: reduce)").matches){el.remove();return}}catch(e){}'
-            'd.classList.add("intro-on");'
-            'var n=innerWidth/innerHeight<0.9?"tall":"wide";v.muted=true;v.poster="__ROOT__assets/intro-"+n+".jpg";v.src="__ROOT__assets/intro-"+n+".mp4";'
-            'v.addEventListener("timeupdate",function(){if(v.duration&&v.currentTime>v.duration-0.9)end()});'
-            'v.addEventListener("ended",function(){end()});v.addEventListener("error",function(){end(true)});'
-            'el.addEventListener("click",function(){end()});'
-            'var p=v.play();if(p&&p.catch)p.catch(function(){end(true)});'
-            'setTimeout(function(){if(!v.currentTime)end(true)},4000);setTimeout(function(){end()},12000);'
+FILM_TALL = os.path.exists(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'site', 'assets', 'film-tall.mp4'))
+
+
+def film():
+    """Opening film, home page only: a smooth walk in through the door to the reception, ending on the gold logo.
+    It fills the first screen, plays once and stays on the logo. Scrolling slides the website up over it.
+    Made in Higgsfield (Seedance 2.5) from Mirela's own walk-in video, using her real first and last frames,
+    then smoothed to 48 frames a second with a gentle slow-down onto the logo.
+    People who ask for less motion, or whose browser won't autoplay, see the still of the logo."""
+    tall = 'true' if FILM_TALL else 'false'
+    return ('<section class="film" id="film" aria-label="Alder Ease Aesthetics reception">'
+            '<video muted playsinline preload="auto" aria-hidden="true"></video>'
+            '<a class="film-down" href="#main" aria-label="Scroll to the website"><span></span></a>'
+            '</section>'
+            '<script>(function(){var f=document.getElementById("film"),v=f.querySelector("video");'
+            'document.documentElement.classList.add("has-film");'
+            'var n=(' + tall + '&&innerWidth/innerHeight<0.8)?"tall":"wide",a="__ROOT__assets/film-";'
+            'f.classList.add("film-"+n);'
+            'function still(){v.poster=a+"end-"+n+".jpg";f.classList.add("done","shown")}'
+            'try{if(matchMedia("(prefers-reduced-motion: reduce)").matches){still();return}}catch(e){}'
+            'v.poster=a+"start-"+n+".jpg";v.muted=true;v.src=a+n+".mp4";'
+            'v.addEventListener("playing",function(){f.classList.add("shown")});'
+            'v.addEventListener("ended",function(){f.classList.add("done")});'
+            'v.addEventListener("error",still);'
+            'var p=v.play();if(p&&p.catch)p.catch(still);'
+            'setTimeout(function(){if(!v.currentTime)still()},6000);'
             '})();</script>')
 
 
@@ -327,7 +336,6 @@ def home():
     equip = ''.join(f'<li><strong>{e(a)}</strong><span>{e(b)}</span></li>' for a, b in EQUIPMENT)
     faqs = ''.join(f'<details class="faq"><summary>{e(q)}</summary><p>{e(a)}</p></details>' for q, a in FAQS[:6])
     body = f'''
-{intro()}
 <section class="hero" aria-label="Welcome">
   <div class="hero-photos">
     {hero_slides([HERO['front'], HERO['facial2'], HERO['hero2']], 'left')}
@@ -442,7 +450,7 @@ def home():
 '''
     page('', 'Alder Ease Aesthetics | Skin treatments and lip filler in Crewe',
          'Radiofrequency microneedling, Dermapen 4, PRP, lip filler and facials in Crewe with Mirela Borowska. Free consultations. Prices online. Book on Booksy.',
-         '', body)
+         '', body, top=film())
 
 
 # ---------- Treatments ----------

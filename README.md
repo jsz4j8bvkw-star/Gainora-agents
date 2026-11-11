@@ -11,6 +11,8 @@ Facts come from Mirela's website questionnaire (10 Nov 2026). Left off on purpos
 anything with a B12 injection. Before go-live: choose the domain, add canonical links and sitemap.xml,
 set external.url in the admin and publish there so tracking and the form work.
 
-Opening film (home page): `assets/intro-wide.mp4` and `assets/intro-tall.mp4` are Mirela's walk-in video (sent 11 Nov 2026),
-steadied, slowed a little, coloured to match the photos and ending on the reception logo. It plays full screen, then fades
-into the website. Live: once per visit. Preview: every time. A tap skips it.
+Opening film (home page): `assets/film-wide.mp4` (computers) and `assets/film-tall.mp4` (phones), with start and end
+stills. Made in Higgsfield (Seedance 2.5, 720p) from Mirela's walk-in video, using her real first frame (the door) and
+last frame (the reception logo), then smoothed to 48 frames a second with a gentle slow-down onto the logo and a light
+warm grade. It fills the first screen, plays once, stays on the logo, and the website slides up over it on scroll.
+Originals are in Adelin's Downloads/alder-film.

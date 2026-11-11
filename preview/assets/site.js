@@ -26,6 +26,33 @@
     });
   }
 
+  // Opening film: as the website slides up over it, it settles back a touch and dims; once covered it pauses.
+  var film = document.getElementById('film');
+  if (film) {
+    var fv = film.querySelector('video');
+    var html = document.documentElement;
+    var still = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var ticking = false;
+    var onScroll = function () {
+      ticking = false;
+      var p = Math.min(1, Math.max(0, window.scrollY / window.innerHeight));
+      html.classList.toggle('film-view', p < 0.6);
+      if (!still) {
+        fv.style.transform = 'scale(' + (1 + 0.05 * p).toFixed(4) + ')';
+        fv.style.filter = 'brightness(' + (1 - 0.35 * p).toFixed(3) + ')';
+      }
+      film.style.visibility = p >= 1 ? 'hidden' : '';
+      if (p >= 1 && !fv.paused) { fv.pause(); film.dataset.wait = '1'; }
+      else if (p < 1 && film.dataset.wait && !film.classList.contains('done')) { delete film.dataset.wait; fv.play().catch(function () {}); }
+    };
+    window.addEventListener('scroll', function () { if (!ticking) { ticking = true; requestAnimationFrame(onScroll); } }, { passive: true });
+    onScroll();
+    film.querySelector('.film-down').addEventListener('click', function (ev) {
+      ev.preventDefault();
+      window.scrollTo({ top: window.innerHeight, behavior: still ? 'auto' : 'smooth' });
+    });
+  }
+
   // Enquiry form: a name, and a phone number or an email.
   var form = document.querySelector('form[data-enquiry]');
   if (form) {
