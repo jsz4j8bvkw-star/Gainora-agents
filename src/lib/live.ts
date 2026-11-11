@@ -11,6 +11,7 @@ import { planToday } from '../../shared/today';
 import { humanError, parseJsonBody } from './errors';
 import { POLL_DELAYS_MS } from '../../shared/chat';
 import { decodeFocus } from '../../shared/scout';
+import { toUrl } from './router';
 import { likelyOutcomes } from '../../shared/money';
 import { uuid } from './format';
 import { isSamePassword, passwordStep } from './password';
@@ -254,7 +255,8 @@ export function createLiveApi(): Api {
     },
     async requestSignIn(email) {
       // create_user is false: only people with a subscription (created by the Stripe webhook) can sign in.
-      await authFetch(`otp?redirect_to=${encodeURIComponent(location.origin + '/')}`, { email, create_user: false });
+      // The link brings you back to the app you asked from: the admin's sign-in returns to the admin, not Command Centre.
+      await authFetch(`otp?redirect_to=${encodeURIComponent(location.origin + toUrl('/'))}`, { email, create_user: false });
     },
     async signOut() {
       const s = readSession();

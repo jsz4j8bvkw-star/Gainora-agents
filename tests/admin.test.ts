@@ -184,4 +184,13 @@ test('admin routes live under /admin on app.gainora.co.uk, so a refresh stays in
   assert.equal(routePrefix('/', 'app.gainora.co.uk'), '', 'Command Centre is untouched');
   const toml = readFileSync('netlify.toml', 'utf8');
   assert.ok(toml.indexOf('from = "/admin/*"') > 0 && toml.indexOf('from = "/admin/*"') < toml.indexOf('from = "/*"'), 'the admin redirect comes before the app catch-all');
+  // Old admin addresses (from before /admin) still in tabs and bookmarks go to the admin, never Command Centre.
+  const catchAll = toml.indexOf('from = "/*"');
+  for (const p of ['me', 'sales', 'delivery', 'requests', 'health', 'money', 'prices', 'paperwork', 'more']) {
+    const i = toml.indexOf(`from = "/${p}/*"\n  to = "/admin/${p}/:splat"`);
+    assert.ok(i > 0 && i < catchAll && toml.indexOf(`from = "/${p}"\n  to = "/admin/${p}"`) > 0, `/${p} moves to /admin/${p}`);
+  }
+  for (const cc of ['clients', 'settings', 'website', 'watcher', 'scout', 'brief', 'ask', 'business', 'results']) assert.ok(!toml.includes(`from = "/${cc}"`), `Command Centre keeps /${cc}`);
+  const sw = readFileSync('public/sw.js', 'utf8');
+  assert.match(sw, /ADMIN_ONLY = \/\^\\\/\(me\|sales\|delivery\|requests\|health\|money\|prices\|paperwork\|more\)/, 'the service worker leaves the old admin addresses alone too');
 });

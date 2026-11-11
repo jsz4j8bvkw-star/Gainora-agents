@@ -52,6 +52,99 @@
   to = "/admin.html"
   status = 200
 
+# Before 11 Nov 2026 the admin's pages had no /admin in front (app.gainora.co.uk/sales). Old tabs and bookmarks
+# with those addresses would open Command Centre on a refresh, so the admin-only ones move to /admin. Command
+# Centre has no pages with these names. (/, /clients and /settings exist in both apps, so they can't be moved.)
+[[redirects]]
+  from = "/me"
+  to = "/admin/me"
+  status = 301
+
+[[redirects]]
+  from = "/me/*"
+  to = "/admin/me/:splat"
+  status = 301
+
+[[redirects]]
+  from = "/sales"
+  to = "/admin/sales"
+  status = 301
+
+[[redirects]]
+  from = "/sales/*"
+  to = "/admin/sales/:splat"
+  status = 301
+
+[[redirects]]
+  from = "/delivery"
+  to = "/admin/delivery"
+  status = 301
+
+[[redirects]]
+  from = "/delivery/*"
+  to = "/admin/delivery/:splat"
+  status = 301
+
+[[redirects]]
+  from = "/requests"
+  to = "/admin/requests"
+  status = 301
+
+[[redirects]]
+  from = "/requests/*"
+  to = "/admin/requests/:splat"
+  status = 301
+
+[[redirects]]
+  from = "/health"
+  to = "/admin/health"
+  status = 301
+
+[[redirects]]
+  from = "/health/*"
+  to = "/admin/health/:splat"
+  status = 301
+
+[[redirects]]
+  from = "/money"
+  to = "/admin/money"
+  status = 301
+
+[[redirects]]
+  from = "/money/*"
+  to = "/admin/money/:splat"
+  status = 301
+
+[[redirects]]
+  from = "/prices"
+  to = "/admin/prices"
+  status = 301
+
+[[redirects]]
+  from = "/prices/*"
+  to = "/admin/prices/:splat"
+  status = 301
+
+[[redirects]]
+  from = "/paperwork"
+  to = "/admin/paperwork"
+  status = 301
+
+[[redirects]]
+  from = "/paperwork/*"
+  to = "/admin/paperwork/:splat"
+  status = 301
+
+[[redirects]]
+  from = "/more"
+  to = "/admin/more"
+  status = 301
+
+[[redirects]]
+  from = "/more/*"
+  to = "/admin/more/:splat"
+  status = 301
+
 # Single-page app: every route serves the app shell.
 [[redirects]]
   from = "/*"
