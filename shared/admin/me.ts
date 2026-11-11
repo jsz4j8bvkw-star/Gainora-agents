@@ -61,7 +61,7 @@ export interface MeSettings {
 export const DEFAULT_SETTINGS: MeSettings = {
   gymSplit: ['Chest', 'Back', 'Shoulders and arms', 'Legs', 'Chest', 'Back', 'Shoulders'],
   gymAnchor: '2026-11-11',
-  gymMinutes: null,
+  gymMinutes: 90,
   finisher: 'heavy bag',
   minimum: { contacts: 10 },
   good: { contacts: 20 },
@@ -73,16 +73,16 @@ export const DEFAULT_SETTINGS: MeSettings = {
 const WEEKDAYS = [1, 2, 3, 4, 5];
 const EVERY_DAY = [1, 2, 3, 4, 5, 6, 7];
 type NewBlock = Omit<RoutineBlock, 'id' | 'active'>;
-/** The routine agreed on 11 Nov 2026. The gym length and breakfast time move once the session length is known. */
+/** The routine agreed on 11 Nov 2026: about 90 minutes in the gym with the bag, home by about 08:45. */
 export const DEFAULT_ROUTINE: NewBlock[] = [
   { start: '05:30', finish: '06:15', title: 'Wake, coffee, morning check-in', detail: 'Write today’s three must-dos. No rushing.', days: EVERY_DAY, kind: 'checkin', sort: 0 },
-  { start: '06:15', finish: null, title: 'Gym', detail: 'Today’s session from the split, then the heavy bag. Session length to be confirmed.', days: EVERY_DAY, kind: 'gym', sort: 1 },
-  { start: '08:15', finish: '09:00', title: 'Shower and breakfast (meal 1 of 3)', detail: 'Time moves once the gym length is known.', days: EVERY_DAY, kind: 'meal', sort: 2 },
-  { start: '09:00', finish: '09:30', title: 'Clear every follow-up due', detail: 'Admin → Sales → Follow-ups. Before anything else.', days: WEEKDAYS, kind: 'followups', sort: 3 },
-  { start: '09:30', finish: '10:00', title: 'Prep check on today’s clinics', detail: 'One problem written in each clinic’s note.', days: [2, 3, 4], kind: 'sales', sort: 4 },
+  { start: '06:15', finish: '08:45', title: 'Gym', detail: 'Leave at 06:15. About 90 minutes: today’s session from the split, then the heavy bag. Home by about 08:45.', days: EVERY_DAY, kind: 'gym', sort: 1 },
+  { start: '08:45', finish: '09:15', title: 'Shower and breakfast (meal 1 of 3)', detail: '', days: EVERY_DAY, kind: 'meal', sort: 2 },
+  { start: '09:15', finish: '09:45', title: 'Clear every follow-up due', detail: 'Admin → Sales → Follow-ups. Before anything else.', days: WEEKDAYS, kind: 'followups', sort: 3 },
+  { start: '09:45', finish: '10:00', title: 'Prep check on today’s clinics', detail: 'One problem written in each clinic’s note.', days: [2, 3, 4], kind: 'sales', sort: 4 },
   { start: '10:00', finish: '12:30', title: 'Walk-ins: 8 to 10 clinics', detail: 'Log each one in the admin straight after, with a next date.', days: [2, 3, 4], kind: 'sales', sort: 5 },
-  { start: '09:30', finish: '12:30', title: 'Add 50 clinics, then phone and email outreach', detail: 'This week’s route. Claude can build the list.', days: [1], kind: 'sales', sort: 6 },
-  { start: '09:30', finish: '12:30', title: 'Weekly client briefs, follow-up calls and proposals', detail: '', days: [5], kind: 'client', sort: 7 },
+  { start: '09:45', finish: '12:30', title: 'Add 50 clinics, then phone and email outreach', detail: 'This week’s route. Claude can build the list.', days: [1], kind: 'sales', sort: 6 },
+  { start: '09:45', finish: '12:30', title: 'Weekly client briefs, follow-up calls and proposals', detail: '', days: [5], kind: 'client', sort: 7 },
   { start: '12:30', finish: '13:30', title: 'Lunch (meal 2 of 3)', detail: 'Sales chats can be booked at 12:00 or straight after walk-ins.', days: EVERY_DAY, kind: 'meal', sort: 8 },
   { start: '13:30', finish: '14:30', title: 'Trading prep and analysis', detail: '', days: WEEKDAYS, kind: 'trading', sort: 9 },
   { start: '14:30', finish: '15:30', title: 'New York open', detail: 'Hard stop at 15:30. News day: watch only, no trades.', days: WEEKDAYS, kind: 'trading', sort: 10 },

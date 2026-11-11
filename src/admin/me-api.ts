@@ -46,7 +46,7 @@ function demoMe(): MeApi {
   const today = ukToday();
   let n = 0;
   const uid = () => `demo-${++n}`;
-  let settings: MeSettings = { ...DEFAULT_SETTINGS, gymAnchor: addDays(today, -2), gymMinutes: 75, seeded: true, tradingRules: 'No trades on red-folder news days.\nStop at 15:30, win or lose.\nOne setup at a time.' };
+  let settings: MeSettings = { ...DEFAULT_SETTINGS, gymAnchor: addDays(today, -2), gymMinutes: 90, seeded: true, tradingRules: 'No trades on red-folder news days.\nStop at 15:30, win or lose.\nOne setup at a time.' };
   let routine: RoutineBlock[] = DEFAULT_ROUTINE.map((b) => ({ ...b, id: uid(), active: true }));
   const days = new Map<string, MeDay>();
   const tickAll = (date: string, except: string[] = []) => Object.fromEntries(routine.filter((b) => b.days.includes(((new Date(`${date}T12:00:00Z`).getUTCDay() + 6) % 7) + 1) && !except.includes(b.kind)).map((b) => [b.id, true]));

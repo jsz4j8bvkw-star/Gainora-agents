@@ -24,7 +24,7 @@ test('my day: dates, the routine by weekday and the gym rotation', () => {
   assert.equal(daysLabel([1, 3, 5]), 'Mon, Wed, Fri');
   const wed = blocksFor(ROUTINE, WED);
   assert.equal(wed.length, 14);
-  assert.deepEqual(wed.map((b) => b.start).slice(0, 4), ['05:30', '06:15', '08:15', '09:00']);
+  assert.deepEqual(wed.map((b) => b.start).slice(0, 5), ['05:30', '06:15', '08:45', '09:15', '09:45']);
   assert.ok(wed.some((b) => /Walk-ins/.test(b.title)) && !wed.some((b) => /Add 50 clinics/.test(b.title)));
   const sat = blocksFor(ROUTINE, '2026-11-14');
   assert.ok(sat.every((b) => ['checkin', 'gym', 'meal', 'sleep'].includes(b.kind)), 'weekends: no work blocks');
