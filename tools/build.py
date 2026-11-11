@@ -17,9 +17,11 @@ P = {k: f'{IMG}{v}.jpg' for k, v in {
     'logo': '4c94d2a0-6ad', 'lips1': '10eea723-073', 'lips2': '6625fe15-b26', 'lips3': '1ea7d16c-ea1', 'lips4': 'f031e182-783',
     'facial': 'ff79e7e0-fcc', 'hero1': 'd2c1c25f-2d0', 'hero2': '2c19ae4c-236', 'detail': '9d28a019-8df', 'needling': 'f51de20a-245',
     'prp': '18f673ad-7b8', 'prf': '7ed4167b-df3'}.items()}
-# Sent by Mirela on 11 Nov 2026 (reception desk with the logo, and the clinic front), stored with her other photos.
-P['reception'] = f'{IMG}ae1edf2c-aca.webp'
+# Sent by Mirela on 11 Nov 2026 (the clinic front), stored with her other photos.
 P['front'] = f'{IMG}923f8795-08b.webp'
+# Sent by Mirela on 11 Nov 2026: her portrait at the reception. The logo is hers, redrawn on warm beige instead of black.
+P['me'] = f'{IMG}2f658043-831.webp'
+P['logo'] = f'{IMG}7f0c6106-ad0.png'
 # Sent by Mirela on 11 Nov 2026 for these treatments (her labels): Dermapen 4, skin booster, facial.
 P['dermapen'] = f'{IMG}0aa33072-b93.webp'
 P['booster'] = f'{IMG}d6c0d797-bdb.webp'
@@ -164,7 +166,7 @@ def logo_mark(size='md'):
 def head(title, desc, path, noindex=False):
     schema = {
         '@context': 'https://schema.org', '@type': 'HealthAndBeautyBusiness', 'name': 'Alder Ease Aesthetics',
-        'image': P['reception'], 'logo': P['logo'], 'telephone': PHONE_TEL, 'email': EMAIL, 'priceRange': '££',
+        'image': P['me'], 'logo': P['logo'], 'telephone': PHONE_TEL, 'email': EMAIL, 'priceRange': '££',
         'address': {'@type': 'PostalAddress', 'streetAddress': '167-169 Underwood Lane', 'addressLocality': 'Crewe', 'postalCode': 'CW1 3SD', 'addressCountry': 'GB'},
         'openingHoursSpecification': [{'@type': 'OpeningHoursSpecification', 'dayOfWeek': ['Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'], 'opens': '09:00', 'closes': '17:00'}],
         'sameAs': [INSTA], 'founder': {'@type': 'Person', 'name': 'Mirela Borowska'},
@@ -181,7 +183,7 @@ def head(title, desc, path, noindex=False):
 <meta property="og:type" content="website">
 <meta property="og:title" content="{e(title)}">
 <meta property="og:description" content="{e(desc)}">
-<meta property="og:image" content="{P['reception']}">
+<meta property="og:image" content="{P['me']}">
 <link rel="icon" href="{P['logo']}">
 <link rel="apple-touch-icon" href="{P['logo']}">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -268,11 +270,22 @@ def brand_panel(t):
     return f'<div class="ph brand-panel"><img src="{P["logo"]}" alt="" width="1080" height="1080" loading="lazy" decoding="async"><span>{e(t["name"])}</span></div>'
 
 
-def hero_slides(slides, side):
-    """One side of the hero: photos that cross-fade and drift slowly, in the clinic's warm colours."""
-    figs = ''.join(f'<figure class="ph graded slide"><img src="{P[k]}" alt="{e(alt)}" width="{w}" height="{h}" {"fetchpriority=\"high\"" if i == 0 else "loading=\"lazy\""} decoding="async" style="object-position:{pos}"></figure>'
-                   for i, (k, alt, pos, w, h) in enumerate(slides))
-    return f'<div class="hero-slides hero-{side}">{figs}</div>'
+def hero_shots(slides):
+    """The photo side of the hero: one photo at a time, cross-fading and drifting slowly, each with a small label."""
+    figs = ''.join(f'<figure class="ph slide{" on" if i == 0 else ""}"><img src="{P[k]}" alt="{e(alt)}" width="{w}" height="{h}" {"fetchpriority=\"high\"" if i == 0 else "loading=\"lazy\""} decoding="async" style="object-position:{pos}"><figcaption class="hero-tag">{e(tag)}</figcaption></figure>'
+                   for i, (k, alt, tag, pos, w, h) in enumerate(slides))
+    return f'<div class="hero-slides hero-shots">{figs}</div>'
+
+
+def hero_walk():
+    """The video side of the hero: Mirela's walk in through the door to the reception, slowed a little, in the clinic's warm colours.
+    site.js plays it, keeps the camera on what matters and steps the photos on each time the walk ends."""
+    return ('<div class="hero-slides hero-walk">'
+            '<video muted playsinline preload="auto" poster="__ROOT__assets/walk-poster.jpg" width="1280" height="720" '
+            'aria-label="Walking in through the door of Alder Ease Aesthetics to the reception desk, with the gold Alder Ease logo on the wall">'
+            '<source src="__ROOT__assets/walk.mp4" type="video/mp4"><source src="__ROOT__assets/walk.webm" type="video/webm"></video>'
+            '<span class="hero-tag walk-tag" aria-hidden="true">Step inside</span>'
+            '</div>')
 
 
 def photo(key, alt, cls='', pos=None, w=1200, h=1600, eager=False):
@@ -299,11 +312,12 @@ def home():
     faqs = ''.join(f'<details class="faq"><summary>{e(q)}</summary><p>{e(a)}</p></details>' for q, a in FAQS[:6])
     body = f'''
 <section class="hero" aria-label="Welcome">
-  <div class="hero-photos">
-    {hero_slides([('reception', 'The reception at Alder Ease Aesthetics, with the gold Alder Ease logo', '50% 30%', 1000, 1500),
-                  ('facial2', 'A cleansing facial at Alder Ease Aesthetics', '50% 40%', 1100, 1560)], 'left')}
-    {hero_slides([('front', 'The front of Alder Ease Aesthetics on Underwood Lane, Crewe', '35% 40%', 960, 1091),
-                  ('hero2', 'Mirela giving a client a radiofrequency microneedling treatment', '45% 35%', 1200, 1600)], 'right')}
+  <div class="hero-photos" data-hero>
+    {hero_walk()}
+    {hero_shots([('front', 'The front of Alder Ease Aesthetics on Underwood Lane, Crewe', 'Underwood Lane, Crewe', '35% 40%', 960, 1091),
+                 ('facial2', 'A cleansing facial at Alder Ease Aesthetics', 'Facials', '50% 40%', 1100, 1560),
+                 ('hero2', 'Mirela giving a client a radiofrequency microneedling treatment', 'Radiofrequency microneedling', '45% 35%', 1200, 1600)])}
+    <button class="hero-pause" type="button" aria-pressed="false" hidden><span class="visually-hidden">Pause the moving pictures</span></button>
   </div>
   <div class="hero-card">
     {logo_mark('md')}
@@ -333,7 +347,7 @@ def home():
       <p class="signature">Mirela Borowska</p>
       <a class="text-link" href="{link('about/')}">More about Mirela</a>
     </div>
-    <div class="split-media reveal">{photo('detail', 'Mirela Borowska at work in the clinic', 'graded tall', pos='45% 30%', w=1200, h=1600)}</div>
+    <div class="split-media reveal">{photo('me', 'Mirela Borowska at the Alder Ease reception', 'graded-soft tall', pos='50% 28%', w=1000, h=1280)}</div>
   </div>
 </section>
 
@@ -471,7 +485,7 @@ def about():
       <p>My goal has always been to create a welcoming, relaxing environment where clients feel valued, cared for and genuinely enjoy coming back for their treatments.</p>
       <p class="signature">Mirela</p>
     </div>
-    <div class="split-media reveal">{photo('hero2', 'Mirela Borowska giving a radiofrequency microneedling treatment', 'graded tall', pos='45% 30%')}</div>
+    <div class="split-media reveal">{photo('me', 'Mirela Borowska, founder of Alder Ease Aesthetics', 'graded-soft tall', pos='50% 28%', w=1000, h=1280)}</div>
   </div>
 </section>
 <section class="section tinted">
