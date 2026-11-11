@@ -8,7 +8,9 @@ export default async (req: Request) => {
   const host = url.hostname.toLowerCase();
   // Gainora's admin: every page of admin.gainora.co.uk is the admin app (files like the logo are served as they are).
   if (host === 'admin.gainora.co.uk') return /\.[a-z0-9]{2,5}$/i.test(url.pathname) ? undefined : new URL('/admin.html', req.url);
-  if (OWN.test(host)) return;
+  // Everywhere else (app.gainora.co.uk included) the admin isn't there: its addresses and admin.html get Command
+  // Centre, like any page it doesn't have, so a client can never tell an admin exists. (This computer, for development, excepted.)
+  if (OWN.test(host)) return /^\/admin/i.test(url.pathname) && !/^(localhost|127\.0\.0\.1)$/.test(host) ? new URL('/index.html', req.url) : undefined;
   if (url.pathname === '/api/site-event' || url.pathname.startsWith('/api/site-enquiry/')) return;
   const target = new URL('/api/site-host', req.url);
   target.searchParams.set('h', host);

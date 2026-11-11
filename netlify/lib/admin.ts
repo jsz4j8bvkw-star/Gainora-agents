@@ -2,7 +2,7 @@
 // client brings in and costs. Shared by /api/admin (the admin app), /api/mcp (the Claude connector) and the
 // morning email.
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
-import { db, enc, HttpError, insert, userFromRequest, type AuthedUser } from './core';
+import { db, enc, env, HttpError, insert, userFromRequest, type AuthedUser } from './core';
 import { stripeGet } from './stripe';
 import { isGainora, siteFor, type SiteRow } from './sites';
 import {
@@ -13,7 +13,19 @@ import { progress, ukToday } from '../../shared/admin/board';
 import { monthCosts, monthlyFromSubscription, monthStart, ratesFrom, type RateCard, type Usage } from '../../shared/admin/money';
 
 /** Signed in and on Gainora's team (GAINORA_ADMIN_EMAILS). Everyone else gets nothing back. */
+/**
+ * The admin answers only at its own address (admin.gainora.co.uk, or ADMIN_URL) and on this computer while developing.
+ * Anywhere else, app.gainora.co.uk included, its endpoints say "Not found" before anything else, so clients never learn
+ * there is an admin.
+ */
+export function onAdminHost(req: Request): boolean {
+  const host = new URL(req.url).hostname.toLowerCase();
+  const own = (() => { try { return new URL(env('ADMIN_URL', 'https://admin.gainora.co.uk')).hostname.toLowerCase(); } catch { return 'admin.gainora.co.uk'; } })();
+  return host === own || host === 'localhost' || host === '127.0.0.1';
+}
+
 export async function requireGainora(req: Request): Promise<AuthedUser> {
+  if (!onAdminHost(req)) throw new HttpError(404, 'Not found.');
   const user = await userFromRequest(req);
   if (!isGainora(user)) throw new HttpError(403, 'This is Gainora’s admin. Sign in with a Gainora team email.');
   return user;

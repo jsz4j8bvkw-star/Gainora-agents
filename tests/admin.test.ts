@@ -128,7 +128,7 @@ test('admin and Claude connector end to end', async () => {
     assert.ok(!JSON.stringify(fake.tables.admin_keys).includes(url.split('/').pop()), 'only a hash is stored');
     const key = url.split('/').pop();
     const rpc = async (method: string, params?: any, id: number | null = 1, k = key) => mcp(new Request(`https://app.gainora.co.uk/api/mcp/${k}`, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' }, body: JSON.stringify(id === null ? { jsonrpc: '2.0', method, params } : { jsonrpc: '2.0', id, method, params }) }));
-    assert.equal((await rpc('initialize', {}, 1, 'wrong-key-wrong-key-wrong-key')).status, 401);
+    assert.equal((await rpc('initialize', {}, 1, 'wrong-key-wrong-key-wrong-key')).status, 404, 'a wrong link looks like nothing is there');
     const init = await (await rpc('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'claude', version: '1' } })).json();
     assert.equal(init.result.protocolVersion, '2025-06-18');
     assert.equal(init.result.serverInfo.name, 'gainora-admin');
@@ -163,7 +163,7 @@ test('admin and Claude connector end to end', async () => {
     // Revoking the link locks Claude out.
     const keys = (await (await call({ op: 'keys' })).json()).keys;
     await call({ op: 'key-revoke', id: keys[0].id });
-    assert.equal((await rpc('tools/list')).status, 401);
+    assert.equal((await rpc('tools/list')).status, 404);
 
     // The morning email.
     const r = await daily();
@@ -174,23 +174,55 @@ test('admin and Claude connector end to end', async () => {
   } finally { fake.server.close(); }
 });
 
-test('admin routes live under /admin on app.gainora.co.uk, so a refresh stays in the admin', async () => {
-  const { routePrefix } = await import('../src/lib/router');
-  assert.equal(routePrefix('/admin.html', 'app.gainora.co.uk'), '/admin');
-  assert.equal(routePrefix('/admin/clients', 'app.gainora.co.uk'), '/admin');
-  assert.equal(routePrefix('/admin', 'app.gainora.co.uk'), '/admin');
-  assert.equal(routePrefix('/administration', 'app.gainora.co.uk'), '');
-  assert.equal(routePrefix('/clients', 'admin.gainora.co.uk'), '');
-  assert.equal(routePrefix('/', 'app.gainora.co.uk'), '', 'Command Centre is untouched');
+test('the admin exists only at admin.gainora.co.uk: on app.gainora.co.uk a client can’t tell there is one', async () => {
+  const { default: edge } = await import('../netlify/edge-functions/sites');
+  const at = async (u: string) => { const r: any = await edge(new Request(u)); return r instanceof URL ? r.pathname : r; };
+  // The admin's own address: every page is the admin; its files are served as they are.
+  assert.equal(await at('https://admin.gainora.co.uk/clients'), '/admin.html');
+  assert.equal(await at('https://admin.gainora.co.uk/'), '/admin.html');
+  assert.equal(await at('https://admin.gainora.co.uk/favicon.svg'), undefined);
+  // app.gainora.co.uk (and any other Gainora address): the admin's addresses and file are Command Centre, like any unknown page.
+  for (const p of ['/admin', '/admin/', '/admin/me', '/admin/clients/a%40b.com', '/admin.html', '/ADMIN.html']) assert.equal(await at(`https://app.gainora.co.uk${p}`), '/index.html', p);
+  assert.equal(await at('https://gainoraagents.netlify.app/admin.html'), '/index.html');
+  assert.equal(await at('https://app.gainora.co.uk/clients'), undefined, 'Command Centre is untouched');
+  assert.equal(await at('https://app.gainora.co.uk/'), undefined);
+  // A client's own domain still goes to their website, even at /admin.
+  assert.match(String(await edge(new Request('https://glowclinic.co.uk/admin'))), /\/api\/site-host\?h=glowclinic\.co\.uk&p=%2Fadmin/);
+
+  // Nothing on app.gainora.co.uk sends anyone to the admin or names it.
   const toml = readFileSync('netlify.toml', 'utf8');
-  assert.ok(toml.indexOf('from = "/admin/*"') > 0 && toml.indexOf('from = "/admin/*"') < toml.indexOf('from = "/*"'), 'the admin redirect comes before the app catch-all');
-  // Old admin addresses (from before /admin) still in tabs and bookmarks go to the admin, never Command Centre.
-  const catchAll = toml.indexOf('from = "/*"');
-  for (const p of ['me', 'sales', 'delivery', 'requests', 'health', 'money', 'prices', 'paperwork', 'more']) {
-    const i = toml.indexOf(`from = "/${p}/*"\n  to = "/admin/${p}/:splat"`);
-    assert.ok(i > 0 && i < catchAll && toml.indexOf(`from = "/${p}"\n  to = "/admin/${p}"`) > 0, `/${p} moves to /admin/${p}`);
-  }
-  for (const cc of ['clients', 'settings', 'website', 'watcher', 'scout', 'brief', 'ask', 'business', 'results']) assert.ok(!toml.includes(`from = "/${cc}"`), `Command Centre keeps /${cc}`);
-  const sw = readFileSync('public/sw.js', 'utf8');
-  assert.match(sw, /ADMIN_ONLY = \/\^\\\/\(me\|sales\|delivery\|requests\|health\|money\|prices\|paperwork\|more\)/, 'the service worker leaves the old admin addresses alone too');
+  const rules = toml.slice(toml.indexOf('[[redirects]]'));
+  assert.ok(!/admin/i.test(rules.replace(/^#.*$/gm, '')), 'no redirect rule mentions the admin');
+  assert.ok(!/admin/i.test(readFileSync('public/sw.js', 'utf8')), 'the service worker never names it');
+  assert.ok(!/admin/i.test(readFileSync('src/lib/router.tsx', 'utf8')), 'Command Centre’s router never names it');
+  assert.ok(!/Gainora admin/i.test(readFileSync('src/pages/website.tsx', 'utf8').replace(/^\s*(\/\*\*|\*|\/\/).*$/gm, '')), 'nor does any text on the website page');
+});
+
+test('the admin’s endpoints say “Not found” anywhere but admin.gainora.co.uk, before checking who’s asking', async () => {
+  const { onAdminHost } = await import('../netlify/lib/admin');
+  assert.equal(onAdminHost(new Request('https://admin.gainora.co.uk/api/admin')), true);
+  assert.equal(onAdminHost(new Request('http://localhost:8888/api/admin')), true);
+  assert.equal(onAdminHost(new Request('https://app.gainora.co.uk/api/admin')), false);
+  assert.equal(onAdminHost(new Request('https://gainoraagents.netlify.app/api/admin')), false);
+  const fake = await startFake({ __users: [{ id: '22222222-2222-4222-8222-222222222222', email: 'hello@gainora.co.uk', token: 'admin' }] });
+  Object.assign(process.env, { SUPABASE_URL: fake.base, SUPABASE_ANON_KEY: 'anon', SUPABASE_SERVICE_ROLE_KEY: 'svc', INTERNAL_SECRET: 's' });
+  try {
+    const fns: [string, (req: Request) => Promise<Response>][] = [
+      ['admin', (await import('../netlify/functions/admin')).default], ['admin-sales', (await import('../netlify/functions/admin-sales')).default],
+      ['admin-business', (await import('../netlify/functions/admin-business')).default], ['admin-asks', (await import('../netlify/functions/admin-asks')).default],
+      ['admin-me', (await import('../netlify/functions/admin-me')).default],
+    ];
+    for (const [path, f] of fns) {
+      for (const token of ['admin', 'nobody']) {
+        const r = await f(new Request(`https://app.gainora.co.uk/api/${path}`, { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ op: 'overview' }) }));
+        assert.equal(r.status, 404, `${path} on app.gainora.co.uk`);
+        const text = await r.text();
+        assert.ok(!/admin|gainora/i.test(text), `${path} says nothing about what it is: ${text}`);
+      }
+    }
+    const { default: mcp } = await import('../netlify/functions/mcp');
+    const bad = await mcp(new Request('https://app.gainora.co.uk/api/mcp/not-a-real-key-123456789012345', { method: 'POST', body: '{}' }));
+    assert.equal(bad.status, 404);
+    assert.ok(!/admin|gainora|connector/i.test(await bad.text()), 'a wrong connector link gives nothing away');
+  } finally { fake.server.close(); }
 });

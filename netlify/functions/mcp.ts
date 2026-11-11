@@ -540,7 +540,8 @@ async function handle(msg: any): Promise<any | null> {
 
 export default async (req: Request) => {
   const key = new URL(req.url).pathname.split('/').filter(Boolean).pop() || '';
-  if (!(await checkKey(key))) return new Response(JSON.stringify({ error: 'This connector link isn’t valid. Make a new one in Gainora admin → Settings.' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
+  // A wrong or revoked link looks like any address that doesn't exist: it says nothing about what's behind it.
+  if (!(await checkKey(key))) return new Response(JSON.stringify({ error: 'Not found.' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
   if (req.method === 'GET') return new Response(null, { status: 405, headers: { Allow: 'POST' } });
   if (req.method === 'DELETE') return new Response(null, { status: 204 });
   if (req.method !== 'POST') return new Response(null, { status: 405, headers: { Allow: 'POST' } });

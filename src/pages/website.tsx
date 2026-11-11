@@ -140,7 +140,7 @@ function ClientBar({ current, onPick }: { current: string | null; onPick: (slug:
           </select>
         )}
       </Field>
-      <span className="xsmall faint">Only Gainora’s team sees this. The separate Gainora admin will replace it.</span>
+      <span className="xsmall faint">Only Gainora’s team sees this.</span>
     </div>
   );
 }

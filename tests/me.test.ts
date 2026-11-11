@@ -121,7 +121,7 @@ test('my day: the admin page and the Claude connector end to end', async () => {
     const { default: page } = await import('../netlify/functions/admin-me');
     const { default: admin } = await import('../netlify/functions/admin');
     const { default: mcp } = await import('../netlify/functions/mcp');
-    const call = async (b: any, token = 'admin') => page(new Request('https://app.gainora.co.uk/api/admin-me', { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(b) }));
+    const call = async (b: any, token = 'admin') => page(new Request('https://admin.gainora.co.uk/api/admin-me', { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(b) }));
 
     // Private to the first admin email, even for the rest of the team.
     assert.equal((await call({ op: 'today' }, 'team')).status, 403);
@@ -162,7 +162,7 @@ test('my day: the admin page and the Claude connector end to end', async () => {
     assert.equal(r.routine.length, DEFAULT_ROUTINE.length);
 
     // The connector: a key, then the My day tools.
-    const { url } = await (await admin(new Request('https://app.gainora.co.uk/api/admin', { method: 'POST', headers: { Authorization: 'Bearer admin', 'Content-Type': 'application/json' }, body: JSON.stringify({ op: 'key-create', label: 'Claude' }) }))).json();
+    const { url } = await (await admin(new Request('https://admin.gainora.co.uk/api/admin', { method: 'POST', headers: { Authorization: 'Bearer admin', 'Content-Type': 'application/json' }, body: JSON.stringify({ op: 'key-create', label: 'Claude' }) }))).json();
     const key = url.split('/').pop();
     const rpc = async (method: string, params?: any) => (await mcp(new Request(`https://app.gainora.co.uk/api/mcp/${key}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }) }))).json();
     const names = (await rpc('tools/list')).result.tools.map((x: any) => x.name);
