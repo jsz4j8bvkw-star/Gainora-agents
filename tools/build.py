@@ -5,7 +5,7 @@
     python3 build.py <out-dir> --preview  preview copy: index.html links, no tracking, form doesn't send
 
 Every fact comes from Mirela's website questionnaire (10 Nov 2026) and her admin draft. Left off on purpose:
-IV drips, skin boosters and anything with a vitamin B12 injection (Gainora brief), nails, brows and lashes.
+IV drips and anything with a vitamin B12 injection (Gainora brief), nails, brows and lashes. Skin boosters added 11 Nov at Adelin's request.
 """
 import html, json, os, sys
 
@@ -20,6 +20,11 @@ P = {k: f'{IMG}{v}.jpg' for k, v in {
 # Sent by Mirela on 11 Nov 2026 (reception desk with the logo, and the clinic front), stored with her other photos.
 P['reception'] = f'{IMG}ae1edf2c-aca.webp'
 P['front'] = f'{IMG}923f8795-08b.webp'
+# Sent by Mirela on 11 Nov 2026 for these treatments (her labels): Dermapen 4, skin booster, facial.
+P['dermapen'] = f'{IMG}0aa33072-b93.webp'
+P['booster'] = f'{IMG}d6c0d797-bdb.webp'
+P['facial2'] = f'{IMG}51bb9e75-fa5.webp'
+# Not used any more: 'facial' (white gloves, actually Dermapen; Adelin asked for it off the site) and 'hero1' (replaced by facial2).
 
 SITE_ID = 'dc156330-3847-4ac1-8a43-1ec287f26412'
 TRACK = f'<script src="https://app.gainora.co.uk/api/site-track/{SITE_ID}.js" defer></script>'
@@ -49,11 +54,11 @@ TREATMENTS = [
     dict(id='consultation', name='Free consultation', img=None, lead='Where every new client starts.',
          text='A relaxed conversation about your skin, your goals and any worries. Mirela checks your medical history and suitability, and talks you through the options. If it’s appropriate, your treatment can follow on the same day.',
          rows=[('Consultation', '30 to 45 min', 'Free')]),
-    dict(id='rf-microneedling', name='Radiofrequency microneedling', img=None,
+    dict(id='rf-microneedling', name='Radiofrequency microneedling', img='hero2',
          lead='Microneedling with radiofrequency energy, to work on firmness and texture.',
          text='Fine needles and radiofrequency energy are used together to encourage the skin’s own collagen and elastin. Chosen for skin firmness, fine lines, acne scarring, enlarged pores and uneven texture.',
          rows=[('Face', '60 min', '£170'), ('Face and neck', '80 min', '£220'), ('Face, neck and décolletage', '90 min', '£300'), ('Scar treatment', '40 min', '£150'), ('Body', '45 min', '£180')]),
-    dict(id='dermapen', name='Dermapen 4 microneedling', img=None,
+    dict(id='dermapen', name='Dermapen 4 microneedling', img='dermapen',
          lead='Professional microneedling with serums chosen for your skin.',
          text='Dermapen 4 microneedling with tailored Meso-Glide serums. Chosen for skin texture, fine lines, acne scarring, pigmentation, enlarged pores and overall skin quality.',
          rows=[('Face', '60 min', '£150'), ('Face and neck', '70 min', '£180'), ('Face, neck and décolletage', '90 min', '£200'), ('Scar treatment', '60 min', 'From £100')]),
@@ -69,11 +74,15 @@ TREATMENTS = [
          lead='Soft, natural-looking shape and volume.',
          text='Planned around your lips and the proportions of your face, after a consultation, using Revolax dermal filler. You’ll get written aftercare and can message Mirela with any questions afterwards. Over 18s only.',
          rows=[('Lip filler', '60 min', 'From £200'), ('Ultimate Lip & Skin Glow: lip filler with a deep-cleansing, hydrating facial', '1 hr 40 min', '£250')]),
+    dict(id='skin-boosters', name='Skin boosters', img='booster',
+         lead='Deep hydration for fresher, more radiant-looking skin.',
+         text='Injectable skin boosters such as Profhilo, Seventy Hyal, Ejal 40, Neauvia Hydro Deluxe and Vitaran bring hydrating ingredients into the skin, to support hydration, texture and overall skin quality. Mirela recommends the right one for your skin at a free consultation. Over 18s only. A £50 deposit secures your appointment.',
+         rows=[('Skin booster, chosen for your skin', 'At consultation', 'Price at consultation')]),
     dict(id='packages', name='Microneedling and PRP packages', img=None,
          lead='Two treatments combined in one appointment.',
          text='Microneedling or radiofrequency microneedling, combined with PRP in the same session, for skin texture, acne scarring and fine lines.',
          rows=[('RF microneedling and PRP', '90 min', '£250'), ('Microneedling and PRP', '75 min', '£200')]),
-    dict(id='facials', name='Professional facials', img='facial',
+    dict(id='facials', name='Professional facials', img='facial2',
          lead='Deep cleansing, exfoliation and a fresh, bright finish.',
          text='Skin Glow combines ultrasonic cavitation peeling and oxybrasion for a deep cleanse and brighter complexion. Facial Rejuvenation pairs cavitation peeling with needle-free radiofrequency for firmer-looking skin. Smooth & Glow combines dermaplaning and oxybrasion to remove dead skin cells and fine facial hair.',
          rows=[('Skin Glow', '60 min', '£65'), ('Facial Rejuvenation', '60 min', '£75'), ('Smooth & Glow', '60 min', '£65')]),
@@ -86,7 +95,7 @@ TREATMENTS = [
          text='Pneumatic compression uses controlled, sequential pressure to support lymphatic circulation. Clients often choose it for feelings of heaviness or fluid retention. After surgery, or with a medical condition, suitability is checked at consultation first.',
          rows=[('Single session', '60 min', '£45'), ('Course of 6 sessions', '60 min each', '£240')]),
 ]
-FEATURED = ['rf-microneedling', 'dermapen', 'prp', 'prf', 'lip-filler', 'facials']
+FEATURED = ['skin-boosters', 'lip-filler', 'prp', 'rf-microneedling', 'dermapen', 'prf']   # Mirela's priorities first
 T = {t['id']: t for t in TREATMENTS}
 
 
@@ -95,6 +104,8 @@ def from_price(t):
     if prices == ['Free']:
         return 'Free'
     nums = [int(''.join(c for c in p if c.isdigit())) for p in prices if any(c.isdigit() for c in p)]
+    if not nums:
+        return prices[0]
     return f'From £{min(nums)}' if len(prices) > 1 or prices[0].startswith('From') else prices[0]
 
 
@@ -111,6 +122,7 @@ EQUIPMENT = [
     ('Dermapen 4', 'Professional microneedling pen, used with Meso-Glide serums.'),
     ('Meso-Glide serums', 'Serums chosen for your skin during microneedling.'),
     ('Revolax', 'Hyaluronic acid dermal filler, used for lip filler.'),
+    ('Skin boosters', 'Profhilo, Seventy Hyal, Ejal 40, Neauvia Hydro Deluxe and Vitaran.'),
     ('PRP and PRF', 'Prepared from your own blood, in clinic.'),
     ('Ultrasonic cavitation peeling', 'Deep, gentle cleansing for facials.'),
     ('Oxybrasion', 'Exfoliation and hydration for a brighter finish.'),
@@ -289,9 +301,9 @@ def home():
 <section class="hero" aria-label="Welcome">
   <div class="hero-photos">
     {hero_slides([('reception', 'The reception at Alder Ease Aesthetics, with the gold Alder Ease logo', '50% 30%', 1000, 1500),
-                  ('hero1', 'Mirela Borowska preparing a client for a skin treatment in the clinic', '58% 40%', 1200, 1600)], 'left')}
+                  ('facial2', 'A cleansing facial at Alder Ease Aesthetics', '50% 40%', 1100, 1560)], 'left')}
     {hero_slides([('front', 'The front of Alder Ease Aesthetics on Underwood Lane, Crewe', '35% 40%', 960, 1091),
-                  ('hero2', 'Mirela giving a client a treatment in the treatment room', '45% 35%', 1200, 1600)], 'right')}
+                  ('hero2', 'Mirela giving a client a radiofrequency microneedling treatment', '45% 35%', 1200, 1600)], 'right')}
   </div>
   <div class="hero-card">
     {logo_mark('md')}
@@ -321,7 +333,7 @@ def home():
       <p class="signature">Mirela Borowska</p>
       <a class="text-link" href="{link('about/')}">More about Mirela</a>
     </div>
-    <div class="split-media reveal">{photo('facial', 'A client relaxing during a facial with a handheld skin device', 'graded tall', pos='50% 30%', w=1080, h=1440)}</div>
+    <div class="split-media reveal">{photo('detail', 'Mirela Borowska at work in the clinic', 'graded tall', pos='45% 30%', w=1200, h=1600)}</div>
   </div>
 </section>
 
@@ -365,7 +377,7 @@ def home():
 
 <section class="section">
   <div class="wrap split split-rev">
-    <div class="split-media reveal">{photo('hero1', 'The treatment room at Alder Ease Aesthetics', 'graded tall', pos='22% 50%')}</div>
+    <div class="split-media reveal">{photo('needling', 'Mirela Borowska treating a client in the clinic', 'graded tall', pos='55% 45%')}</div>
     <div class="split-text reveal">
       <p class="eyebrow">Equipment and products</p>
       <h2>Professional equipment, chosen for each treatment</h2>
@@ -459,7 +471,7 @@ def about():
       <p>My goal has always been to create a welcoming, relaxing environment where clients feel valued, cared for and genuinely enjoy coming back for their treatments.</p>
       <p class="signature">Mirela</p>
     </div>
-    <div class="split-media reveal">{photo('hero2', 'Mirela Borowska at work in the clinic', 'graded tall', pos='45% 30%')}</div>
+    <div class="split-media reveal">{photo('hero2', 'Mirela Borowska giving a radiofrequency microneedling treatment', 'graded tall', pos='45% 30%')}</div>
   </div>
 </section>
 <section class="section tinted">
