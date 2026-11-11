@@ -262,8 +262,8 @@ address { font-style: normal; }
 @media (max-width: 600px) {
   body { font-size: 16px; padding-bottom: 64px; }
   .hero { padding: 8px 8px 0; }
-  .hero-photos { gap: 8px; height: 62vh; min-height: 380px; }
-  .hero-card { margin-top: -110px; padding: 40px 24px 32px; width: calc(100% - 24px); }
+  .hero-photos { gap: 8px; height: 68vh; min-height: 440px; }
+  .hero-card { margin-top: -60px; padding: 40px 24px 32px; width: calc(100% - 24px); }
   .hero-card .mark-md { width: 72px; height: 72px; margin-top: -76px; }
   .cards { grid-template-columns: 1fr; }
   .field-row { grid-template-columns: 1fr; }
