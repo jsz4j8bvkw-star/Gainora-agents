@@ -5,17 +5,33 @@ declare const __DEMO__: boolean;
 const memory = typeof __DEMO__ !== 'undefined' && __DEMO__;
 let memPath = '/';
 
+/**
+ * Gainora's admin also runs at app.gainora.co.uk/admin (next to Command Centre), so its routes live under /admin there:
+ * a refresh on /admin/clients reopens the admin, not Command Centre. On admin.gainora.co.uk the routes have no prefix.
+ * Pages always see and pass plain routes ("/clients"); the prefix is added and removed here.
+ */
+export function routePrefix(pathname: string, host: string): string {
+  return host !== 'admin.gainora.co.uk' && /^\/admin(\.html)?(\/|$)/.test(pathname) ? '/admin' : '';
+}
+const PREFIX = memory || typeof location === 'undefined' ? '' : routePrefix(location.pathname, location.hostname);
+export const toUrl = (to: string) => (PREFIX && to.startsWith('/') ? PREFIX + (to === '/' ? '' : to) || PREFIX : to);
+export function fromUrl(pathname: string): string {
+  if (!PREFIX) return pathname || '/';
+  const rest = pathname.replace(/^\/admin(\.html)?/, '');
+  return rest.startsWith('/') ? rest : '/' + rest;
+}
+
 function current(): string {
   if (memory) return memPath;
-  return (location.pathname || '/') + (location.search || '');
+  return fromUrl(location.pathname || '/') + (location.search || '');
 }
 
 const listeners = new Set<() => void>();
 
 export function navigate(to: string, opts: { replace?: boolean } = {}) {
   if (memory) memPath = to;
-  else if (opts.replace) history.replaceState(null, '', to);
-  else history.pushState(null, '', to);
+  else if (opts.replace) history.replaceState(null, '', toUrl(to));
+  else history.pushState(null, '', toUrl(to));
   listeners.forEach((l) => l());
   window.scrollTo({ top: 0 });
 }
@@ -40,7 +56,7 @@ export function usePath(): string {
 }
 
 export function href(to: string): string {
-  return memory ? '#' : to;
+  return memory ? '#' : toUrl(to);
 }
 
 /** The query string of the current route, so pages can open on a tab or item from a link. */

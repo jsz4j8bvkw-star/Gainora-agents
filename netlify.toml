@@ -40,6 +40,18 @@
 
 # Clients' own domains are routed to their websites by netlify/edge-functions/sites.ts (its config says where it runs).
 
+# Gainora's admin at app.gainora.co.uk/admin: its pages (/admin, /admin/clients, …) all serve the admin app,
+# so refreshing an admin page keeps you in the admin. (admin.gainora.co.uk is handled by the edge function.)
+[[redirects]]
+  from = "/admin"
+  to = "/admin.html"
+  status = 200
+
+[[redirects]]
+  from = "/admin/*"
+  to = "/admin.html"
+  status = 200
+
 # Single-page app: every route serves the app shell.
 [[redirects]]
   from = "/*"

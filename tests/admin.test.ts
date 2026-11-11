@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { startFake } from './fake-sb';
 import { board, bucketOf, dueLabel, progress } from '../shared/admin/board';
 import { monthCosts, monthlyFromSubscription, DEFAULT_RATES, ratesFrom } from '../shared/admin/money';
@@ -171,4 +172,16 @@ test('admin and Claude connector end to end', async () => {
     assert.equal(morning.to[0], 'hello@gainora.co.uk');
     assert.match(morning.text, /New clients with no set-up started:\n• new@shop\.example/);
   } finally { fake.server.close(); }
+});
+
+test('admin routes live under /admin on app.gainora.co.uk, so a refresh stays in the admin', async () => {
+  const { routePrefix } = await import('../src/lib/router');
+  assert.equal(routePrefix('/admin.html', 'app.gainora.co.uk'), '/admin');
+  assert.equal(routePrefix('/admin/clients', 'app.gainora.co.uk'), '/admin');
+  assert.equal(routePrefix('/admin', 'app.gainora.co.uk'), '/admin');
+  assert.equal(routePrefix('/administration', 'app.gainora.co.uk'), '');
+  assert.equal(routePrefix('/clients', 'admin.gainora.co.uk'), '');
+  assert.equal(routePrefix('/', 'app.gainora.co.uk'), '', 'Command Centre is untouched');
+  const toml = readFileSync('netlify.toml', 'utf8');
+  assert.ok(toml.indexOf('from = "/admin/*"') > 0 && toml.indexOf('from = "/admin/*"') < toml.indexOf('from = "/*"'), 'the admin redirect comes before the app catch-all');
 });
