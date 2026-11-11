@@ -96,8 +96,31 @@ p { margin: 0; }
 /* Hero: two open photos, a card across the seam */
 .hero { position: relative; padding: 14px 14px 0; }
 .hero-photos { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; height: clamp(460px, 78vh, 820px); }
-.hero-ph { height: 100%; }
-.hero-ph img { transform: scale(1.02); }
+/* Each side cross-fades between two photos, drifting slowly sideways, the two sides out of step.
+   A warm wash pulls the different photos into the same beige-and-gold palette, and the bottom fades into the page. */
+.hero-slides { position: relative; height: 100%; overflow: hidden; background: var(--sand); isolation: isolate; }
+.hero-slides .slide { position: absolute; inset: 0; opacity: 0; animation: hero-fade 14s linear infinite both; }
+.hero-slides .slide img { filter: brightness(1.05) contrast(1.02) saturate(0.74) sepia(0.2); animation: hero-drift 14s linear infinite both; will-change: transform; }
+.hero-left .slide:nth-child(1), .hero-left .slide:nth-child(1) img { animation-delay: -1.2s; }
+.hero-left .slide:nth-child(2), .hero-left .slide:nth-child(2) img { animation-delay: 5.8s; }
+.hero-right .slide:nth-child(1), .hero-right .slide:nth-child(1) img { animation-delay: -3.6s; }
+.hero-right .slide:nth-child(2), .hero-right .slide:nth-child(2) img { animation-delay: 3.4s; }
+.hero-slides::before { content: ""; position: absolute; inset: 0; z-index: 2; pointer-events: none; mix-blend-mode: soft-light;
+  background: linear-gradient(160deg, rgba(220, 190, 140, 0.55), rgba(245, 239, 231, 0.2) 45%, rgba(168, 134, 90, 0.45)); }
+.hero-slides::after { content: ""; position: absolute; inset: 0; z-index: 3; pointer-events: none;
+  background: linear-gradient(180deg, rgba(245, 239, 231, 0.12), rgba(245, 239, 231, 0) 30%, rgba(245, 239, 231, 0) 62%, rgba(245, 239, 231, 0.7) 100%); }
+@keyframes hero-fade { 0% { opacity: 0; } 9% { opacity: 1; } 50% { opacity: 1; } 59% { opacity: 0; } 100% { opacity: 0; } }
+@keyframes hero-drift { 0% { transform: scale(1.1) translateX(2.5%); } 59% { transform: scale(1.16) translateX(-2.5%); } 100% { transform: scale(1.16) translateX(-2.5%); } }
+@media (prefers-reduced-motion: reduce) {
+  .hero-slides .slide, .hero-slides .slide img { animation: none; }
+  .hero-slides .slide:first-child { opacity: 1; }
+}
+
+/* A treatment with no photo of it yet: the logo on warm sand. */
+.brand-panel { aspect-ratio: 4 / 3.4; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+  background: radial-gradient(120% 90% at 50% 35%, var(--white), var(--sand) 70%); }
+.brand-panel img { width: 34%; height: auto; object-fit: contain; opacity: 0.92; }
+.brand-panel span { font: 500 0.72rem/1.4 var(--body); letter-spacing: 0.22em; text-transform: uppercase; color: var(--gold-deep); text-align: center; padding: 0 16px; }
 .hero-card { position: relative; z-index: 2; width: min(640px, 100% - 40px); margin: -190px auto 0; background: var(--white); padding: 48px 52px 46px; text-align: center;
   box-shadow: 0 30px 60px -30px rgba(46, 38, 33, 0.35); border-top: 2px solid var(--gold); }
 .hero-card .mark-md { margin-inline: auto; margin-top: -90px; }

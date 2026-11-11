@@ -17,6 +17,9 @@ P = {k: f'{IMG}{v}.jpg' for k, v in {
     'logo': '4c94d2a0-6ad', 'lips1': '10eea723-073', 'lips2': '6625fe15-b26', 'lips3': '1ea7d16c-ea1', 'lips4': 'f031e182-783',
     'facial': 'ff79e7e0-fcc', 'hero1': 'd2c1c25f-2d0', 'hero2': '2c19ae4c-236', 'detail': '9d28a019-8df', 'needling': 'f51de20a-245',
     'prp': '18f673ad-7b8', 'prf': '7ed4167b-df3'}.items()}
+# Sent by Mirela on 11 Nov 2026 (reception desk with the logo, and the clinic front), stored with her other photos.
+P['reception'] = f'{IMG}ae1edf2c-aca.webp'
+P['front'] = f'{IMG}923f8795-08b.webp'
 
 SITE_ID = 'dc156330-3847-4ac1-8a43-1ec287f26412'
 TRACK = f'<script src="https://app.gainora.co.uk/api/site-track/{SITE_ID}.js" defer></script>'
@@ -46,11 +49,11 @@ TREATMENTS = [
     dict(id='consultation', name='Free consultation', img=None, lead='Where every new client starts.',
          text='A relaxed conversation about your skin, your goals and any worries. Mirela checks your medical history and suitability, and talks you through the options. If it’s appropriate, your treatment can follow on the same day.',
          rows=[('Consultation', '30 to 45 min', 'Free')]),
-    dict(id='rf-microneedling', name='Radiofrequency microneedling', img='needling',
+    dict(id='rf-microneedling', name='Radiofrequency microneedling', img=None,
          lead='Microneedling with radiofrequency energy, to work on firmness and texture.',
          text='Fine needles and radiofrequency energy are used together to encourage the skin’s own collagen and elastin. Chosen for skin firmness, fine lines, acne scarring, enlarged pores and uneven texture.',
          rows=[('Face', '60 min', '£170'), ('Face and neck', '80 min', '£220'), ('Face, neck and décolletage', '90 min', '£300'), ('Scar treatment', '40 min', '£150'), ('Body', '45 min', '£180')]),
-    dict(id='dermapen', name='Dermapen 4 microneedling', img='detail',
+    dict(id='dermapen', name='Dermapen 4 microneedling', img=None,
          lead='Professional microneedling with serums chosen for your skin.',
          text='Dermapen 4 microneedling with tailored Meso-Glide serums. Chosen for skin texture, fine lines, acne scarring, pigmentation, enlarged pores and overall skin quality.',
          rows=[('Face', '60 min', '£150'), ('Face and neck', '70 min', '£180'), ('Face, neck and décolletage', '90 min', '£200'), ('Scar treatment', '60 min', 'From £100')]),
@@ -64,7 +67,7 @@ TREATMENTS = [
          rows=[('Under-eye', '60 min', '£150')]),
     dict(id='lip-filler', name='Lip filler', img='lips2',
          lead='Soft, natural-looking shape and volume.',
-         text='Planned around your lips and the proportions of your face, after a consultation. You’ll get written aftercare and can message Mirela with any questions afterwards. Over 18s only.',
+         text='Planned around your lips and the proportions of your face, after a consultation, using Revolax dermal filler. You’ll get written aftercare and can message Mirela with any questions afterwards. Over 18s only.',
          rows=[('Lip filler', '60 min', 'From £200'), ('Ultimate Lip & Skin Glow: lip filler with a deep-cleansing, hydrating facial', '1 hr 40 min', '£250')]),
     dict(id='packages', name='Microneedling and PRP packages', img=None,
          lead='Two treatments combined in one appointment.',
@@ -107,6 +110,7 @@ EQUIPMENT = [
     ('Radiofrequency microneedling', 'Microneedling and radiofrequency energy in one treatment.'),
     ('Dermapen 4', 'Professional microneedling pen, used with Meso-Glide serums.'),
     ('Meso-Glide serums', 'Serums chosen for your skin during microneedling.'),
+    ('Revolax', 'Hyaluronic acid dermal filler, used for lip filler.'),
     ('PRP and PRF', 'Prepared from your own blood, in clinic.'),
     ('Ultrasonic cavitation peeling', 'Deep, gentle cleansing for facials.'),
     ('Oxybrasion', 'Exfoliation and hydration for a brighter finish.'),
@@ -148,7 +152,7 @@ def logo_mark(size='md'):
 def head(title, desc, path, noindex=False):
     schema = {
         '@context': 'https://schema.org', '@type': 'HealthAndBeautyBusiness', 'name': 'Alder Ease Aesthetics',
-        'image': P['hero1'], 'logo': P['logo'], 'telephone': PHONE_TEL, 'email': EMAIL, 'priceRange': '££',
+        'image': P['reception'], 'logo': P['logo'], 'telephone': PHONE_TEL, 'email': EMAIL, 'priceRange': '££',
         'address': {'@type': 'PostalAddress', 'streetAddress': '167-169 Underwood Lane', 'addressLocality': 'Crewe', 'postalCode': 'CW1 3SD', 'addressCountry': 'GB'},
         'openingHoursSpecification': [{'@type': 'OpeningHoursSpecification', 'dayOfWeek': ['Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'], 'opens': '09:00', 'closes': '17:00'}],
         'sameAs': [INSTA], 'founder': {'@type': 'Person', 'name': 'Mirela Borowska'},
@@ -165,7 +169,7 @@ def head(title, desc, path, noindex=False):
 <meta property="og:type" content="website">
 <meta property="og:title" content="{e(title)}">
 <meta property="og:description" content="{e(desc)}">
-<meta property="og:image" content="{P['hero1']}">
+<meta property="og:image" content="{P['reception']}">
 <link rel="icon" href="{P['logo']}">
 <link rel="apple-touch-icon" href="{P['logo']}">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -247,6 +251,18 @@ def page(path, title, desc, active, body, noindex=False):
         f.write(doc)
 
 
+def brand_panel(t):
+    """For a treatment with no photo of that treatment yet: the logo on warm sand, never a photo of something else."""
+    return f'<div class="ph brand-panel"><img src="{P["logo"]}" alt="" width="1080" height="1080" loading="lazy" decoding="async"><span>{e(t["name"])}</span></div>'
+
+
+def hero_slides(slides, side):
+    """One side of the hero: photos that cross-fade and drift slowly, in the clinic's warm colours."""
+    figs = ''.join(f'<figure class="ph graded slide"><img src="{P[k]}" alt="{e(alt)}" width="{w}" height="{h}" {"fetchpriority=\"high\"" if i == 0 else "loading=\"lazy\""} decoding="async" style="object-position:{pos}"></figure>'
+                   for i, (k, alt, pos, w, h) in enumerate(slides))
+    return f'<div class="hero-slides hero-{side}">{figs}</div>'
+
+
 def photo(key, alt, cls='', pos=None, w=1200, h=1600, eager=False):
     style = f' style="object-position:{pos}"' if pos else ''
     return f'<figure class="ph {cls}"><img src="{P[key]}" alt="{e(alt)}" width="{w}" height="{h}" {"fetchpriority=\"high\"" if eager else "loading=\"lazy\""} decoding="async"{style}></figure>'
@@ -259,7 +275,7 @@ def home():
     for tid in FEATURED:
         t = T[tid]
         cards += f'''<article class="card reveal">
-      <a class="card-img" href="{link('treatments/#' + tid)}" tabindex="-1" aria-hidden="true">{photo(t['img'], '', 'graded', w=1200, h=1600)}</a>
+      <a class="card-img" href="{link('treatments/#' + tid)}" tabindex="-1" aria-hidden="true">{photo(t['img'], '', 'graded', w=1200, h=1600) if t['img'] else brand_panel(t)}</a>
       <div class="card-body">
         <h3><a href="{link('treatments/#' + tid)}">{e(t['name'])}</a></h3>
         <p>{e(t['lead'])}</p>
@@ -272,8 +288,10 @@ def home():
     body = f'''
 <section class="hero" aria-label="Welcome">
   <div class="hero-photos">
-    {photo('hero1', 'Mirela Borowska preparing a client for a skin treatment in the clinic', 'graded hero-ph', pos='58% 40%', eager=True)}
-    {photo('hero2', 'Mirela giving a client a treatment in the treatment room', 'graded hero-ph', pos='45% 35%', eager=True)}
+    {hero_slides([('reception', 'The reception at Alder Ease Aesthetics, with the gold Alder Ease logo', '50% 30%', 1000, 1500),
+                  ('hero1', 'Mirela Borowska preparing a client for a skin treatment in the clinic', '58% 40%', 1200, 1600)], 'left')}
+    {hero_slides([('front', 'The front of Alder Ease Aesthetics on Underwood Lane, Crewe', '35% 40%', 960, 1091),
+                  ('hero2', 'Mirela giving a client a treatment in the treatment room', '45% 35%', 1200, 1600)], 'right')}
   </div>
   <div class="hero-card">
     {logo_mark('md')}
@@ -287,7 +305,7 @@ def home():
 <section class="trust" aria-label="About the clinic">
   <ul class="wrap trust-list">
     <li><strong>Level 2, 3 and 4</strong><span>aesthetics trained</span></li>
-    <li><strong>Around 3 years</strong><span>in practice</span></li>
+    <li><strong>Over 3 years</strong><span>in practice</span></li>
     <li><strong>Fully insured</strong><span>for your peace of mind</span></li>
     <li><strong>Free</strong><span>consultations</span></li>
   </ul>
@@ -430,7 +448,7 @@ def about():
     body = f'''
 <section class="page-hero">
   <div class="wrap"><p class="eyebrow">About</p><h1>Meet Mirela</h1>
-  <p class="lede">Mirela Borowska is the founder of Alder Ease Aesthetics in Crewe. Level 2, 3 and 4 aesthetics trained, fully insured, and in practice for around 3 years.</p></div>
+  <p class="lede">Mirela Borowska is the founder of Alder Ease Aesthetics in Crewe. Level 2, 3 and 4 aesthetics trained, fully insured, and in practice for over 3 years.</p></div>
 </section>
 <section class="section">
   <div class="wrap split">
@@ -456,7 +474,7 @@ def about():
 </section>
 '''
     page('about/', 'About Mirela Borowska | Alder Ease Aesthetics, Crewe',
-         'Mirela Borowska: level 2, 3 and 4 aesthetics trained, fully insured, around 3 years in practice. Personal, unhurried care in Crewe.',
+         'Mirela Borowska: level 2, 3 and 4 aesthetics trained, fully insured, over 3 years in practice. Personal, unhurried care in Crewe.',
          'about/', body)
 
 
