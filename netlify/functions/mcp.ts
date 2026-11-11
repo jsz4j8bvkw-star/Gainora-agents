@@ -290,7 +290,10 @@ const TOOLS: Tool[] = [
         if (r.email && (blocked.has(r.email) || blocked.has(r.email.split('@')[1]))) { skipped.push(`${r.business_name}: asked not to be contacted`); continue; }
         fresh.push({ id: randomUUID(), step: 0, ...r, created_at: new Date().toISOString(), updated_at: new Date().toISOString() });
       }
-      if (fresh.length) await insert('prospects', fresh);
+      // The database takes a batch only when every row has the same fields, so fill the gaps.
+      const keys = [...new Set(fresh.flatMap((f) => Object.keys(f)))];
+      const rows = fresh.map((f) => Object.fromEntries(keys.map((k) => [k, f[k] ?? (k === 'company_type' ? 'unknown' : '')])));
+      if (rows.length) await insert('prospects', rows);
       return { added: fresh.map((f) => ({ id: f.id, business: f.business_name })), skipped };
     },
   },
