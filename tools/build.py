@@ -270,22 +270,38 @@ def brand_panel(t):
     return f'<div class="ph brand-panel"><img src="{P["logo"]}" alt="" width="1080" height="1080" loading="lazy" decoding="async"><span>{e(t["name"])}</span></div>'
 
 
-def hero_shots(slides):
-    """The photo side of the hero: one photo at a time, cross-fading and drifting slowly, each with a small label."""
-    figs = ''.join(f'<figure class="ph slide{" on" if i == 0 else ""}"><img src="{P[k]}" alt="{e(alt)}" width="{w}" height="{h}" {"fetchpriority=\"high\"" if i == 0 else "loading=\"lazy\""} decoding="async" style="object-position:{pos}"><figcaption class="hero-tag">{e(tag)}</figcaption></figure>'
-                   for i, (k, alt, tag, pos, w, h) in enumerate(slides))
-    return f'<div class="hero-slides hero-shots">{figs}</div>'
+def hero_slides(slides, side):
+    """One side of the hero: three photos that cross-fade and drift slowly, in the clinic's warm colours."""
+    figs = ''.join(f'<figure class="ph slide"><img src="{P[k]}" alt="{e(alt)}" width="{w}" height="{h}" {"fetchpriority=\"high\"" if i == 0 else "loading=\"lazy\""} decoding="async" style="object-position:{pos}"></figure>'
+                   for i, (k, alt, pos, w, h) in enumerate(slides))
+    return f'<div class="hero-slides hero-{side}">{figs}</div>'
 
 
-def hero_walk():
-    """The video side of the hero: Mirela's walk in through the door to the reception, slowed a little, in the clinic's warm colours.
-    site.js plays it, keeps the camera on what matters and steps the photos on each time the walk ends."""
-    return ('<div class="hero-slides hero-walk">'
-            '<video muted playsinline preload="auto" poster="__ROOT__assets/walk-poster.jpg" width="1280" height="720" '
-            'aria-label="Walking in through the door of Alder Ease Aesthetics to the reception desk, with the gold Alder Ease logo on the wall">'
-            '<source src="__ROOT__assets/walk.mp4" type="video/mp4"><source src="__ROOT__assets/walk.webm" type="video/webm"></video>'
-            '<span class="hero-tag walk-tag" aria-hidden="true">Step inside</span>'
-            '</div>')
+HERO = {
+    'front': ('front', 'The front of Alder Ease Aesthetics on Underwood Lane, Crewe', '35% 40%', 960, 1091),
+    'facial2': ('facial2', 'A cleansing facial at Alder Ease Aesthetics', '50% 40%', 1100, 1560),
+    'hero2': ('hero2', 'Mirela giving a client a radiofrequency microneedling treatment', '45% 35%', 1200, 1600),
+}
+
+
+def intro():
+    """Opening film, home page only: Mirela's walk in through the door, full screen, ending on the gold logo, then it fades into the website.
+    Live it plays once per visit; in the preview it plays every time. Skipped for people who ask for less motion. A tap skips it."""
+    once = 'false' if PREVIEW else 'true'
+    return ('<div class="opening" id="intro" aria-hidden="true"><video muted playsinline preload="auto"></video></div>'
+            '<script>(function(){var d=document.documentElement,el=document.getElementById("intro"),v=el.firstChild,once=' + once + ',done=false;'
+            'function end(now){if(done)return;done=true;try{sessionStorage.setItem("ae-intro","1")}catch(e){}'
+            'if(now){d.classList.remove("intro-on");el.remove();return}'
+            'el.classList.add("out");setTimeout(function(){d.classList.remove("intro-on");el.remove()},1300)}'
+            'try{if((once&&sessionStorage.getItem("ae-intro"))||matchMedia("(prefers-reduced-motion: reduce)").matches){el.remove();return}}catch(e){}'
+            'd.classList.add("intro-on");'
+            'var n=innerWidth/innerHeight<0.9?"tall":"wide";v.muted=true;v.poster="__ROOT__assets/intro-"+n+".jpg";v.src="__ROOT__assets/intro-"+n+".mp4";'
+            'v.addEventListener("timeupdate",function(){if(v.duration&&v.currentTime>v.duration-0.9)end()});'
+            'v.addEventListener("ended",function(){end()});v.addEventListener("error",function(){end(true)});'
+            'el.addEventListener("click",function(){end()});'
+            'var p=v.play();if(p&&p.catch)p.catch(function(){end(true)});'
+            'setTimeout(function(){if(!v.currentTime)end(true)},4000);setTimeout(function(){end()},12000);'
+            '})();</script>')
 
 
 def photo(key, alt, cls='', pos=None, w=1200, h=1600, eager=False):
@@ -311,13 +327,11 @@ def home():
     equip = ''.join(f'<li><strong>{e(a)}</strong><span>{e(b)}</span></li>' for a, b in EQUIPMENT)
     faqs = ''.join(f'<details class="faq"><summary>{e(q)}</summary><p>{e(a)}</p></details>' for q, a in FAQS[:6])
     body = f'''
+{intro()}
 <section class="hero" aria-label="Welcome">
-  <div class="hero-photos" data-hero>
-    {hero_walk()}
-    {hero_shots([('front', 'The front of Alder Ease Aesthetics on Underwood Lane, Crewe', 'Underwood Lane, Crewe', '35% 40%', 960, 1091),
-                 ('facial2', 'A cleansing facial at Alder Ease Aesthetics', 'Facials', '50% 40%', 1100, 1560),
-                 ('hero2', 'Mirela giving a client a radiofrequency microneedling treatment', 'Radiofrequency microneedling', '45% 35%', 1200, 1600)])}
-    <button class="hero-pause" type="button" aria-pressed="false" hidden><span class="visually-hidden">Pause the moving pictures</span></button>
+  <div class="hero-photos">
+    {hero_slides([HERO['front'], HERO['facial2'], HERO['hero2']], 'left')}
+    {hero_slides([HERO['facial2'], HERO['hero2'], HERO['front']], 'right')}
   </div>
   <div class="hero-card">
     {logo_mark('md')}

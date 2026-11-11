@@ -93,40 +93,38 @@ p { margin: 0; }
   mix-blend-mode: soft-light; }
 .tall { aspect-ratio: 4 / 5; }
 
-/* Hero: the walk in through the door on one side, Mirela's photos on the other, a card across the seam. */
+/* Opening film (home page): full screen, then it fades into the website. */
+.opening { display: none; }
+.intro-on body { overflow: hidden; }
+.intro-on .opening { display: block; position: fixed; inset: 0; z-index: 1000; background: var(--sand); cursor: pointer; transition: opacity 1.2s ease; }
+.opening video { width: 100%; height: 100%; object-fit: cover; object-position: 50% 35%; transition: transform 1.6s ease; }
+.opening.out { opacity: 0; pointer-events: none; }
+.opening.out video { transform: scale(1.06); }
+
+/* Hero: two open photos, a card across the seam */
 .hero { position: relative; padding: 14px 14px 0; }
-.hero-photos { position: relative; display: grid; grid-template-columns: 1fr 1fr; gap: 14px; height: clamp(460px, 78vh, 820px); }
-/* A warm wash pulls the video and the different photos into the same beige-and-gold palette, and the bottom fades into the page. */
+.hero-photos { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; height: clamp(460px, 78vh, 820px); }
+/* Each side cross-fades through the same three photos, drifting slowly sideways, the two sides out of step so they never match.
+   A warm wash pulls the different photos into the same beige-and-gold palette, and the bottom fades into the page. */
 .hero-slides { position: relative; height: 100%; overflow: hidden; background: var(--sand); isolation: isolate; }
+.hero-slides .slide { position: absolute; inset: 0; opacity: 0; animation: hero-fade 18s linear infinite both; }
+.hero-slides .slide img { filter: brightness(1.05) contrast(1.02) saturate(0.74) sepia(0.2); animation: hero-drift 18s linear infinite both; will-change: transform; }
+.hero-left .slide:nth-child(1), .hero-left .slide:nth-child(1) img { animation-delay: -1.2s; }
+.hero-left .slide:nth-child(2), .hero-left .slide:nth-child(2) img { animation-delay: 4.8s; }
+.hero-left .slide:nth-child(3), .hero-left .slide:nth-child(3) img { animation-delay: 10.8s; }
+.hero-right .slide:nth-child(1), .hero-right .slide:nth-child(1) img { animation-delay: -4.2s; }
+.hero-right .slide:nth-child(2), .hero-right .slide:nth-child(2) img { animation-delay: 1.8s; }
+.hero-right .slide:nth-child(3), .hero-right .slide:nth-child(3) img { animation-delay: 7.8s; }
 .hero-slides::before { content: ""; position: absolute; inset: 0; z-index: 2; pointer-events: none; mix-blend-mode: soft-light;
   background: linear-gradient(160deg, rgba(220, 190, 140, 0.55), rgba(245, 239, 231, 0.2) 45%, rgba(168, 134, 90, 0.45)); }
 .hero-slides::after { content: ""; position: absolute; inset: 0; z-index: 3; pointer-events: none;
   background: linear-gradient(180deg, rgba(245, 239, 231, 0.12), rgba(245, 239, 231, 0) 30%, rgba(245, 239, 231, 0) 62%, rgba(245, 239, 231, 0.7) 100%); }
-/* The video is already coloured to match; site.js moves object-position so the camera stays on the room and then the logo. */
-.hero-walk video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 30% 50%; }
-/* Photos: one at a time, a slow cross-fade and a slow sideways drift. */
-.hero-shots .slide { position: absolute; inset: 0; opacity: 0; transition: opacity 1.6s ease; }
-.hero-shots .slide.on { opacity: 1; }
-.hero-shots .slide img { filter: brightness(1.05) contrast(1.02) saturate(0.74) sepia(0.2); transform: scale(1.06) translateX(2%); }
-.hero-shots .slide.on img, .hero-shots .slide.off img { animation: hero-drift 12s linear both; }
-@keyframes hero-drift { from { transform: scale(1.06) translateX(2%); } to { transform: scale(1.14) translateX(-2%); } }
-/* Small labels, top left. */
-.hero-tag { position: absolute; top: 18px; left: 18px; z-index: 4; padding: 7px 13px 6px; background: rgba(255, 252, 248, 0.86); color: var(--ink);
-  font: 500 0.66rem/1.2 var(--body); letter-spacing: 0.2em; text-transform: uppercase; border-left: 2px solid var(--gold); }
-.walk-tag { opacity: 0; transform: translateY(-6px); transition: opacity 0.9s ease, transform 0.9s ease; }
-.walk-tag.on { opacity: 1; transform: none; }
-.hero-pause { position: absolute; top: 14px; right: 14px; z-index: 5; width: 38px; height: 38px; border: 0; border-radius: 50%; cursor: pointer;
-  background: rgba(255, 252, 248, 0.82); box-shadow: 0 6px 16px -8px rgba(46, 38, 33, 0.5); display: grid; place-items: center; }
-.hero-pause::before { content: ""; width: 10px; height: 12px; border-left: 3px solid var(--ink); border-right: 3px solid var(--ink); box-sizing: border-box; }
-.hero-pause[aria-pressed="true"]::before { width: 0; height: 0; border-style: solid; border-width: 7px 0 7px 11px; border-color: transparent transparent transparent var(--ink); margin-left: 3px; }
-.hero-pause[hidden] { display: none; }
-.hero-pause:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
-.hero-photos.paused .slide img { animation-play-state: paused; }
+@keyframes hero-fade { 0% { opacity: 0; } 7% { opacity: 1; } 33.3% { opacity: 1; } 40.3% { opacity: 0; } 100% { opacity: 0; } }
+@keyframes hero-drift { 0% { transform: scale(1.1) translateX(2.5%); } 40.3% { transform: scale(1.16) translateX(-2.5%); } 100% { transform: scale(1.16) translateX(-2.5%); } }
 @media (prefers-reduced-motion: reduce) {
-  .hero-shots .slide img { animation: none !important; transform: none; }
-  .hero-shots .slide { transition: none; }
+  .hero-slides .slide, .hero-slides .slide img { animation: none; }
+  .hero-slides .slide:first-child { opacity: 1; }
 }
-.visually-hidden { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 
 /* A treatment with no photo of it yet: the logo on warm sand. */
 .brand-panel { aspect-ratio: 4 / 3.4; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
@@ -298,12 +296,7 @@ address { font-style: normal; }
 @media (max-width: 600px) {
   body { font-size: 16px; padding-bottom: 64px; }
   .hero { padding: 8px 8px 0; }
-  /* On a phone the two sides share one frame: the walk in, then the photos one by one, then the walk again. */
-  .hero-photos { grid-template-columns: 1fr; gap: 0; height: 70vh; min-height: 460px; }
-  .hero-photos > .hero-slides { grid-area: 1 / 1; }
-  .hero-shots { z-index: 1; opacity: 0; transition: opacity 1.4s ease; }
-  .hero-photos.shots-up .hero-shots { opacity: 1; }
-  .hero-tag { top: 14px; left: 14px; }
+  .hero-photos { gap: 8px; height: 68vh; min-height: 440px; }
   .hero-card { margin-top: -60px; padding: 40px 24px 32px; width: calc(100% - 24px); }
   .hero-card .mark-md { width: 72px; height: 72px; margin-top: -76px; }
   .cards { grid-template-columns: 1fr; }
