@@ -114,17 +114,20 @@ export async function syncSubscription(sub: any): Promise<string[]> {
     const match = (users?.users || []).find((u: any) => String(u.email).toLowerCase() === email);
     if (match) await db(`entitlements?email=eq.${enc(email)}&user_id=is.null`, { method: 'PATCH', body: { user_id: match.id } });
     const commandCentre = agents.some((a) => a !== 'capture');
-    if (created && !commandCentre) {
+    // Capture & Convert and the bundle include Command Centre, so their buyers hear about both apps in one email.
+    if (created && agents.includes('capture')) {
       const cap = env('CAPTURE_URL', 'https://capture.gainora.co.uk');
+      const app = env('APP_URL', 'https://app.gainora.co.uk');
       await sendEmail(email, 'Your Gainora receptionist is ready to set up', [
-        'Thank you for choosing Capture & Convert.',
+        agents.includes('website') ? 'Thank you for choosing Launch & Grow with Capture & Convert.' : 'Thank you for choosing Capture & Convert.',
         `Open ${cap} and choose “Email me a sign-in link” with this email address. The first time you sign in, you’ll choose a password; after that you sign in with your email and password.`,
         'You’ll see a short set of questions about your business. Gainora will be in touch within one working day to book your set-up call.',
+        ...(commandCentre ? [`Command Centre is included: open ${app} with the same login for your weekly brief and monthly results.`] : []),
         'If you have any questions, just reply to this email.',
         'Gainora',
       ]).catch((e) => console.error('[gainora] welcome email', e?.message));
     }
-    if (created && commandCentre) {
+    else if (created && commandCentre) {
       const app = env('APP_URL', 'https://app.gainora.co.uk');
       await sendEmail(email, 'Your Gainora agents are ready to set up', [
         'Thank you for subscribing to Gainora.',
