@@ -1,0 +1,13 @@
+# Alder Ease Aesthetics website (static, no build step). The site is in site/, made by tools/build.py.
+[build]
+  publish = "site"
+
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=604800"
+
+[[headers]]
+  for = "/thanks/*"
+  [headers.values]
+    X-Robots-Tag = "noindex"
