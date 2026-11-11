@@ -119,7 +119,8 @@ p { margin: 0; }
 /* A treatment with no photo of it yet: the logo on warm sand. */
 .brand-panel { aspect-ratio: 4 / 3.4; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
   background: radial-gradient(120% 90% at 50% 35%, var(--white), var(--sand) 70%); }
-.brand-panel img { width: 34%; height: auto; object-fit: contain; opacity: 0.92; }
+.brand-panel img { width: 30%; height: auto; aspect-ratio: 1; object-fit: cover; border-radius: 50%; box-shadow: 0 0 0 6px rgba(255, 252, 248, 0.7), 0 18px 36px -18px rgba(46, 38, 33, 0.45); }
+.card-img { text-decoration: none; }
 .brand-panel span { font: 500 0.72rem/1.4 var(--body); letter-spacing: 0.22em; text-transform: uppercase; color: var(--gold-deep); text-align: center; padding: 0 16px; }
 .hero-card { position: relative; z-index: 2; width: min(640px, 100% - 40px); margin: -190px auto 0; background: var(--white); padding: 48px 52px 46px; text-align: center;
   box-shadow: 0 30px 60px -30px rgba(46, 38, 33, 0.35); border-top: 2px solid var(--gold); }
