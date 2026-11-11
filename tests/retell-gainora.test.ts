@@ -24,13 +24,14 @@ test('gainora line: answers as Gainora, honest about being an AI, and the call i
   assert.equal(agent.language, 'en-GB');
 });
 
-test('gainora line: every price on the website, said once, plus VAT, and no discounts or promised results', () => {
+test('gainora line: every price on the website, said once, as the full price (no VAT), and no discounts or promised results', () => {
   const p = String(gainoraLineSetup(s, GAINORA_PRICES).llm.general_prompt);
   const c = GAINORA_PRICES.cc;
   for (const v of [c.setup, c.monthly, GAINORA_PRICES.launchGrow.setup,
     GAINORA_PRICES.launchGrow.monthly, GAINORA_PRICES.bundle.monthly, GAINORA_PRICES.partner.focused, GAINORA_PRICES.partner.core,
     GAINORA_PRICES.partner.whole, GAINORA_PRICES.partner.monthly, GAINORA_PRICES.audit]) assert.ok(p.includes(v), v);
-  assert.match(p, /All prices are plus VAT/);
+  assert.match(p, /Every price is the full price: Gainora isn’t VAT-registered/);
+  assert.doesNotMatch(p, /plus VAT/);
   assert.match(p, /Never offer or hint at discounts, deals or trials/);
   assert.match(p, /Never promise results/);
   // 10 November 2026: one Capture & Convert price; Command Centre included, never quoted on its own

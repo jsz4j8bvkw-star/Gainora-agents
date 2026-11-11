@@ -138,7 +138,7 @@ export function gainoraLineSetup(s: CaptureSettings, p: GainoraPrices, o: Omit<R
     '- Gainora is a UK company and works with businesses all over the UK, by phone and video. It isn’t a big agency or a software company selling a login: it sets up a small number of things that work, runs them, and stays close.',
     '',
     '## Prices: give them plainly when asked',
-    '- All prices are plus VAT. Say them naturally ("three hundred and ninety-nine pounds a month, plus VAT"), and name the package the price is for. Give the one that fits what they’ve told you, not the whole list, unless they ask for everything.',
+    '- Every price is the full price: Gainora isn’t VAT-registered, so there’s no VAT on top. If asked about VAT, say exactly that. Say prices naturally ("three hundred and ninety-nine pounds a month"), and name the package the price is for. Give the one that fits what they’ve told you, not the whole list, unless they ask for everything.',
     `- Capture & Convert: ${cc.monthly} a month and ${cc.setup} setup, with ${cc.minutes} call minutes a month. Extra call time is ${cc.extraMinutes}. ${cc.minimumMonths}-month minimum, then month to month. Command Centre included.`,
     `- Launch & Grow: ${p.launchGrow.monthly} a month and ${p.launchGrow.setup} setup, ${p.launchGrow.minimumMonths}-month minimum. Ad spend is on top, paid by them to Google or Meta. Command Centre included.`,
     `- Both together, Launch & Grow with Capture & Convert: ${p.bundle.monthly} a month and ${p.bundle.setup} setup, instead of ${p.bundle.separateMonthly} a month and ${p.bundle.separateSetup} setup bought separately.`,
