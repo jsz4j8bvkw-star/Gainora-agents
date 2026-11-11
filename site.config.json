@@ -30,7 +30,7 @@
   "show": false
  },
  "prices": {
-  "_readme": "All prices ex-VAT. The live prices come from Gainora admin → Prices; these are the fallback. Command Centre isn't sold on its own: it's included in every package.",
+  "_readme": "All prices are full prices: Gainora isn't VAT-registered, so no VAT is added. The live prices come from Gainora admin → Prices; these are the fallback. Command Centre isn't sold on its own: it's included in every package.",
   "audit": "£495",
   "auditCreditDays": "30",
   "launchGrow": {

@@ -157,7 +157,9 @@ for (const [name, html] of [["home", home], ["packages", packages], ["audit", au
     check(configPrices.has(m[0]), `${name}: price ${m[0]} is not one of the prices (admin price book or site.config.json)`);
   }
 }
-check(/ex-VAT|exclude VAT|excludes VAT|excluding VAT/.test(packages.replace(/<[^>]+>/g, " ")), "packages: prices not marked ex-VAT");
+// Gainora isn't VAT-registered (11 November 2026): prices are full prices, never "plus VAT" or "ex-VAT".
+for (const [n, html] of [["home", home], ["packages", packages]]) check(!/ex-VAT|exclud\w* VAT|plus VAT|\+ VAT/i.test(html.replace(/<[^>]+>/g, " ")), `${n}: says prices exclude VAT, but Gainora isn't VAT-registered`);
+check(/no VAT is added/.test(packages.replace(/<[^>]+>/g, " ")), "packages: doesn't say no VAT is added");
 check(home.includes(config.brand.name), "brand name from config not shown");
 check(/book\/"|book\/\?/.test(home) && /Book a 15-minute diagnostic/.test(home), "home: main call to action missing");
 
