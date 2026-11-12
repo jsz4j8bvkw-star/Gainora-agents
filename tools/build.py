@@ -5,7 +5,7 @@
     python3 build.py <out-dir> --preview  preview copy: index.html links, no tracking, form doesn't send
 
 Every fact comes from Mirela's website questionnaire (10 Nov 2026) and her admin draft. Left off on purpose:
-IV drips and anything with a vitamin B12 injection (Gainora brief), nails, brows and lashes. Skin boosters added 11 Nov at Adelin's request.
+IV drips and anything with a vitamin B12 injection (Gainora brief), nails, brows and lashes. Skin boosters added 11 Nov at Adelin's request; names and prices from her Booksy (12 Nov).
 """
 import html, json, os, sys
 
@@ -77,9 +77,13 @@ TREATMENTS = [
          text='Planned around your lips and the proportions of your face, after a consultation, using Revolax dermal filler. You’ll get written aftercare and can message Mirela with any questions afterwards. Over 18s only.',
          rows=[('Lip filler', '60 min', 'From £200'), ('Ultimate Lip & Skin Glow: lip filler with a deep-cleansing, hydrating facial', '1 hr 40 min', '£250')]),
     dict(id='skin-boosters', name='Skin boosters', img='booster',
-         lead='Deep hydration for fresher, more radiant-looking skin.',
-         text='Injectable skin boosters such as Profhilo, Seventy Hyal, Ejal 40, Neauvia Hydro Deluxe and Vitaran bring hydrating ingredients into the skin, to support hydration, texture and overall skin quality. Mirela recommends the right one for your skin at a free consultation. Over 18s only. A £50 deposit secures your appointment.',
-         rows=[('Skin booster, chosen for your skin', 'At consultation', 'Price at consultation')]),
+         lead='Skin boosters, polynucleotides and collagen therapy, for hydration, elasticity and overall skin quality.',
+         text='Injectable treatments that bring hydrating and skin-supporting ingredients into the skin: Seventy Hyal, EJAL 40, Neauvia Hydro Deluxe and Profhilo Structura (hyaluronic acid based), Vitaran polynucleotides and Guna tropocollagen therapy. Mirela recommends the right one for your skin. A consultation is needed first to check it suits you, and results vary from person to person. Vitaran is made from fish DNA, so it is not suitable if you have a fish allergy. Over 18s only.',
+         rows=[('Guna tropocollagen: under-eye', '60 min', '£80'), ('Guna tropocollagen: face', '60 min', '£120'),
+               ('Guna tropocollagen: neck and décolletage', '60 min', '£130'), ('Vitaran polynucleotides: under-eye', '60 min', '£150'),
+               ('Vitaran polynucleotides: face', '60 min', '£190'), ('EJAL 40: face', '60 min', '£160'),
+               ('Seventy Hyal: face', '60 min', '£170'), ('Neauvia Hydro Deluxe: face', '60 min', '£220'),
+               ('Profhilo Structura: face', '60 min', '£300')]),
     dict(id='packages', name='Microneedling and PRP packages', img=None,
          lead='Two treatments combined in one appointment.',
          text='Microneedling or radiofrequency microneedling, combined with PRP in the same session, for skin texture, acne scarring and fine lines.',
@@ -124,7 +128,7 @@ EQUIPMENT = [
     ('Dermapen 4', 'Professional microneedling pen, used with Meso-Glide serums.'),
     ('Meso-Glide serums', 'Serums chosen for your skin during microneedling.'),
     ('Revolax', 'Hyaluronic acid dermal filler, used for lip filler.'),
-    ('Skin boosters', 'Profhilo, Seventy Hyal, Ejal 40, Neauvia Hydro Deluxe and Vitaran.'),
+    ('Skin boosters', 'Seventy Hyal, EJAL 40, Neauvia Hydro Deluxe, Profhilo Structura, Vitaran polynucleotides and Guna tropocollagen.'),
     ('PRP and PRF', 'Prepared from your own blood, in clinic.'),
     ('Ultrasonic cavitation peeling', 'Deep, gentle cleansing for facials.'),
     ('Oxybrasion', 'Exfoliation and hydration for a brighter finish.'),
@@ -284,35 +288,6 @@ HERO = {
 }
 
 
-FILM_TALL = os.path.exists(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'site', 'assets', 'film-tall.mp4'))
-
-
-def film():
-    """Opening film, home page only: a smooth walk in through the door to the reception, ending on the gold logo.
-    It fills the first screen, plays once and stays on the logo. Scrolling slides the website up over it.
-    Made in Higgsfield (Seedance 2.5) from Mirela's own walk-in video, using her real first and last frames,
-    then smoothed to 48 frames a second with a gentle slow-down onto the logo.
-    People who ask for less motion, or whose browser won't autoplay, see the still of the logo."""
-    tall = 'true' if FILM_TALL else 'false'
-    return ('<section class="film" id="film" aria-label="Alder Ease Aesthetics reception">'
-            '<video muted playsinline preload="auto" aria-hidden="true"></video>'
-            '<a class="film-down" href="#main" aria-label="Scroll to the website"><span></span></a>'
-            '</section>'
-            '<script>(function(){var f=document.getElementById("film"),v=f.querySelector("video");'
-            'document.documentElement.classList.add("has-film");'
-            'var n=(' + tall + '&&innerWidth/innerHeight<0.8)?"tall":"wide",a="__ROOT__assets/film-";'
-            'f.classList.add("film-"+n);'
-            'function still(){v.poster=a+"end-"+n+".jpg";f.classList.add("done","shown")}'
-            'try{if(matchMedia("(prefers-reduced-motion: reduce)").matches){still();return}}catch(e){}'
-            'v.poster=a+"start-"+n+".jpg";v.muted=true;v.src=a+n+".mp4";'
-            'v.addEventListener("playing",function(){f.classList.add("shown")});'
-            'v.addEventListener("ended",function(){f.classList.add("done")});'
-            'v.addEventListener("error",still);'
-            'var p=v.play();if(p&&p.catch)p.catch(still);'
-            'setTimeout(function(){if(!v.currentTime)still()},6000);'
-            '})();</script>')
-
-
 def photo(key, alt, cls='', pos=None, w=1200, h=1600, eager=False):
     style = f' style="object-position:{pos}"' if pos else ''
     return f'<figure class="ph {cls}"><img src="{P[key]}" alt="{e(alt)}" width="{w}" height="{h}" {"fetchpriority=\"high\"" if eager else "loading=\"lazy\""} decoding="async"{style}></figure>'
@@ -450,7 +425,7 @@ def home():
 '''
     page('', 'Alder Ease Aesthetics | Skin treatments and lip filler in Crewe',
          'Radiofrequency microneedling, Dermapen 4, PRP, lip filler and facials in Crewe with Mirela Borowska. Free consultations. Prices online. Book on Booksy.',
-         '', body, top=film())
+         '', body)
 
 
 # ---------- Treatments ----------

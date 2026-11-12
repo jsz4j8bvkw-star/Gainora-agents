@@ -93,22 +93,6 @@ p { margin: 0; }
   mix-blend-mode: soft-light; }
 .tall { aspect-ratio: 4 / 5; }
 
-/* Opening film (home page): fills the first screen, plays once and stays on the logo.
-   It is sticky, so scrolling slides the website up over it. */
-.film { position: sticky; top: 0; z-index: 0; height: 100vh; height: 100svh; overflow: hidden; background: #2E2621; }
-.film video { display: block; width: 100%; height: 100%; object-fit: cover; object-position: 50% 40%; transform-origin: 50% 35%; will-change: transform, filter;
-  opacity: 0; transition: opacity 0.9s ease; }
-.film.shown video { opacity: 1; }
-.has-film .preview-bar, .has-film main, .has-film .site-footer { position: relative; z-index: 1; }
-.has-film main { background: var(--cream); }
-.film-down { position: absolute; left: 50%; bottom: 28px; z-index: 2; width: 44px; height: 44px; margin-left: -22px; border-radius: 50%; display: grid; place-items: center;
-  background: rgba(255, 252, 248, 0.16); border: 1px solid rgba(255, 252, 248, 0.55); backdrop-filter: blur(6px); opacity: 0; transform: translateY(8px); transition: opacity 1s ease, transform 1s ease; }
-.film-down span { width: 10px; height: 10px; border-right: 1.5px solid #FFFCF8; border-bottom: 1.5px solid #FFFCF8; transform: translateY(-2px) rotate(45deg); }
-.film.done .film-down { opacity: 1; transform: none; animation: film-nudge 2.4s ease-in-out 1.2s infinite; }
-@keyframes film-nudge { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(6px); } }
-.film-view .mobile-book { opacity: 0; pointer-events: none; }
-@media (prefers-reduced-motion: reduce) { .film.done .film-down { animation: none; } }
-
 /* Hero: two open photos, a card across the seam */
 .hero { position: relative; padding: 14px 14px 0; }
 .hero-photos { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; height: clamp(460px, 78vh, 820px); }
