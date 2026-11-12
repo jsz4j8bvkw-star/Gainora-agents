@@ -192,3 +192,13 @@
 .me-energy > button { min-width: 36px; padding: 0 8px; }
 .me-nowrap { white-space: nowrap; }
 @media (max-width: 640px) { .me-block { gap: 10px; padding-left: 14px; padding-right: 14px; } .me-time { width: 46px; font-size: var(--t-xs); } .me-time .faint { display: block; } }
+
+/* Type of business: aesthetics and tattoo get different pitches, so they look different everywhere. */
+.sector-aesthetics { background: var(--brass-tint); color: var(--brass); }
+.sector-tattoo { background: #1F1A17; color: #F5EDE6; }
+.sector-clinic { background: #E8EEF3; color: #2F4A5E; }
+.sector-other { background: var(--canvas); color: var(--ink-soft); border: 1px solid var(--line); }
+.pitch-note { display: flex; gap: 8px; align-items: flex-start; padding: 10px 14px; border-radius: 6px; margin: 0 0 16px; }
+.pitch-tattoo { background: #1F1A17; color: #F5EDE6; }
+.pitch-aesthetics, .pitch-clinic { background: var(--brass-tint); color: var(--ink); }
+.pitch-other { background: var(--canvas); border: 1px solid var(--line); }

@@ -24,6 +24,26 @@ export const STAGE_LABEL = Object.fromEntries(STAGES.map((s) => [s.id, s.label])
 export type CompanyType = 'limited' | 'llp' | 'sole_trader' | 'partnership' | 'unknown';
 export const COMPANY_LABEL: Record<CompanyType, string> = { limited: 'Limited company', llp: 'LLP', sole_trader: 'Sole trader', partnership: 'Partnership', unknown: 'Not checked' };
 
+/* ---------- What kind of business: decides which pitch they get ---------- */
+
+// Clinics and tattoo studios get different pitches, so the admin shows which one a prospect is everywhere.
+export type Sector = 'aesthetics' | 'tattoo' | 'clinic' | 'other';
+export const SECTOR_LABEL: Record<Sector, string> = { aesthetics: 'Aesthetics', tattoo: 'Tattoo studio', clinic: 'Clinic', other: 'Other' };
+export const SECTOR_PITCH: Record<Sector, string> = {
+  aesthetics: 'Clinic pitch: missed calls, online booking, Google and reviews. Not the tattoo planner.',
+  tattoo: 'Tattoo pitch: calls they can’t take mid-tattoo, quotes, and the planner demo at afterform-demo.netlify.app. Not the clinic pitch.',
+  clinic: 'Clinic pitch: missed calls, online booking, Google and reviews.',
+  other: 'Check what they do before you pick a pitch.',
+};
+/** The sector, read from the free-text industry ("aesthetics clinic", "tattoo studio", "physiotherapy clinic"…). */
+export function sectorOf(industry: string | null | undefined): Sector {
+  const s = (industry ?? '').toLowerCase();
+  if (/tattoo|piercing/.test(s)) return 'tattoo';
+  if (/aesthetic|skin|beauty|cosmetic|laser|derm/.test(s)) return 'aesthetics';
+  if (/physio|chiro|osteo|podiat|dental|dentist|clinic/.test(s)) return 'clinic';
+  return 'other';
+}
+
 export interface SequenceStep { day: number; channel: Channel; subject: string; body: string }
 export interface Sequence { id: string; name: string; steps: SequenceStep[]; active: boolean }
 

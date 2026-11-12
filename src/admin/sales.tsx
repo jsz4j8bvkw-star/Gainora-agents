@@ -6,7 +6,7 @@ import { relative, shortDate } from '../lib/format';
 import { dueLabel } from '../../shared/admin/board';
 import { addDays } from '../../shared/admin/templates';
 import {
-  CHANNEL_LABEL, COMPANY_LABEL, STAGE_LABEL, STAGES, type Channel, type CompanyType, type Prospect, type Sequence, type SequenceStep, type Stage,
+  CHANNEL_LABEL, COMPANY_LABEL, SECTOR_LABEL, SECTOR_PITCH, STAGE_LABEL, STAGES, sectorOf, type Channel, type CompanyType, type Prospect, type Sector, type Sequence, type SequenceStep, type Stage,
 } from '../../shared/admin/sales';
 import { fromPriceItem, money, type PriceItem, proposalTotals, type ProposalItem } from '../../shared/admin/prices';
 import { biz, type DueProspect, type ProposalRow, type SalesOverview } from './biz-api';
@@ -16,6 +16,13 @@ const TABS: Tab[] = ['followups', 'prospects', 'proposals', 'sequences', 'result
 export const prospectPath = (id: string) => `/sales/${id}`;
 const pct = (x: number | null) => (x == null ? '–' : `${Math.round(x * 100)}%`);
 const callTime = (iso: string) => new Date(iso).toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/London' });
+
+/** Aesthetics clinic or tattoo studio, so the right pitch goes to the right business. */
+export function SectorChip({ industry }: { industry: string }) {
+  const s = sectorOf(industry);
+  const label = s === 'other' && industry.trim() ? industry.trim()[0].toUpperCase() + industry.trim().slice(1) : SECTOR_LABEL[s];
+  return <span className={`tag sector sector-${s}`}>{label}</span>;
+}
 
 export function StageChip({ stage }: { stage: Stage }) {
   const tone = stage === 'won' ? 'tag-forest' : stage === 'lost' ? 'tag-plain' : stage === 'new' ? 'tag-plain' : stage === 'proposal' || stage === 'call' ? 'tag-brass' : 'stage-mid';
@@ -73,7 +80,7 @@ function FollowUps({ o, reload }: { o: SalesOverview; reload: () => void }) {
       {o.calls.length > 0 && (
         <section className="panel" aria-labelledby="calls-h">
           <div className="panel-head"><h2 className="heading" id="calls-h">Calls booked</h2></div>
-          <ul className="plain-list">{o.calls.map((p) => <li key={p.id} className="row gap-12 wrap"><strong className="small">{callTime(p.call_at!)}</strong><Link to={prospectPath(p.id)}>{p.business_name}</Link>{p.contact_name && <span className="small muted">{p.contact_name}</span>}</li>)}</ul>
+          <ul className="plain-list">{o.calls.map((p) => <li key={p.id} className="row gap-12 wrap"><strong className="small">{callTime(p.call_at!)}</strong><Link to={prospectPath(p.id)}>{p.business_name}</Link><SectorChip industry={p.industry} />{p.contact_name && <span className="small muted">{p.contact_name}</span>}</li>)}</ul>
         </section>
       )}
       {o.due.length ? (
@@ -98,7 +105,7 @@ function DueCard({ p, o, onDone }: { p: DueProspect; o: SalesOverview; onDone: (
     <section className="panel fu-card" aria-label={p.business_name}>
       <div className="fu-card-head">
         <div className="stack gap-2"><Link to={prospectPath(p.id)}><strong>{p.business_name}</strong></Link><span className="xsmall faint">{[p.contact_name, p.town, COMPANY_LABEL[p.company_type]].filter(Boolean).join(' · ')}</span></div>
-        <span className="row gap-8 wrap"><span className={`chan chan-${d.channel}`}>{CHANNEL_LABEL[d.channel]}</span><span className="xsmall muted">Message {d.step + 1} of {seq?.steps.length ?? '?'}</span><span className={`due ${p.next_on! < o.today ? 'due-late' : 'due-today'}`}>{dueLabel(p.next_on, o.today)}</span></span>
+        <span className="row gap-8 wrap"><SectorChip industry={p.industry} /><span className={`chan chan-${d.channel}`}>{CHANNEL_LABEL[d.channel]}</span><span className="xsmall muted">Message {d.step + 1} of {seq?.steps.length ?? '?'}</span><span className={`due ${p.next_on! < o.today ? 'due-late' : 'due-today'}`}>{dueLabel(p.next_on, o.today)}</span></span>
       </div>
       {d.channel === 'email' && !p.email_ok.ok && <p className="small gate-note"><Icon name="info" />{p.email_ok.why}</p>}
       {d.subject && <p className="small"><span className="faint">{d.channel === 'email' ? 'Subject: ' : 'Step: '}</span>{d.subject}</p>}
@@ -126,13 +133,16 @@ function DueCard({ p, o, onDone }: { p: DueProspect; o: SalesOverview; onDone: (
 
 function Prospects({ o, reload }: { o: SalesOverview; reload: () => void }) {
   const [stage, setStage] = useState<Stage | 'all'>('all');
+  const [sector, setSector] = useState<Sector | 'all'>((queryParam('type') as Sector) || 'all');
   const [q, setQ] = useState('');
+  const sectors = useMemo(() => { const m = new Map<Sector, number>(); o.prospects.forEach((p) => { const s = sectorOf(p.industry); m.set(s, (m.get(s) ?? 0) + 1); }); return m; }, [o]);
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [seq, setSeq] = useState(o.sequences.find((s) => s.active)?.id ?? '');
   const [start, setStart] = useState(o.today);
   const [busy, setBusy] = useState(false);
   const toast = useToast();
-  const list = useMemo(() => o.prospects.filter((p) => (stage === 'all' || p.stage === stage) && (!q || `${p.business_name} ${p.contact_name} ${p.town} ${p.email}`.toLowerCase().includes(q.toLowerCase()))), [o, stage, q]);
+  const list = useMemo(() => o.prospects.filter((p) => (stage === 'all' || p.stage === stage) && (sector === 'all' || sectorOf(p.industry) === sector) && (!q || `${p.business_name} ${p.contact_name} ${p.town} ${p.email} ${p.industry}`.toLowerCase().includes(q.toLowerCase()))), [o, stage, sector, q]);
+  const pickedSectors = useMemo(() => [...new Set(o.prospects.filter((p) => picked.has(p.id)).map((p) => sectorOf(p.industry)))], [o, picked]);
   const toggle = (id: string) => setPicked((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const go = async () => {
     setBusy(true);
@@ -147,6 +157,12 @@ function Prospects({ o, reload }: { o: SalesOverview; reload: () => void }) {
           <button type="button" aria-pressed={stage === 'all'} onClick={() => setStage('all')}>All {o.prospects.length}</button>
           {STAGES.map((s) => <button key={s.id} type="button" aria-pressed={stage === s.id} onClick={() => setStage(s.id)}>{s.label} {o.funnel.by[s.id]}</button>)}
         </div>
+        {sectors.size > 1 && (
+          <div className="seg" role="group" aria-label="Type of business">
+            <button type="button" aria-pressed={sector === 'all'} onClick={() => setSector('all')}>All types</button>
+            {(['aesthetics', 'tattoo', 'clinic', 'other'] as Sector[]).filter((s) => sectors.get(s)).map((s) => <button key={s} type="button" aria-pressed={sector === s} onClick={() => setSector(s)}>{SECTOR_LABEL[s]} {sectors.get(s)}</button>)}
+          </div>
+        )}
       </div>
       {picked.size > 0 && (
         <div className="panel panel-pad row gap-12 wrap pick-bar" role="region" aria-label="Selected prospects">
@@ -155,15 +171,17 @@ function Prospects({ o, reload }: { o: SalesOverview; reload: () => void }) {
           <Field label="First message on">{(id) => <input id={id} className="input" type="date" value={start} min={o.today} onChange={(e: any) => setStart(e.target.value || o.today)} />}</Field>
           <Button busy={busy} disabled={!seq} onClick={go}>Start messages</Button>
           <Button kind="quiet" onClick={() => setPicked(new Set())}>Clear</Button>
+          {pickedSectors.length > 1 && <p className="small gate-note" role="alert"><Icon name="info" />This mixes {pickedSectors.map((s) => SECTOR_LABEL[s]).join(' and ')}. They need different messages, so start them separately.</p>}
         </div>
       )}
       <section className="panel">
         <div className="table-wrap"><table className="clients-table">
-          <thead><tr><th className="pick-col"><span className="sr-only">Select</span></th><th>Business</th><th>Stage</th><th>Company type</th><th>Next message</th><th>Source</th></tr></thead>
+          <thead><tr><th className="pick-col"><span className="sr-only">Select</span></th><th>Business</th><th>Type</th><th>Stage</th><th>Company type</th><th>Next message</th><th>Source</th></tr></thead>
           <tbody>{list.map((p) => (
             <tr key={p.id}>
               <td className="pick-col"><input type="checkbox" checked={picked.has(p.id)} onChange={() => toggle(p.id)} aria-label={`Select ${p.business_name}`} disabled={!!p.unsubscribed_at || p.stage === 'won'} /></td>
               <td><Link to={prospectPath(p.id)}><strong>{p.business_name}</strong></Link><div className="xsmall faint">{[p.contact_name, p.town].filter(Boolean).join(' · ') || p.email}</div></td>
+              <td><SectorChip industry={p.industry} /></td>
               <td><StageChip stage={p.stage} />{p.unsubscribed_at && <div className="xsmall faint">Don’t contact</div>}</td>
               <td className="small">{COMPANY_LABEL[p.company_type]}{p.consent && <div className="xsmall faint">Said yes</div>}</td>
               <td className="small">{p.next_on ? <span className={`due ${p.next_on < o.today ? 'due-late' : p.next_on === o.today ? 'due-today' : ''}`}>{dueLabel(p.next_on, o.today)}</span> : p.call_at ? `Call ${callTime(p.call_at)}` : <span className="faint">–</span>}</td>
@@ -192,11 +210,17 @@ function AddProspect({ onClose, onDone }: { onClose: () => void; onDone: (p: Pro
         <Field label="Phone" optional>{(id) => <input id={id} className="input" type="tel" value={p.phone ?? ''} onChange={set('phone')} />}</Field>
         <Field label="Website" optional>{(id) => <input id={id} className="input" value={p.website ?? ''} onChange={set('website')} />}</Field>
         <Field label="Town" optional>{(id) => <input id={id} className="input" value={p.town ?? ''} onChange={set('town')} />}</Field>
+        <Field label="Type of business" help="Decides which pitch they get">{(id, d) => <IndustryInput id={id} d={d} value={p.industry ?? ''} onChange={set('industry')} />}</Field>
         <Field label="Company type" help="From Companies House">{(id, d) => <select id={id} className="select" aria-describedby={d} value={p.company_type} onChange={set('company_type')}>{(Object.entries(COMPANY_LABEL) as [CompanyType, string][]).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>}</Field>
         <Field label="Where you found them" optional>{(id) => <input id={id} className="input" value={p.source ?? ''} placeholder="Their website, a referral…" onChange={set('source')} />}</Field>
       </div>
     </Modal>
   );
+}
+
+const INDUSTRIES = ['aesthetics clinic', 'tattoo studio', 'physiotherapy clinic', 'chiropractic clinic', 'dental practice'];
+function IndustryInput({ id, d, value, onChange }: { id: string; d?: string; value: string; onChange: (e: any) => void }) {
+  return <><input id={id} className="input" list={`${id}-list`} aria-describedby={d} value={value} placeholder="aesthetics clinic, tattoo studio…" onChange={onChange} /><datalist id={`${id}-list`}>{INDUSTRIES.map((x) => <option key={x} value={x} />)}</datalist></>;
 }
 
 function ImportList({ onClose }: { onClose: () => void }) {
@@ -241,12 +265,13 @@ export function ProspectPage({ id }: { id: string }) {
     <div className="page">
       <p className="small"><Link to="/sales?tab=prospects">← Prospects</Link></p>
       <div className="page-head">
-        <div><h1 className="title">{x.business_name}</h1><p className="lede row gap-8 wrap"><StageChip stage={x.stage} /><span className="small muted">{[x.contact_name, x.town, COMPANY_LABEL[x.company_type]].filter(Boolean).join(' · ')}</span></p></div>
+        <div><h1 className="title">{x.business_name}</h1><p className="lede row gap-8 wrap"><SectorChip industry={x.industry} /><StageChip stage={x.stage} /><span className="small muted">{[x.contact_name, x.town, COMPANY_LABEL[x.company_type]].filter(Boolean).join(' · ')}</span></p></div>
         <div className="row gap-8 wrap">
           {x.stage !== 'won' && <Button icon="contract" onClick={() => setProposal({ business_name: x.business_name, contact_name: x.contact_name, email: x.email, prospect_id: x.id })}>Make a proposal</Button>}
           {x.client_email && <Link className="btn btn-secondary" to={`/clients/${encodeURIComponent(x.client_email)}`}>Open client</Link>}
         </div>
       </div>
+      <p className={`small pitch-note pitch-${sectorOf(x.industry)}`} role="note"><Icon name="info" />{SECTOR_PITCH[sectorOf(x.industry)]}</p>
       <div className="grid-2">
         <div className="stack gap-24">
           {d.draft && x.next_on && (
@@ -273,6 +298,7 @@ export function ProspectPage({ id }: { id: string }) {
               <Field label="Instagram">{(id) => <input id={id} className="input" value={p.instagram ?? ''} onChange={set('instagram')} />}</Field>
               <Field label="LinkedIn">{(id) => <input id={id} className="input" value={p.linkedin ?? ''} onChange={set('linkedin')} />}</Field>
               <Field label="Town">{(id) => <input id={id} className="input" value={p.town ?? ''} onChange={set('town')} />}</Field>
+              <Field label="Type of business" help="Decides which pitch they get">{(id, dd) => <IndustryInput id={id} d={dd} value={p.industry ?? ''} onChange={set('industry')} />}</Field>
               <Field label="Company type" help="Check on Companies House">{(id, dd) => <select id={id} className="select" aria-describedby={dd} value={p.company_type ?? 'unknown'} onChange={set('company_type')}>{(Object.entries(COMPANY_LABEL) as [CompanyType, string][]).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>}</Field>
             </div>
             <label className="check-row"><input type="checkbox" checked={!!p.consent} onChange={(e: any) => setP({ ...p, consent: e.target.checked })} /> They said yes to hearing from Gainora by email</label>

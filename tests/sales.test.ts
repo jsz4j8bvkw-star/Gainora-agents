@@ -5,6 +5,7 @@ import { startFake } from './fake-sb';
 import { ukToday } from '../shared/admin/board';
 import { addDays } from '../shared/admin/templates';
 import { DEFAULT_PRICE_BOOK, fromPriceItem } from '../shared/admin/prices';
+import { sectorOf } from '../shared/admin/sales';
 
 // The business side of the admin end to end: outreach (import, sequence, automatic email, unsubscribe), a proposal
 // paid through Stripe becoming a client with their set-up started, the price book feeding the website, the books,
@@ -292,4 +293,14 @@ test('sales, proposals, prices, books and paperwork end to end', async () => {
     assert.equal(kept.outreach.autoSend, true);
     assert.equal(kept.rates.sms, 0.05);
   } finally { fake.server.close(); }
+});
+
+test('sectorOf: aesthetics and tattoo prospects are told apart, so the right pitch goes out', () => {
+  assert.equal(sectorOf('aesthetics clinic'), 'aesthetics');
+  assert.equal(sectorOf('Skin & laser clinic'), 'aesthetics');
+  assert.equal(sectorOf('tattoo studio'), 'tattoo');
+  assert.equal(sectorOf('Tattoo & piercing'), 'tattoo');
+  assert.equal(sectorOf('physiotherapy clinic'), 'clinic');
+  assert.equal(sectorOf(''), 'other');
+  assert.equal(sectorOf(null), 'other');
 });
