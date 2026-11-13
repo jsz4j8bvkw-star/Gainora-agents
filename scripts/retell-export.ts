@@ -1,10 +1,11 @@
 // Writes the Retell setup for a sample business, or for Gainora's own line:
 //   node scripts/retell-export.mjs [beauty|clinic|trade|gainora]
-// gainora also writes settings.sql: hello@gainora.co.uk's Capture & Convert settings, for the owner to run in Supabase.
+// gainora also writes the Romanian and Polish receptionists (retell/gainora-line-ro, -pl) and settings.sql: hello@gainora.co.uk's Capture & Convert settings, for the owner to run in Supabase.
 // Its prices come from the website's site.config.json when the website repo sits next to this one.
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { retellSetup, type RetellSetup } from '../shared/retell';
 import { gainoraLineSetup } from '../shared/retell-gainora';
+import { gainoraLanguageSetup } from '../shared/retell-gainora-lang';
 import { BEAUTY_SETTINGS, CLINIC_SETTINGS, DEMO_SETTINGS } from '../src/lib/demo';
 import { GAINORA_PRICES, gainoraLineSettings, type GainoraPrices } from '../src/lib/gainora-line';
 
@@ -21,6 +22,17 @@ if (which === 'gainora') {
   // A fixed date keeps the export the same from run to run; the SQL stamps the real time.
   const s = gainoraLineSettings('2026-11-10T00:00:00.000Z');
   r = gainoraLineSetup(s, prices);
+  // The Romanian and Polish receptionists the English one hands over to, in the same call (13 Nov 2026).
+  for (const lang of ['ro', 'pl'] as const) {
+    const l = gainoraLanguageSetup(s, prices, lang);
+    const dir = `${out}-${lang}`;
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(`${dir}/llm.json`, JSON.stringify(l.llm, null, 2));
+    writeFileSync(`${dir}/agent.json`, JSON.stringify(l.agent, null, 2));
+    writeFileSync(`${dir}/prompt.txt`, String(l.llm.general_prompt));
+    writeFileSync(`${dir}/todo.txt`, l.todo.map((t) => `- ${t}`).join('\n'));
+    console.log(`Wrote ${dir}`);
+  }
   const json = JSON.stringify(s);
   if (json.includes('$gainora$')) throw new Error('Settings contain the SQL quote marker.');
   writeFileSync(`${out}/settings.sql`, [

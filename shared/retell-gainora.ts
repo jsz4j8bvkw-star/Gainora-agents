@@ -7,6 +7,9 @@
 import { greetingFor, type CaptureSettings } from './capture';
 import { retellSetup, type RetellOptions, type RetellSetup } from './retell';
 
+/** Agent-transfer tools between the language receptionists (added in Retell as Agent Transfer functions). */
+export const HANDOVER_TOOLS = { ro: 'transfer_to_romanian', pl: 'transfer_to_polish', en: 'transfer_to_english' } as const;
+
 /** The website's price book (gainora-web/site.config.json, "prices"). The export reads the live file when it can. */
 export interface GainoraPrices {
   audit: string; auditCreditDays: string;
@@ -227,10 +230,15 @@ export function gainoraLineSetup(s: CaptureSettings, p: GainoraPrices, o: Omit<R
   ];
 
   // Adelin asked for Polish and Romanian on his line (13 Nov), with everything she does in English.
+  // 13 Nov, later: Polish and Romanian now have their own receptionists (retell-gainora-lang.ts). She hands over to them
+  // in the same call; the rules below stay as a fallback for when a hand-over fails.
   const languages = [
     '## Languages: English, Polish and Romanian',
-    '- You speak English, Polish and Romanian. Always start in English.',
-    '- If the caller speaks Polish or Romanian, or asks for it, switch to that language straight away. From then on that is the language of the call: stay in it until the call ends.',
+    '- You speak English. Always start in English.',
+    `- If the caller speaks Polish or Romanian, or asks for it, switch to their language with the hand-over tool, in the same call: say one short sentence in their language, then straight away use ${HANDOVER_TOOLS.pl} for Polish or ${HANDOVER_TOOLS.ro} for Romanian. Romanian: "Sigur, putem vorbi în română." Polish: "Oczywiście, możemy rozmawiać po polsku." Don’t say anything else after that sentence. The caller hears the same voice carry on, so never mention a colleague or a transfer.`,
+    '- Hand over on the first clear Polish or Romanian sentence, or when they ask. Never on a single word, a name, or something that might be a mishearing: then ask them in English to say it again.',
+    '- Only if the hand-over doesn’t work (the tool isn’t there or fails), carry on in that language yourself, following everything below.',
+    '- Once a call is in Polish or Romanian, stay in it until the call ends.',
     '- Only change language again if the caller clearly asks you to ("can we speak English?") or speaks at least two whole sentences in another language. A single word, a name, "okay", "sorry", "thanks", or a word that sounds English (Gainora, the package names, a brand or a place) is never a reason to switch.',
     '- If something you hear seems to be in another language but doesn’t make sense, it is almost certainly a mishearing on the line: stay in the call’s language and ask them, in that language, to say it again.',
     '- Every word you say in a Polish or Romanian call is in that language, including the little reactions and fillers. Never drop in English words like "Perfect", "Sorry", "Lovely", "No problem" or "Bear with me": use the natural Polish or Romanian ones instead.',

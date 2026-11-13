@@ -1,0 +1,7 @@
+- Create the agent by duplicating "Gainora receptionist" in Retell (it keeps the diary tools, webhook and post-call fields), rename it "Gainora receptionist (Polish)", and paste retell/gainora-line-pl/prompt.txt as its prompt.
+- Welcome message: none ("User speaks first" is wrong here: the call is already going). Use "AI speaks first" with an empty message, or the dynamic option, so she simply carries on.
+- Speech language: pl-PL only (single language: better hearing than multilingual).
+- Voice: the same as Gainora receptionist (Maren, ElevenLabs V4 Turbo, multilingual), so the caller hears the same person. Turn on "keep the same voice" on each Agent Transfer too.
+- Functions: add Agent Transfer "transfer_to_english" to Gainora receptionist and "transfer_to_romanian" to the other language's receptionist, version Latest Published, post-call extraction on the transferred agent.
+- On Gainora receptionist, add Agent Transfer "transfer_to_polish" to this agent (Latest Published).
+- Publish, then one test call: start in English, switch, ask a question, try the role-play, book a call, and say a few English words in the middle.

@@ -140,3 +140,36 @@ test('next step: a booking whose confirmation failed says so, instead of "Confir
   assert.match(nextStep(e, w, { now, confirmation: 'sent' }).detail!, /Confirmation sent/);
   assert.doesNotMatch(nextStep(e, w, { now }).detail!, /Confirmation sent/);
 });
+
+test('gainora line: Romanian and Polish have their own receptionists, written in the language, with the same abilities', async () => {
+  const { gainoraLanguageSetup } = await import('../shared/retell-gainora-lang');
+  const en = gainoraLineSetup(s, GAINORA_PRICES);
+  assert.match(String(en.llm.general_prompt), /transfer_to_romanian/);
+  assert.match(String(en.llm.general_prompt), /transfer_to_polish/);
+  for (const [lang, code, words] of [['ro', 'ro-RO', /Îmi cer scuze|dumneavoastră|programare/], ['pl', 'pl-PL', /Przepraszam|Pan|rezerw/]] as const) {
+    const r = gainoraLanguageSetup(s, GAINORA_PRICES, lang);
+    const p = String(r.llm.general_prompt);
+    assert.equal(r.agent.language, code);
+    assert.match(String(r.agent.agent_name), /Gainora receptionist \((Romanian|Polish)\)/);
+    assert.equal(r.llm.begin_message, '');
+    assert.match(p, words);
+    // Same tools and the same call analysis as the English line
+    assert.deepEqual((r.llm.general_tools as any[]).map((t) => t.name), (en.llm.general_tools as any[]).map((t) => t.name));
+    assert.deepEqual(r.agent.post_call_analysis_data, en.agent.post_call_analysis_data);
+    // Every price, the diary tools with the English call name, hand-back to English, never claims to be human
+    for (const v of [GAINORA_PRICES.cc.monthly, GAINORA_PRICES.cc.setup, GAINORA_PRICES.launchGrow.monthly, GAINORA_PRICES.bundle.monthly,
+      GAINORA_PRICES.partner.monthly, GAINORA_PRICES.audit]) assert.ok(p.includes(v), `${lang} ${v}`);
+    assert.ok(p.includes(`„${DIAGNOSTIC}”`), `${lang} diary call name`);
+    assert.match(p, /check_availability/);
+    assert.match(p, /book_appointment/);
+    assert.match(p, /transfer_to_english/);
+    assert.match(p, /\{\{caller_record\}\}/);
+    assert.match(p, /\{\{user_number\}\}/);
+    // Beauty clinics: never 999 for a problem after a treatment
+    assert.match(p, lang === 'ro' ? /Nu adăuga niciodată 999/ : /Nigdy nie dodawaj 999/);
+    // No English filler words, and no supplier names
+    assert.doesNotMatch(p.replace(/niciodată „sorry”, „okay”, „basically”, „cool”|nigdy „sorry”, „okay”, „basically”, „cool”|\(„okay”, „sorry”, „thanks”\)/g, ''), /\b(sorry|okay|lovely|perfect)\b/i);
+    assert.doesNotMatch(p, /GPT|OpenAI|Retell|Twilio|ElevenLabs/);
+    assert.doesNotMatch(p, /small business/i);
+  }
+});
