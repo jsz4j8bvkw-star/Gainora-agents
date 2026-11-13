@@ -45,7 +45,7 @@ Old addresses (`/diagnosis/`, `/contact/`, `/solutions/`, `/shop/`, `/ai-trainin
 ## Switches in `site.config.json`
 
 - `founding.show`: `true` shows the founding offers on the packages page. Off by default; mention them on calls.
-- `demo.phone`, `demo.phoneHref`, `demo.recordingUrl`: set all three and the "Ring our receptionist" block appears on the home page. The build refuses a number without a recording.
+- `demo.phone`, `demo.phoneHref`: set both and the "Ring our receptionist" block appears on the home page. `demo.recordingUrl` (https) is optional: a 90-second recording is shown under the number once it is set.
 - `contact.bookingUrl` and `contact.bookingEmbedUrl`: the Google Calendar appointment schedule. The embed URL is the schedule link with `?gv=true`; if it's empty the booking page shows the form first and promises times by email.
 
 ## The booking form

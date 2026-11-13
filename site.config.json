@@ -20,9 +20,9 @@
   "bookingEmbedUrl": "https://capture.gainora.co.uk/book/gainora"
  },
  "demo": {
-  "_readme": "The 'Ring our receptionist' block stays hidden until both a phone number and a recording are set.",
-  "phone": "",
-  "phoneHref": "",
+  "_readme": "The 'Ring our receptionist' block shows once a phone number is set. The recording under it is optional.",
+  "phone": "07414 111875",
+  "phoneHref": "+447414111875",
   "recordingUrl": ""
  },
  "founding": {

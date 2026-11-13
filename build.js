@@ -131,8 +131,11 @@ function copyDir(from, to) {
 
 function build(pricesFrom = "site.config.json") {
   fs.writeFileSync(BUILD_PRICES, JSON.stringify(config.prices, null, 1));
-  if (config.demo.phone && !(config.demo.phoneHref && /^https:\/\//.test(config.demo.recordingUrl || ""))) {
-    throw new Error("demo.phone is set but demo.phoneHref or demo.recordingUrl is missing. The 'Ring our receptionist' block needs the number, a tel: value and a recording.");
+  if (config.demo.phone && !/^\+44\d{9,10}$/.test(config.demo.phoneHref || "")) {
+    throw new Error("demo.phone is set but demo.phoneHref isn't a +44 number. The 'Ring our receptionist' block needs the number and its tel: value.");
+  }
+  if (config.demo.recordingUrl && !/^https:\/\//.test(config.demo.recordingUrl)) {
+    throw new Error("demo.recordingUrl must be an https address.");
   }
   fs.rmSync(DIST, { recursive: true, force: true });
   fs.mkdirSync(DIST, { recursive: true });
@@ -166,7 +169,11 @@ function build(pricesFrom = "site.config.json") {
         bodyClass: meta.bodyClass || "",
         scripts: (meta.scripts || []).map(s => `<script src="${escapeHtml(s)}" defer></script>`).join("\n")
       },
-      year: String(new Date().getFullYear())
+      year: String(new Date().getFullYear()),
+      // The recording under the demo number is optional: shown only once there is one.
+      demoRecording: config.demo.recordingUrl
+        ? `<p class="demo-label">A real call, 90 seconds</p><audio controls preload="none" src="${escapeHtml(config.demo.recordingUrl)}"></audio>`
+        : ""
     });
 
     let html = render(layout.replace("{{content}}", body), ctx);

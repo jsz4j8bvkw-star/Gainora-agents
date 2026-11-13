@@ -14,7 +14,8 @@ These are the things only you can decide or supply. The site builds and passes i
 - [ ] Decide whether to show the founding offers on the site (`founding.show`). Default: off, mentioned on calls.
 
 ## Demo receptionist
-- [ ] When the demo number and a 90-second recording exist, set `demo.phone`, `demo.phoneHref` (the number in international form, for example `+44…`) and `demo.recordingUrl`. The "Ring our receptionist" block then appears on the home page. Until then it's hidden and nothing is faked.
+- [x] Demo number live (13 Nov 2026): `demo.phone` 07414 111875, `demo.phoneHref` +447414111875. The "Ring our receptionist" block shows on the home page.
+- [ ] Record a good 90-second call and set `demo.recordingUrl` to show it under the number.
 
 ## Legal pages (drafts, marked on the site)
 - [ ] Privacy policy: fill in the bracketed details, list the real providers (telephony and receptionist platform, text-message provider, email provider, AI tools), describe international transfers and set retention periods, including for call recordings.
