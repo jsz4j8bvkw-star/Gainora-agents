@@ -11,7 +11,7 @@ const s = gainoraLineSettings('2026-11-10T00:00:00.000Z');
 test('gainora line: answers as Gainora, honest about being an AI, and the call is the demo', () => {
   const { llm, agent } = gainoraLineSetup(s, GAINORA_PRICES);
   const p = String(llm.general_prompt);
-  assert.match(String(llm.begin_message), /^Hello, you’re through to Gainora\. Calls are recorded/);
+  assert.match(String(llm.begin_message), /^Hello, you’re through to Gainora\. How can I help\?$/);
   assert.match(p, /Never claim to be a person/);
   assert.match(p, /I’m Gainora’s AI receptionist/);
   assert.match(p, /this call is a live demonstration/);

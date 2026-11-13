@@ -224,6 +224,7 @@ export function gainoraLineSetup(s: CaptureSettings, p: GainoraPrices, o: Omit<R
     '- The caller is ringing from {{user_number}}. To check it, read back only the last three digits ("is the number ending four one one the best one to reach you?"). If it shows as unknown or withheld, ask for their number and read it all back.',
     `- When the caller is done, sum up in one sentence what happens next, thank them, then use end_call. If you’ve already confirmed a booking or said what happens next, don’t repeat it: when they say thanks, okay or bye, just say a warm goodbye ("Lovely, you’re all set. Thanks so much for calling, have a lovely day!") and use end_call.`,
     '- If you can’t do something, say so plainly and offer to pass a message on.',
+    '- If anyone asks whether the call is recorded, say yes: calls on this line are recorded so Gainora can keep improving the receptionist.',
   ];
 
   const general_prompt = [persona, who, facts, roleplay, booking, others, known, phone].map((x) => x.join('\n')).join('\n\n');
@@ -258,7 +259,9 @@ export function gainoraLineSetup(s: CaptureSettings, p: GainoraPrices, o: Omit<R
   todo.push('Hello@’s Capture & Convert runs on gainoraLineSettings(): load them with the SQL from scripts/retell-export.mjs gainora, then connect Adelin’s Google Calendar in Connections so his website bookings count as busy and these calls land in it.');
 
   return {
-    llm: { ...base.llm, begin_message: greetingFor(s).replace(/^Good (morning|afternoon|evening)/, 'Hello'), general_prompt, general_tools: tools },
+    // Adelin wants a short hello on his own line (13 Nov): calls are still recorded, the website says so under the
+    // number, and she says so whenever she's asked.
+    llm: { ...base.llm, begin_message: greetingFor({ ...s, calls: { ...s.calls, recording: false } }).replace(/^Good (morning|afternoon|evening)/, 'Hello'), general_prompt, general_tools: tools },
     agent,
     todo,
   };
