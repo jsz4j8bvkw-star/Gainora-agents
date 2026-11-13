@@ -270,7 +270,7 @@ export function gainoraLineSetup(s: CaptureSettings, p: GainoraPrices, o: Omit<R
 
   const todo = base.todo.filter((t) => !/^Phone number:/.test(t));
   todo.push('Phone number: import the Twilio UK number into Retell (Elastic SIP trunk) and attach this agent to it for inbound calls.');
-  todo.push('Languages: in the agent, set Speech Languages to Multiselect with English (UK), Polish and Romanian, and pick a voice that covers all three (the picker greys out any that can’t). Then one test call in each language: a question, a role-play and a booking.');
+  todo.push('Languages: in the agent, set Speech Languages to Multiselect with English (UK), Polish and Romanian, and use a multilingual voice so Polish and Romanian sound natural: since 13 Nov it’s ElevenLabs Maren (11labs-Maren) on the ElevenLabs V4 Turbo model; Retell’s own Maren has an English accent in both. Then one test call in each language: a question, a role-play and a booking.');
   todo.push('Hello@’s Capture & Convert runs on gainoraLineSettings(): load them with the SQL from scripts/retell-export.mjs gainora, then connect Adelin’s Google Calendar in Connections so his website bookings count as busy and these calls land in it.');
 
   return {
