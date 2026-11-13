@@ -59,7 +59,7 @@ export function retellSetup(s: CaptureSettings, o: RetellOptions = {}): RetellSe
   const tools: Record<string, unknown>[] = [
     {
       type: 'end_call', name: 'end_call',
-      description: 'End the call politely once the caller has nothing else, after summing up what happens next. Also end it if the caller is abusive, or if it is a sales call for the business.',
+      description: 'End the call politely once the caller has nothing else. If you have already confirmed a booking or said what happens next, don’t say it again: just say goodbye and end the call. Also end it if the caller is abusive, or if it is a sales call for the business.',
     },
   ];
   // Booking during the call: her diary tools, when the clinic's diary is one she can see (Gainora's own, or connected).
@@ -139,13 +139,13 @@ export function retellSetup(s: CaptureSettings, o: RetellOptions = {}): RetellSe
     ] : []),
     '- It is now {{current_time_Europe/London}} (UK time). Use it to work out dates such as "next Tuesday", and always say the day and the date together.',
     '- The caller is ringing from {{user_number}}. To check it, read back only the last three digits ("is the number ending four one one the best one to reach you?"). If it shows as unknown or withheld, ask for their number and read it all back.',
-    `- When the caller is done, sum up in one sentence what happens next, thank them, then use end_call.`,
+    `- When the caller is done, sum up in one sentence what happens next, thank them, then use end_call. If you’ve already confirmed a booking or said what happens next, don’t repeat it: when they say thanks, okay or bye, just say a warm goodbye and use end_call.`,
     ...(canTransfer ? ['- For a concern after a treatment, say "I’m putting you straight through to the clinic now", then use transfer_to_clinic_emergency_line. If the transfer fails, give them the emergency line number and say the team is being alerted.'] : []),
     '- If you cannot do something, say so plainly and offer to pass a message on.',
     ...(diaryTools ? [
       '- To find times, use check_availability with the treatment (and the person, day and part of day if they said). Offer two of the options it returns, in its words. Never make up a time.',
       mode === 'book'
-        ? '- When they choose, check their full name (spell it back) and the best number, ask whether they have been to us before, then use book_appointment with that option’s slot exactly as given. Only say it’s booked once book_appointment says booked, then read back the day, date, time and who it’s with.'
+        ? '- When they choose, check their full name (spell it back) and the best number, ask whether they have been to us before, then use book_appointment with that option’s slot exactly as given. Only say it’s booked once book_appointment says booked, then read back the day, date, time and who it’s with, once. Don’t read the booking back again later in the call unless they ask.'
         : '- When they choose, take their name and number and say the team will confirm that time by text shortly. Don’t say it’s booked.',
       '- If a diary tool says to take details for a call back, do that kindly. If a time has just gone, apologise and offer the new options.',
     ] : []),
