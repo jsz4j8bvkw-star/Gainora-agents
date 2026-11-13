@@ -224,10 +224,23 @@ export function gainoraLineSetup(s: CaptureSettings, p: GainoraPrices, o: Omit<R
     '- The caller is ringing from {{user_number}}. To check it, read back only the last three digits ("is the number ending four one one the best one to reach you?"). If it shows as unknown or withheld, ask for their number and read it all back.',
     `- When the caller is done, sum up in one sentence what happens next, thank them, then use end_call. If you’ve already confirmed a booking or said what happens next, don’t repeat it: when they say thanks, okay or bye, just say a warm goodbye ("Lovely, you’re all set. Thanks so much for calling, have a lovely day!") and use end_call.`,
     '- If you can’t do something, say so plainly and offer to pass a message on.',
-    '- If anyone asks whether the call is recorded, say yes: calls on this line are recorded so Gainora can keep improving the receptionist.',
   ];
 
-  const general_prompt = [persona, who, facts, roleplay, booking, others, known, phone].map((x) => x.join('\n')).join('\n\n');
+  // Adelin asked for Polish and Romanian on his line (13 Nov), with everything she does in English.
+  const languages = [
+    '## Languages: English, Polish and Romanian',
+    '- You speak English, Polish and Romanian. Always start in English.',
+    '- If the caller speaks Polish or Romanian, or asks for it, switch to that language straight away and stay in it for the rest of the call. Switch back if they do.',
+    '- Everything in these instructions applies in every language, with nothing left out: answering questions about Gainora, the prices, the role-play, booking the free call with the diary tools, moving or cancelling it, taking a message, and being honest that you are an AI.',
+    '- Speak natural, everyday Polish or Romanian, the way a friendly receptionist would, never word-for-word translation. Keep Gainora and the package names in English (Capture & Convert, Launch & Grow, Command Centre). Say prices in pounds.',
+    '- Read phone numbers back in the caller’s language, in small groups. Spell names back letter by letter.',
+    `- The diary tools work the same in every language: pass "${call}" and the slot exactly as the tools give them, in English, and say the day, date and time to the caller in their language.`,
+    '- The confirmation and reminder texts are in English for now. If you booked in Polish or Romanian, tell the caller the text will come in English.',
+    `- When you book in Polish or Romanian, ask lightly whether they’d be happy to have the call with ${owner} in English, and pass on their answer, so ${owner} knows before the call.`,
+    '- In a role-play, play their business in whichever of the three languages they choose.',
+  ];
+
+  const general_prompt = [persona, who, languages, facts, roleplay, booking, others, known, phone].map((x) => x.join('\n')).join('\n\n');
 
   const PACKAGES = ['Capture & Convert', 'Launch & Grow', 'Launch & Grow with Capture & Convert', 'Growth & Operations Partner', 'Business Audit', 'not sure'];
   const analysis = (base.agent.post_call_analysis_data as any[])
@@ -245,6 +258,7 @@ export function gainoraLineSetup(s: CaptureSettings, p: GainoraPrices, o: Omit<R
     { type: 'string', name: 'business_type', description: 'What their business does, in a few words (for example "electricians, 2 vans" or "aesthetics clinic").', required: false },
     { type: 'enum', name: 'interested_in', description: 'The Gainora package they were most interested in.', choices: PACKAGES, required: false },
     { type: 'boolean', name: 'roleplay', description: 'True if you played a receptionist for their business on this call.', required: false },
+    { type: 'enum', name: 'call_language', description: 'The language most of the call was in.', choices: ['English', 'Polish', 'Romanian'], required: false },
   );
 
   const agent: Record<string, unknown> = {
@@ -256,6 +270,7 @@ export function gainoraLineSetup(s: CaptureSettings, p: GainoraPrices, o: Omit<R
 
   const todo = base.todo.filter((t) => !/^Phone number:/.test(t));
   todo.push('Phone number: import the Twilio UK number into Retell (Elastic SIP trunk) and attach this agent to it for inbound calls.');
+  todo.push('Languages: in the agent, set Speech Languages to Multiselect with English (UK), Polish and Romanian, and pick a voice that covers all three (the picker greys out any that can’t). Then one test call in each language: a question, a role-play and a booking.');
   todo.push('Hello@’s Capture & Convert runs on gainoraLineSettings(): load them with the SQL from scripts/retell-export.mjs gainora, then connect Adelin’s Google Calendar in Connections so his website bookings count as busy and these calls land in it.');
 
   return {

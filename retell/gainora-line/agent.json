@@ -158,6 +158,17 @@
       "name": "roleplay",
       "description": "True if you played a receptionist for their business on this call.",
       "required": false
+    },
+    {
+      "type": "enum",
+      "name": "call_language",
+      "description": "The language most of the call was in.",
+      "choices": [
+        "English",
+        "Polish",
+        "Romanian"
+      ],
+      "required": false
     }
   ],
   "voicemail_option": null

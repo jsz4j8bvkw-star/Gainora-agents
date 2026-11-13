@@ -312,3 +312,9 @@ test('settings with nothing saved still work', () => {
     assert(b[b.length - 1] === 'Something else' && t[t.length - 1] === 'Something else');
   });
 }
+
+test('a call in Polish or Romanian says so in the inbox note; English says nothing extra', () => {
+  const call = (lang: string) => normaliseEnquiry({ event: 'call_analyzed', call: { call_id: 'c-' + lang, from_number: '+447700900123', transcript: 'x', call_analysis: { call_summary: 'Asked about prices.', custom_analysis_data: { call_language: lang } } } } as any);
+  assert.match(String(call('Polish')?.summary), /Call in Polish\./);
+  assert.doesNotMatch(String(call('English')?.summary), /Call in/);
+});

@@ -357,6 +357,9 @@ export function normaliseEnquiry(raw: any, hint?: Channel, now = new Date()): En
   if (bizName && !has(bizName)) extra.push(`Business: ${bizName}${bizType && !has(bizType) ? ` (${bizType})` : ''}.`);
   else if (bizType && !has(bizType)) extra.push(`Business: ${bizType}.`);
   if (keen && keen !== 'not sure' && !has(keen)) extra.push(`Interested in: ${keen}.`);
+  // The call's language, when it wasn't English (Gainora's line speaks Polish and Romanian too).
+  const lang = String(custom.call_language ?? '').trim().slice(0, 30);
+  if (lang && !/^english$/i.test(lang)) extra.push(`Call in ${lang}.`);
   if (extra.length) summary = `${summary.trim()}${summary.trim() ? ' ' : ''}${extra.join(' ')}`;
   summary = summary.slice(0, 2000);
   const name = (pick(custom, ['caller_name', 'name', 'customer_name']) || get(['caller_name', 'customer_name', 'contact_name', 'name', 'full_name', 'from_name'])).slice(0, 120);
